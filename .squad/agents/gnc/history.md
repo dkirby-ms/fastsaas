@@ -19,6 +19,20 @@ Assigned to GNC:
 
 **Coordination:** Coordinate with EECOM on API/subscription/metering stability before deploying staging. Portal (#4 FIDO) will be integrated into staging environment.
 
+## Orchestration — 2026-05-29T19:30:29Z
+
+**#5 Containerized Staging Deployment — COMPLETE**
+- Docker Compose, Dockerfiles, Bicep infrastructure-as-code modules
+- GitHub Actions deploy workflow, deployment runbook
+- Two-phase Bicep strategy: deploy shared resources first (`deployContainerApps=false`), build/push images to ACR, redeploy with `deployContainerApps=true`
+- Ensures Container Apps always reference valid image tags; enables rollback by redeploying older tags
+
+**Cross-team info:**
+- EECOM API foundation (PR #7) ready for staging integration
+- FIDO portal MVP (PR #8) ready for staging integration
+- Both services containerized and staging infrastructure supports deployment of both
+- Decision: Two-phase Bicep avoids failed Container Apps revisions and enables safe rollback
+
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29T19:30:29Z:** Staging infrastructure complete. Two-phase Bicep deployment strategy ensures Container Apps reliability and rollback safety. API (EECOM) and portal (FIDO) ready for staging integration.
