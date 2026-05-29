@@ -5,7 +5,8 @@ import clsx from 'clsx';
 import type { DashboardData, PortalAction } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
 import { LoadingPanel } from '@/components/loading-panel';
-import { ApiError, portalApi } from '@/lib/api-client';
+import { portalApi } from '@/lib/api-client';
+import { getErrorMessage } from '@/lib/errors';
 
 const stateTone: Record<DashboardData['subscription']['state'], string> = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -41,7 +42,7 @@ export function DashboardClient() {
   }
 
   if (dashboardQuery.isError) {
-    return <ErrorAlert message={(dashboardQuery.error as ApiError).userMessage} />;
+    return <ErrorAlert message={getErrorMessage(dashboardQuery.error, 'We could not load your subscription overview.')} />;
   }
 
   if (!dashboardQuery.data) {
@@ -68,7 +69,7 @@ export function DashboardClient() {
         </dl>
       </header>
 
-      {actionMutation.isError ? <ErrorAlert message={(actionMutation.error as ApiError).userMessage} /> : null}
+      {actionMutation.isError ? <ErrorAlert message={getErrorMessage(actionMutation.error, 'We could not complete that lifecycle action.')} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr,0.7fr]">
         <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel">

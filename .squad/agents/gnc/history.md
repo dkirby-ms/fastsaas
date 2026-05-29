@@ -36,3 +36,4 @@ Assigned to GNC:
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** Staging infrastructure complete. Two-phase Bicep deployment strategy ensures Container Apps reliability and rollback safety. API (EECOM) and portal (FIDO) ready for staging integration.
+- **2026-05-29T21:10:05Z:** Portal auth now mirrors the Entra-backed API contract: `packages/portal/lib/auth.ts` uses NextAuth Azure AD with a required `NEXTAUTH_SECRET`, `packages/portal/lib/api-client.ts` forwards the session access token as `Authorization: Bearer`, and portal env config must include both the portal app credentials and API audience (`AZURE_AD_API_CLIENT_ID` / optional `AZURE_AD_API_SCOPE`).

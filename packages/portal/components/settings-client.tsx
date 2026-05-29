@@ -5,7 +5,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import type { SettingsData } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
 import { LoadingPanel } from '@/components/loading-panel';
-import { ApiError, portalApi } from '@/lib/api-client';
+import { portalApi } from '@/lib/api-client';
+import { getErrorMessage } from '@/lib/errors';
 
 const emptySettings: SettingsData = {
   displayName: '',
@@ -43,7 +44,7 @@ export function SettingsClient() {
   }
 
   if (settingsQuery.isError) {
-    return <ErrorAlert message={(settingsQuery.error as ApiError).userMessage} />;
+    return <ErrorAlert message={getErrorMessage(settingsQuery.error, 'We could not load your account settings.')} />;
   }
 
   if (!settingsQuery.data) {
@@ -65,7 +66,7 @@ export function SettingsClient() {
         <p className="mt-3 max-w-3xl text-sm text-slate-500">Profile and notification preferences are saved through the same API abstraction used by the rest of the portal.</p>
       </header>
 
-      {updateSettingsMutation.isError ? <ErrorAlert message={(updateSettingsMutation.error as ApiError).userMessage} /> : null}
+      {updateSettingsMutation.isError ? <ErrorAlert message={getErrorMessage(updateSettingsMutation.error, 'We could not save your account settings.')} /> : null}
       {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div> : null}
 
       <form className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]" onSubmit={handleSubmit}>

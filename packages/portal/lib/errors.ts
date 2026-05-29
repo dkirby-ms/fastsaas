@@ -4,3 +4,15 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    return error.userMessage;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}

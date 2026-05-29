@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { ErrorAlert } from '@/components/error-alert';
 import { LoadingPanel } from '@/components/loading-panel';
-import { ApiError, portalApi } from '@/lib/api-client';
+import { portalApi } from '@/lib/api-client';
+import { getErrorMessage } from '@/lib/errors';
 
 export function PlanClient() {
   const queryClient = useQueryClient();
@@ -26,7 +27,7 @@ export function PlanClient() {
   }
 
   if (plansQuery.isError) {
-    return <ErrorAlert message={(plansQuery.error as ApiError).userMessage} />;
+    return <ErrorAlert message={getErrorMessage(plansQuery.error, 'We could not load your plan options.')} />;
   }
 
   if (!plansQuery.data) {
@@ -45,7 +46,7 @@ export function PlanClient() {
         </p>
       </header>
 
-      {updatePlanMutation.isError ? <ErrorAlert message={(updatePlanMutation.error as ApiError).userMessage} /> : null}
+      {updatePlanMutation.isError ? <ErrorAlert message={getErrorMessage(updatePlanMutation.error, 'We could not update your subscription plan.')} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-3">
         {availablePlans.map((plan) => {
