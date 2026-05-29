@@ -3,7 +3,14 @@ import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Respon
 
 import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
-import { buildResponseMeta } from '../lib/response';
+
+function buildMeta(req: ApiRequest) {
+  return {
+    requestId: String(req.id ?? 'unknown'),
+    timestamp: new Date().toISOString(),
+    version: 'v1'
+  };
+}
 
 export const notFoundHandler: RequestHandler = (req: Request, _res: Response, next: NextFunction): void => {
   next(AppError.notFound(`Route ${req.method} ${req.originalUrl} was not found`));
@@ -18,8 +25,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req: ApiReques
     {
       err: error,
       code: appError.code,
-      requestId: req.id,
-      correlationId: req.correlationId
+      requestId: req.id
     },
     'Request failed'
   );
@@ -31,6 +37,6 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req: ApiReques
       message: appError.message,
       details: appError.details
     },
-    meta: buildResponseMeta(req)
+    meta: buildMeta(req)
   });
 };

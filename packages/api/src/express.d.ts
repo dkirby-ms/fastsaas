@@ -5,7 +5,6 @@ declare global {
     interface Request {
       auth?: AuthClaims;
       context?: RequestContext;
-      correlationId?: string;
     }
   }
 }
