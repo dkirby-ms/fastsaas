@@ -1,4 +1,4 @@
-import { createSecretKey } from 'node:crypto';
+import { createHmac, createSecretKey } from 'node:crypto';
 import { Writable } from 'node:stream';
 
 import type { Subscription } from '@fastsaas/shared';
@@ -18,10 +18,13 @@ const config = createConfig({
   JWT_AUDIENCE: 'api://fastsaas-tests',
   JWT_ISSUER: 'https://login.microsoftonline.com/fastsaas-test/v2.0/',
   JWT_REQUIRED_SCOPE: 'api:read',
-  JWT_SECRET: 'integration-test-secret'
+  JWT_SECRET: 'integration-test-secret',
+  MARKETPLACE_WEBHOOK_SECRET: 'integration-webhook-secret'
 });
 
 const signingKey = createSecretKey(Buffer.from(config.auth.secret, 'utf8'));
+
+type FulfillmentAction = 'resolve' | 'activate' | 'suspend' | 'unsubscribe' | 'update' | 'reinstate';
 
 async function createToken(options?: { scope?: string; tenantId?: string }) {
   return new SignJWT({
@@ -38,6 +41,21 @@ async function createToken(options?: { scope?: string; tenantId?: string }) {
     .sign(signingKey);
 }
 
+function signWebhookPayload(payload: Record<string, unknown>, timestamp = new Date().toISOString()) {
+  const rawBody = JSON.stringify(payload);
+  const signature = createHmac('sha256', config.marketplace.webhookSecret)
+    .update(timestamp, 'utf8')
+    .update('.', 'utf8')
+    .update(rawBody)
+    .digest('base64');
+
+  return {
+    rawBody,
+    signature,
+    timestamp
+  };
+}
+
 class MemoryLogStream extends Writable {
   readonly entries: Record<string, unknown>[] = [];
 
@@ -52,7 +70,7 @@ class MemoryLogStream extends Writable {
 }
 
 class FakeFulfillmentClient implements MarketplaceFulfillmentClient {
-  readonly actions: string[] = [];
+  readonly calls: Array<Record<string, unknown>> = [];
 
   constructor(
     private readonly resolved: FulfillmentResolveResult = {
@@ -64,11 +82,11 @@ class FakeFulfillmentClient implements MarketplaceFulfillmentClient {
       beneficiaryTenantId: 'tenant-123',
       metadata: { landingPageToken: 'landing-token-123' }
     },
-    private readonly failOn?: 'resolve' | 'activate' | 'suspend' | 'unsubscribe'
+    private readonly failOn?: FulfillmentAction
   ) {}
 
   async resolveSubscription(): Promise<FulfillmentResolveResult> {
-    this.actions.push('resolve');
+    this.calls.push({ action: 'resolve' });
     if (this.failOn === 'resolve') {
       throw new Error('resolve failed');
     }
@@ -76,29 +94,43 @@ class FakeFulfillmentClient implements MarketplaceFulfillmentClient {
     return this.resolved;
   }
 
-  async activateSubscription(): Promise<void> {
-    this.actions.push('activate');
+  async activateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number): Promise<void> {
+    this.calls.push({ action: 'activate', marketplaceSubscriptionId, planId, quantity });
     if (this.failOn === 'activate') {
       throw new Error('activate failed');
     }
   }
 
-  async suspendSubscription(): Promise<void> {
-    this.actions.push('suspend');
+  async suspendSubscription(marketplaceSubscriptionId: string): Promise<void> {
+    this.calls.push({ action: 'suspend', marketplaceSubscriptionId });
     if (this.failOn === 'suspend') {
       throw new Error('suspend failed');
     }
   }
 
-  async unsubscribeSubscription(): Promise<void> {
-    this.actions.push('unsubscribe');
+  async unsubscribeSubscription(marketplaceSubscriptionId: string): Promise<void> {
+    this.calls.push({ action: 'unsubscribe', marketplaceSubscriptionId });
     if (this.failOn === 'unsubscribe') {
       throw new Error('unsubscribe failed');
     }
   }
+
+  async updateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number): Promise<void> {
+    this.calls.push({ action: 'update', marketplaceSubscriptionId, planId, quantity });
+    if (this.failOn === 'update') {
+      throw new Error('update failed');
+    }
+  }
+
+  async reinstateSubscription(marketplaceSubscriptionId: string): Promise<void> {
+    this.calls.push({ action: 'reinstate', marketplaceSubscriptionId });
+    if (this.failOn === 'reinstate') {
+      throw new Error('reinstate failed');
+    }
+  }
 }
 
-function createHarness(options?: { failOn?: 'resolve' | 'activate' | 'suspend' | 'unsubscribe' }) {
+function createHarness(options?: { failOn?: FulfillmentAction }) {
   const logStream = new MemoryLogStream();
   const logger = createLogger({ level: 'trace', destination: logStream });
   const subscriptionRepository = new InMemorySubscriptionRepository();
@@ -123,6 +155,23 @@ async function subscribe(app: ReturnType<typeof createHarness>['app'], token: st
     .set('Authorization', `Bearer ${token}`)
     .set('x-correlation-id', correlationId)
     .send({ marketplaceToken: 'marketplace-token-123' });
+}
+
+async function postSignedWebhook(
+  app: ReturnType<typeof createHarness>['app'],
+  payload: Record<string, unknown>,
+  options?: { eventId?: string; timestamp?: string; signature?: string; correlationId?: string }
+) {
+  const signedPayload = signWebhookPayload(payload, options?.timestamp);
+
+  return request(app)
+    .post('/api/webhooks/marketplace')
+    .set('Content-Type', 'application/json')
+    .set('x-ms-marketplace-timestamp', signedPayload.timestamp)
+    .set('x-ms-marketplace-signature', options?.signature ?? signedPayload.signature)
+    .set('x-ms-marketplace-event-id', options?.eventId ?? 'event-1')
+    .set('x-correlation-id', options?.correlationId ?? 'corr-webhook')
+    .send(signedPayload.rawBody);
 }
 
 function latestAuditEvent(subscription: Subscription) {
@@ -231,10 +280,33 @@ describe('API foundation and subscription lifecycle', () => {
       toStatus: 'Unsubscribed',
       correlationId: 'corr-unsubscribe-1'
     });
-    expect(fulfillmentClient.actions).toEqual(['resolve', 'activate', 'suspend', 'unsubscribe']);
+    expect(fulfillmentClient.calls).toEqual([
+      { action: 'resolve' },
+      { action: 'activate', marketplaceSubscriptionId: 'marketplace-sub-123', planId: 'basic', quantity: 5 },
+      { action: 'suspend', marketplaceSubscriptionId: 'marketplace-sub-123' },
+      { action: 'unsubscribe', marketplaceSubscriptionId: 'marketplace-sub-123' }
+    ]);
   });
 
-  it('processes marketplace webhook transitions and records webhook-sourced audits', async () => {
+  it('rejects marketplace webhooks with missing or expired security headers', async () => {
+    const { app } = createHarness();
+    const missingSignatureResponse = await request(app)
+      .post('/api/webhooks/marketplace')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ action: 'Suspend', marketplaceSubscriptionId: 'marketplace-sub-123' }));
+
+    expect(missingSignatureResponse.status).toBe(401);
+
+    const expiredResponse = await postSignedWebhook(
+      app,
+      { action: 'Suspend', marketplaceSubscriptionId: 'marketplace-sub-123' },
+      { timestamp: new Date(Date.now() - (config.marketplace.webhookTimestampToleranceMs + 1000)).toISOString() }
+    );
+
+    expect(expiredResponse.status).toBe(401);
+  });
+
+  it('processes marketplace webhook transitions, validates signatures, and treats duplicate events as idempotent', async () => {
     const { app } = createHarness();
     const token = await createToken();
     const subscribeResponse = await subscribe(app, token, 'corr-webhook-subscribe');
@@ -245,14 +317,16 @@ describe('API foundation and subscription lifecycle', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('x-correlation-id', 'corr-webhook-activate');
 
-    const webhookResponse = await request(app)
-      .post('/api/webhooks/marketplace')
-      .set('x-correlation-id', 'corr-webhook-suspend')
-      .send({
-        action: 'Suspend',
-        marketplaceSubscriptionId: subscribeResponse.body.data.marketplaceSubscriptionId,
-        details: { initiatedBy: 'marketplace' }
-      });
+    const payload = {
+      action: 'Suspend',
+      marketplaceSubscriptionId: subscribeResponse.body.data.marketplaceSubscriptionId,
+      details: { initiatedBy: 'marketplace' }
+    };
+
+    const webhookResponse = await postSignedWebhook(app, payload, {
+      eventId: 'marketplace-event-1',
+      correlationId: 'corr-webhook-suspend'
+    });
 
     expect(webhookResponse.status).toBe(202);
     expect(webhookResponse.body.data.status).toBe('Suspended');
@@ -261,6 +335,15 @@ describe('API foundation and subscription lifecycle', () => {
       source: 'marketplace-webhook',
       correlationId: 'corr-webhook-suspend'
     });
+
+    const duplicateResponse = await postSignedWebhook(app, payload, {
+      eventId: 'marketplace-event-1',
+      correlationId: 'corr-webhook-suspend-duplicate'
+    });
+
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicateResponse.body.data.status).toBe('Suspended');
+    expect(duplicateResponse.body.data.auditLog).toHaveLength(3);
   });
 
   it('logs actionable correlation details when fulfillment calls fail', async () => {

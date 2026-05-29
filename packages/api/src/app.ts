@@ -40,9 +40,10 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   const openApiSpec = buildOpenApiSpec(config);
 
   app.disable('x-powered-by');
-  app.use(express.json());
   app.use(createRequestLogger(appLogger));
   app.use(correlationContext);
+  app.use('/api/webhooks', createMarketplaceWebhookRouter(config, subscriptionService));
+  app.use(express.json());
 
   app.use(healthRouter);
   app.get('/openapi.json', (_req, res) => {
@@ -50,7 +51,6 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, { explorer: true }));
 
-  app.use('/api/webhooks', createMarketplaceWebhookRouter(config, subscriptionService));
   app.use('/v1', createV1Router(config, subscriptionService));
   app.use(notFoundHandler);
   app.use(errorHandler);

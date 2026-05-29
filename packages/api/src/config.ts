@@ -13,6 +13,8 @@ export interface ApiConfig {
     baseUrl: string;
     apiVersion: string;
     authToken: string;
+    webhookSecret: string;
+    webhookTimestampToleranceMs: number;
   };
 }
 
@@ -31,7 +33,9 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     marketplace: {
       baseUrl: env.MARKETPLACE_BASE_URL ?? 'https://marketplaceapi.microsoft.com',
       apiVersion: env.MARKETPLACE_API_VERSION ?? '2018-08-31',
-      authToken: env.MARKETPLACE_AUTH_TOKEN ?? 'local-marketplace-token'
+      authToken: env.MARKETPLACE_AUTH_TOKEN ?? 'local-marketplace-token',
+      webhookSecret: env.MARKETPLACE_WEBHOOK_SECRET ?? 'local-marketplace-webhook-secret',
+      webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     }
   };
 }

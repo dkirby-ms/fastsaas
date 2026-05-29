@@ -52,6 +52,7 @@ model SubscriptionAuditLog {
 
 model MarketplaceWebhookEvent {
   id                        String   @id @default(uuid())
+  idempotencyKey            String   @unique
   marketplaceSubscriptionId String
   action                    String
   correlationId             String

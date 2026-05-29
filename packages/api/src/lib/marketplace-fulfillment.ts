@@ -14,9 +14,11 @@ export interface FulfillmentResolveResult {
 
 export interface MarketplaceFulfillmentClient {
   resolveSubscription(marketplaceToken: string, requestId: string, correlationId: string): Promise<FulfillmentResolveResult>;
-  activateSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
+  activateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number, requestId: string, correlationId: string): Promise<void>;
   suspendSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
   unsubscribeSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
+  updateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number, requestId: string, correlationId: string): Promise<void>;
+  reinstateSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
 }
 
 export class MarketplaceFulfillmentError extends Error {
@@ -65,7 +67,13 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
     });
   }
 
-  async activateSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void> {
+  async activateSubscription(
+    marketplaceSubscriptionId: string,
+    planId: string,
+    quantity: number,
+    requestId: string,
+    correlationId: string
+  ): Promise<void> {
     const url = new URL(`/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}/activate`, this.options.baseUrl);
     url.searchParams.set('api-version', this.options.apiVersion);
 
@@ -74,7 +82,7 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
       action: 'activate',
       requestId,
       correlationId,
-      body: {}
+      body: { planId, quantity }
     });
   }
 
@@ -92,22 +100,52 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
   }
 
   async unsubscribeSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void> {
-    const url = new URL(`/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}/unsubscribe`, this.options.baseUrl);
+    const url = new URL(`/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}`, this.options.baseUrl);
+    url.searchParams.set('api-version', this.options.apiVersion);
+
+    await this.request(url, {
+      method: 'DELETE',
+      action: 'unsubscribe',
+      requestId,
+      correlationId
+    });
+  }
+
+  async updateSubscription(
+    marketplaceSubscriptionId: string,
+    planId: string,
+    quantity: number,
+    requestId: string,
+    correlationId: string
+  ): Promise<void> {
+    const url = new URL(`/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}`, this.options.baseUrl);
+    url.searchParams.set('api-version', this.options.apiVersion);
+
+    await this.request(url, {
+      method: 'PATCH',
+      action: 'update',
+      requestId,
+      correlationId,
+      body: { planId, quantity }
+    });
+  }
+
+  async reinstateSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void> {
+    const url = new URL(`/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}/reinstate`, this.options.baseUrl);
     url.searchParams.set('api-version', this.options.apiVersion);
 
     await this.request(url, {
       method: 'POST',
-      action: 'unsubscribe',
+      action: 'reinstate',
       requestId,
-      correlationId,
-      body: {}
+      correlationId
     });
   }
 
   private async request<T = void>(
     url: URL,
     options: {
-      method: 'GET' | 'POST';
+      method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
       action: string;
       requestId: string;
       correlationId: string;

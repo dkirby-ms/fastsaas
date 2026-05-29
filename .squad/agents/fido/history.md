@@ -21,4 +21,4 @@ Assigned to FIDO:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29:** Marketplace webhooks in `packages/api` now require a route-level raw-body parser plus HMAC-SHA256 validation using `timestamp.rawBody`, a 5-minute replay window, and idempotency keys so duplicate Azure lifecycle events return success without reapplying transitions.
