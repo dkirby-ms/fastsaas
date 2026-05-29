@@ -21,4 +21,9 @@ Assigned to GNC:
 
 ## Learnings
 
+### 2026-05-29T14:30:29.387-05:00
+- Used a two-phase staging deployment flow: bootstrap shared Azure resources with infrastructure/bicep/main.bicep, publish images to ACR, then redeploy Container Apps with the selected image tag.
+- Added reusable Azure modules under infrastructure/bicep/modules/ for ACR, Container Apps environment, Container Apps, PostgreSQL Flexible Server, and Redis.
+- Standardized /health probes across packages/api/Dockerfile, packages/portal/Dockerfile, docker-compose.yml, .github/workflows/deploy-staging.yml, and docs/deployment-guide.md so local and Azure verification use the same checks.
 _No learnings recorded yet._
+
