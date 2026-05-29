@@ -13,7 +13,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   tags: tags
   properties: {
     adminUserEnabled: adminUserEnabled
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: 'Enabled'
   }
 }
 
