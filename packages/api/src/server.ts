@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { createConfig } from './config';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
+import { createMeteringRuntime } from './metering/runtime';
 import {
   InMemorySubscriptionRepository,
   PrismaSubscriptionRepository,
@@ -14,6 +15,7 @@ function createSubscriptionRepository(databaseUrl?: string): SubscriptionReposit
 }
 
 const config = createConfig();
+const meteringRuntime = createMeteringRuntime(config);
 const subscriptionRepository = createSubscriptionRepository(config.databaseUrl);
 const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
   baseUrl: config.marketplace.baseUrl,
@@ -22,7 +24,23 @@ const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
   logger
 });
 const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
-const app = createApp(config, { subscriptionService });
+const app = createApp(config, { ...meteringRuntime, subscriptionService });
+
+async function runMeteringWorker(): Promise<void> {
+  try {
+    const result = await meteringRuntime.worker.runNextBatch();
+    if (result.attempted > 0) {
+      logger.info(result, 'Completed metering outbox batch');
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Metering worker run failed');
+  }
+}
+
+setInterval(() => {
+  void runMeteringWorker();
+}, config.metering.workerIntervalMs).unref();
+
 const server = app.listen(config.port, () => {
   logger.info({ port: config.port }, 'API server listening');
 });

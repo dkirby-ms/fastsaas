@@ -43,8 +43,15 @@ Assigned to EECOM:
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** API foundation complete. JWT auth and tenant middleware ready for multi-tenant SaaS operations. Portal scaffold (FIDO) ready to integrate live endpoints.
+## Learnings
+
 - **2026-05-29T14:30:29.387-05:00:** API foundation now lives in `packages/api/` with Express + TypeScript, `packages/shared/src/index.ts` carries shared auth/response types, and the protected bootstrap route is `GET /v1/auth/context`.
 - **2026-05-29T14:30:29.387-05:00:** Auth uses `jose` JWT verification plus tenant-context middleware that reads `tenant_id`, `tid`, or `extension_tenant_id`, and global JSON logging/error handling is wired through `src/middleware/`.
 - **2026-05-29T14:30:29.387-05:00:** OpenAPI bootstrap is published at `/openapi.json` and `/docs`, with integration coverage in `packages/api/src/__tests__/app.integration.test.ts` for 401, 403, 200, and spec validation.
-- **2026-05-29T14:30:29.387-05:00:** Subscription lifecycle support now lives in `packages/api` with `POST /v1/subscriptions`, `POST /v1/subscriptions/:subscriptionId/activate`, `POST /v1/subscriptions/:subscriptionId/suspend`, `DELETE /v1/subscriptions/:subscriptionId`, and `POST /api/webhooks/marketplace`, all persisting audit transitions with correlation IDs.
-- **2026-05-29T14:30:29.387-05:00:** `packages/api/prisma/schema.prisma` defines the Marketplace subscription state model plus audit/webhook tables, while runtime repository selection uses Prisma when `DATABASE_URL` is present and an in-memory adapter for integration tests.
+- **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
+
+## Completed Work
+
+- **2026-05-29 Phase 1 Round 2:**
+  - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
+  - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.

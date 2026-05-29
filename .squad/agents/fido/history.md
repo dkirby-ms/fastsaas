@@ -19,6 +19,12 @@ Assigned to FIDO:
 
 **Coordination:** Align portal navigation and auth flows with EECOM's API foundation. Staging deployment (#5 GNC) will integrate portal with backend once backend is ready.
 
+## Learnings
+
+- **2026-05-29T14:30:29.387-05:00:** Customer portal MVP lives in `packages/portal/` as a Next.js App Router app with Tailwind, NextAuth credentials scaffolding, TanStack Query data fetching, and a mock-capable API client for backend-parallel development.
+- **2026-05-29T14:30:29.387-05:00:** Reusable portal contract types now live in `packages/shared/src/index.ts`, and the portal shell/navigation pattern is centered around `packages/portal/components/portal-shell.tsx` plus page clients in `packages/portal/components/*-client.tsx`.
+- **2026-05-29T14:30:29.387-05:00:** Portal validation is workspace-scoped: `npm run typecheck --workspace=@fastsaas/portal` and `npm run build --workspace=@fastsaas/portal`.
+
 ## Orchestration — 2026-05-29T19:30:29Z
 
 **#4 Customer Portal MVP — COMPLETE (PR #8)**
@@ -34,8 +40,9 @@ Assigned to FIDO:
 
 ## Learnings
 
-- **2026-05-29T14:30:29.387-05:00:** Customer portal MVP lives in `packages/portal/` as a Next.js App Router app with Tailwind, NextAuth credentials scaffolding, TanStack Query data fetching, and a mock-capable API client for backend-parallel development.
-- **2026-05-29T14:30:29.387-05:00:** Reusable portal contract types now live in `packages/shared/src/index.ts`, and the portal shell/navigation pattern is centered around `packages/portal/components/portal-shell.tsx` plus page clients in `packages/portal/components/*-client.tsx`.
-- **2026-05-29T14:30:29.387-05:00:** Portal validation is workspace-scoped: `npm run typecheck --workspace=@fastsaas/portal` and `npm run build --workspace=@fastsaas/portal`.
 - **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
-- **2026-05-29:** Marketplace webhooks in `packages/api` now require a route-level raw-body parser plus HMAC-SHA256 validation using `timestamp.rawBody`, a 5-minute replay window, and idempotency keys so duplicate Azure lifecycle events return success without reapplying transitions.
+_No learnings recorded yet._
+
+## Cross-Team Updates
+
+- **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. FIDO should review API contracts for portal integration.
