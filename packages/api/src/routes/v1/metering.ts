@@ -14,7 +14,7 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
 
   /**
    * @openapi
-   * /api/metering/events:
+   * /v1/metering/events:
    *   post:
    *     summary: Ingest a metering usage event
    *     tags:
@@ -57,8 +57,8 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
   router.post(
     '/events',
     ...authorizeWrite,
-    async (req: ApiRequest<unknown, unknown, UsageEventIngestRequest>, res: Response<ApiResponse<UsageEventIngestResponse>>) => {
-      const result = await service.ingestEvent(req.context!.tenantId, req.body);
+    async (req: ApiRequest, res: Response<ApiResponse<UsageEventIngestResponse>>) => {
+      const result = await service.ingestEvent(req.context!.tenantId, req.body as UsageEventIngestRequest);
 
       res.status(202).json({
         status: 'success',
@@ -74,7 +74,7 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
 
   /**
    * @openapi
-   * /api/metering/dashboard:
+   * /v1/metering/dashboard:
    *   get:
    *     summary: Get metering submission SLA indicators for the tenant
    *     tags:

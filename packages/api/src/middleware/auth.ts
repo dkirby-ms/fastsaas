@@ -1,12 +1,10 @@
-import { createSecretKey } from 'node:crypto';
-
 import type { AuthClaims } from '@fastsaas/shared';
 import type { NextFunction, Response } from 'express';
-import { jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 import type { ApiConfig } from '../config';
-import type { ApiRequest } from '../http';
 import { AppError } from '../errors/app-error';
+import type { ApiRequest } from '../http';
 
 function getBearerToken(authorizationHeader?: string): string {
   if (!authorizationHeader) {
@@ -19,6 +17,10 @@ function getBearerToken(authorizationHeader?: string): string {
   }
 
   return token;
+}
+
+function normalizeUrl(url: string): string {
+  return url.replace(/\/+$/, '');
 }
 
 export function getScopes(claims: Partial<AuthClaims> | undefined): string[] {
@@ -58,18 +60,71 @@ export function getRoles(claims: Partial<AuthClaims> | undefined): string[] {
   return [];
 }
 
+export function getUserId(claims: Partial<AuthClaims> | undefined): string | undefined {
+  if (!claims) {
+    return undefined;
+  }
+
+  const candidates = [claims.oid, claims.sub];
+  return candidates.find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function validateIssuer(payload: JWTPayload, config: ApiConfig): void {
+  const issuer = typeof payload.iss === 'string' ? normalizeUrl(payload.iss) : undefined;
+  if (!issuer) {
+    throw AppError.unauthorized('Token issuer claim is required');
+  }
+
+  const tokenTenantId = typeof payload.tid === 'string' ? payload.tid : undefined;
+
+  if (config.auth.azureTenantId === 'common') {
+    const commonIssuerPattern = /^https:\/\/login\.microsoftonline\.com\/[^/]+\/v2\.0$/;
+    if (!commonIssuerPattern.test(issuer)) {
+      throw AppError.unauthorized('Bearer token issuer is invalid');
+    }
+
+    return;
+  }
+
+  if (issuer !== config.auth.issuer) {
+    throw AppError.unauthorized('Bearer token issuer is invalid');
+  }
+
+  if (tokenTenantId && tokenTenantId !== config.auth.azureTenantId) {
+    throw AppError.forbidden('The access token was issued for a different tenant', { tokenTenantId });
+  }
+}
+
+function buildDevAuthClaims(config: ApiConfig): AuthClaims {
+  return {
+    sub: config.auth.devUserId,
+    oid: config.auth.devUserId,
+    tid: config.auth.devTenantId,
+    scp: config.auth.requiredScope,
+    roles: ['developer']
+  };
+}
+
 export function authenticateRequest(config: ApiConfig) {
-  const key = createSecretKey(Buffer.from(config.auth.secret, 'utf8'));
+  const jwks = config.auth.bypassEnabled ? undefined : createRemoteJWKSet(new URL(config.auth.jwksUri));
 
   return async function authenticate(req: ApiRequest, _res: Response, next: NextFunction): Promise<void> {
+    if (config.auth.bypassEnabled) {
+      req.auth = buildDevAuthClaims(config);
+      next();
+      return;
+    }
+
     try {
       const token = getBearerToken(req.header('authorization'));
-      const { payload } = await jwtVerify(token, key, {
-        issuer: config.auth.issuer,
-        audience: config.auth.audience
+      const { payload } = await jwtVerify(token, jwks!, {
+        audience: config.auth.audience,
+        algorithms: ['RS256']
       });
 
-      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+      validateIssuer(payload, config);
+
+      if (!getUserId(payload as Partial<AuthClaims>)) {
         throw AppError.unauthorized('Token subject claim is required');
       }
 

@@ -7,12 +7,20 @@ const config = createConfig();
 const meteringRuntime = createMeteringRuntime(config);
 const app = createApp(config, meteringRuntime);
 
-setInterval(async () => {
-  const result = await meteringRuntime.worker.runNextBatch();
+async function runMeteringWorker(): Promise<void> {
+  try {
+    const result = await meteringRuntime.worker.runNextBatch();
 
-  if (result.attempted > 0) {
-    logger.info(result, 'Completed metering outbox batch');
+    if (result.attempted > 0) {
+      logger.info(result, 'Completed metering outbox batch');
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Metering worker run failed');
   }
+}
+
+setInterval(() => {
+  void runMeteringWorker();
 }, config.metering.workerIntervalMs).unref();
 
 app.listen(config.port, () => {

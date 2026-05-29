@@ -1,273 +1,154 @@
-import { createSecretKey } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 import SwaggerParser from '@apidevtools/swagger-parser';
-import { SignJWT } from 'jose';
+import { exportJWK, generateKeyPair, SignJWT, type KeyLike, type JWK } from 'jose';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app';
-import { createConfig } from '../config';
-import { MarketplaceMeteringError, type MarketplaceMeteringClient, type MarketplaceSubmitUsageEvent } from '../metering/client';
-import type { Clock } from '../metering/clock';
-import { InMemoryUsageEventRepository } from '../metering/repository';
-import { MeteringOutboxWorker } from '../metering/worker';
+import { createConfig, type ApiConfig } from '../config';
 
-class FakeClock implements Clock {
-  private current: Date;
+let jwksServer: Server;
+let signingKey: KeyLike;
+let app: ReturnType<typeof createApp>;
+let config: ApiConfig;
 
-  constructor(seed = '2026-05-29T14:30:29.387Z') {
-    this.current = new Date(seed);
-  }
+beforeAll(async () => {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = await exportJWK(publicKey) as JWK;
 
-  now(): Date {
-    return new Date(this.current);
-  }
+  jwk.alg = 'RS256';
+  jwk.kid = 'test-key-1';
+  jwk.use = 'sig';
+  signingKey = privateKey;
 
-  advanceMs(ms: number): void {
-    this.current = new Date(this.current.getTime() + ms);
-  }
-}
-
-class ScriptedMarketplaceClient implements MarketplaceMeteringClient {
-  private readonly script: Array<'success' | MarketplaceMeteringError>;
-  readonly submittedEvents: MarketplaceSubmitUsageEvent[] = [];
-
-  constructor(script: Array<'success' | MarketplaceMeteringError>) {
-    this.script = [...script];
-  }
-
-  async submitUsageEvent(event: MarketplaceSubmitUsageEvent): Promise<void> {
-    const step = this.script.shift() ?? 'success';
-    if (step === 'success') {
-      this.submittedEvents.push(event);
+  jwksServer = createServer((req, res) => {
+    if (req.url !== '/discovery/v2.0/keys') {
+      res.statusCode = 404;
+      res.end();
       return;
     }
 
-    throw step;
-  }
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ keys: [jwk] }));
+  });
 
-  async refreshAccessToken(): Promise<void> {
-    return Promise.resolve();
-  }
-}
+  await new Promise<void>((resolve) => {
+    jwksServer.listen(0, '127.0.0.1', () => resolve());
+  });
 
-function createHarness(script: Array<'success' | MarketplaceMeteringError> = []) {
-  const clock = new FakeClock();
-  const config = createConfig({
+  const { port } = jwksServer.address() as AddressInfo;
+  config = createConfig({
     API_PORT: '3001',
-    JWT_AUDIENCE: 'api://fastsaas-tests',
-    JWT_ISSUER: 'https://login.microsoftonline.com/fastsaas-test/v2.0/',
-    JWT_REQUIRED_SCOPE: 'api:read',
-    JWT_SECRET: 'integration-test-secret',
-    METERING_READ_SCOPE: 'metering:read',
-    METERING_WRITE_SCOPE: 'metering:write',
-    METERING_BATCH_SIZE: '10',
-    METERING_MAX_RETRIES: '2',
-    METERING_RETRY_BASE_DELAY_MS: '1000',
-    METERING_RETRY_MAX_DELAY_MS: '30000',
-    METERING_RETRY_JITTER_RATIO: '0',
-    METERING_SUBMISSION_SLA_MS: '14400000'
+    NODE_ENV: 'test',
+    AZURE_AD_TENANT_ID: 'fastsaas-test-tenant',
+    AZURE_AD_CLIENT_ID: 'fastsaas-tests-client',
+    AZURE_AD_AUDIENCE: 'api://fastsaas-tests',
+    AZURE_AD_ISSUER: 'https://login.microsoftonline.com/fastsaas-test-tenant/v2.0',
+    AZURE_AD_JWKS_URI: `http://127.0.0.1:${port}/discovery/v2.0/keys`,
+    JWT_REQUIRED_SCOPE: 'api:read'
   });
-  const repository = new InMemoryUsageEventRepository(clock);
-  const marketplaceClient = new ScriptedMarketplaceClient(script);
-  const app = createApp(config, {
-    clock,
-    repository,
-    marketplaceClient,
-    random: () => 0
-  });
-  const worker = new MeteringOutboxWorker(config, repository, marketplaceClient, clock, () => 0);
-  const signingKey = createSecretKey(Buffer.from(config.auth.secret, 'utf8'));
+  app = createApp(config);
+});
 
-  async function createToken(scope: string, tenantId = 'tenant-123') {
-    return new SignJWT({
-      scope,
-      tenant_id: tenantId,
-      roles: ['member']
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuer(config.auth.issuer)
-      .setAudience(config.auth.audience)
-      .setSubject('user-123')
-      .setIssuedAt(clock.now())
-      .setExpirationTime('10m')
-      .sign(signingKey);
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    jwksServer.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+});
+
+async function createToken(options?: { scope?: string; tenantId?: string; omitTenantId?: boolean }) {
+  const payload: Record<string, unknown> = {
+    scp: options?.scope ?? config.auth.requiredScope,
+    oid: 'user-123',
+    roles: ['member']
+  };
+
+  if (!options?.omitTenantId) {
+    payload.tid = options?.tenantId ?? config.auth.azureTenantId;
   }
 
-  return {
-    app,
-    clock,
-    config,
-    repository,
-    marketplaceClient,
-    worker,
-    createToken
-  };
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
+    .setIssuer(config.auth.issuer)
+    .setAudience(config.auth.audience[0])
+    .setSubject('subject-123')
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(signingKey);
 }
 
-const usageEventPayload = {
-  eventId: 'evt_001',
-  subscriptionId: 'sub_001',
-  planId: 'plan-growth',
-  dimensionId: 'dim_api_requests',
-  quantity: 42,
-  timestamp: '2026-05-29T14:00:00.000Z'
-};
-
-describe('API foundation and metering baseline', () => {
-  let harness: ReturnType<typeof createHarness>;
-
-  beforeEach(() => {
-    harness = createHarness();
-  });
-
+describe('API foundation and auth baseline', () => {
   it('returns 401 when the bearer token is missing', async () => {
-    const response = await request(harness.app).get('/v1/auth/context');
+    const response = await request(app).get('/v1/auth/context');
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('AUTH_UNAUTHORIZED');
   });
 
+  it('returns 403 when the token lacks the required scope', async () => {
+    const token = await createToken({ scope: 'api:write' });
+    const response = await request(app)
+      .get('/v1/auth/context')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(response.body.error.details.missingScopes).toEqual([config.auth.requiredScope]);
+  });
+
+  it('returns 403 when a valid token is missing tenant claims', async () => {
+    const token = await createToken({ omitTenantId: true });
+    const response = await request(app)
+      .get('/v1/auth/context')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(response.body.error.message).toBe('Tenant context is missing from the access token');
+  });
+
   it('returns 200 and tenant context for an authenticated request', async () => {
-    const token = await harness.createToken('api:read');
-    const response = await request(harness.app)
+    const token = await createToken();
+    const response = await request(app)
       .get('/v1/auth/context')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({
-      tenantId: 'tenant-123',
+      tenantId: config.auth.azureTenantId,
       userId: 'user-123',
-      scopes: ['api:read'],
+      scopes: [config.auth.requiredScope],
       roles: ['member']
     });
   });
 
-  it('ingests and persists a usage event through the API', async () => {
-    const token = await harness.createToken('metering:write metering:read');
-    const response = await request(harness.app)
-      .post('/api/metering/events')
-      .set('Authorization', `Bearer ${token}`)
-      .send(usageEventPayload);
+  it('sanitizes an invalid request id before echoing it back', async () => {
+    const invalidRequestId = 'x'.repeat(129);
+    const response = await request(app)
+      .get('/health')
+      .set('x-request-id', invalidRequestId);
 
-    expect(response.status).toBe(202);
-    expect(response.body.data.deduplicated).toBe(false);
-
-    const events = await harness.repository.listByTenant('tenant-123');
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      eventId: usageEventPayload.eventId,
-      subscriptionId: usageEventPayload.subscriptionId,
-      planId: usageEventPayload.planId,
-      status: 'pending',
-      retryCount: 0
-    });
+    expect(response.status).toBe(200);
+    expect(response.headers['x-request-id']).toBeDefined();
+    expect(response.headers['x-request-id']).not.toBe(invalidRequestId);
+    expect(response.body.meta.requestId).toBe(response.headers['x-request-id']);
   });
 
-  it('deduplicates usage events by eventId and timestamp', async () => {
-    const token = await harness.createToken('metering:write');
-    const first = await request(harness.app)
-      .post('/api/metering/events')
-      .set('Authorization', `Bearer ${token}`)
-      .send(usageEventPayload);
-    const second = await request(harness.app)
-      .post('/api/metering/events')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        ...usageEventPayload,
-        idempotencyKey: 'custom-key-that-should-still-dedupe'
-      });
-
-    expect(first.status).toBe(202);
-    expect(second.status).toBe(202);
-    expect(second.body.data.deduplicated).toBe(true);
-    expect(second.body.data.event.id).toBe(first.body.data.event.id);
-    expect(await harness.repository.listByTenant('tenant-123')).toHaveLength(1);
-  });
-
-  it('retries a 429 and then reports the event as submitted within SLA', async () => {
-    harness = createHarness([
-      new MarketplaceMeteringError(429, 'rate limited', 30),
-      'success'
-    ]);
-    const token = await harness.createToken('metering:write metering:read');
-
-    await request(harness.app)
-      .post('/api/metering/events')
-      .set('Authorization', `Bearer ${token}`)
-      .send(usageEventPayload);
-
-    const firstRun = await harness.worker.runNextBatch();
-    expect(firstRun).toEqual({ attempted: 1, submitted: 0, retried: 1, deadLettered: 0 });
-
-    let events = await harness.repository.listByTenant('tenant-123');
-    expect(events[0]).toMatchObject({
-      status: 'retry_scheduled',
-      retryCount: 1,
-      lastHttpStatus: 429
-    });
-    expect(events[0].nextAttemptAt).toBe('2026-05-29T14:30:59.387Z');
-
-    harness.clock.advanceMs(30000);
-    const secondRun = await harness.worker.runNextBatch();
-    expect(secondRun).toEqual({ attempted: 1, submitted: 1, retried: 0, deadLettered: 0 });
-
-    events = await harness.repository.listByTenant('tenant-123');
-    expect(events[0].status).toBe('submitted');
-
-    const dashboard = await request(harness.app)
-      .get('/api/metering/dashboard')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(dashboard.status).toBe(200);
-    expect(dashboard.body.data.submittedWithinSlaPercent).toBe(100);
-    expect(dashboard.body.data.submittedCount).toBe(1);
-  });
-
-  it('moves exhausted 5xx events into the dead-letter queue', async () => {
-    harness = createHarness([
-      new MarketplaceMeteringError(503, 'upstream unavailable'),
-      new MarketplaceMeteringError(503, 'still unavailable'),
-      new MarketplaceMeteringError(503, 'terminal outage')
-    ]);
-    const token = await harness.createToken('metering:write metering:read');
-
-    await request(harness.app)
-      .post('/api/metering/events')
-      .set('Authorization', `Bearer ${token}`)
-      .send(usageEventPayload);
-
-    expect(await harness.worker.runNextBatch()).toEqual({ attempted: 1, submitted: 0, retried: 1, deadLettered: 0 });
-    harness.clock.advanceMs(1000);
-    expect(await harness.worker.runNextBatch()).toEqual({ attempted: 1, submitted: 0, retried: 1, deadLettered: 0 });
-    harness.clock.advanceMs(2000);
-    expect(await harness.worker.runNextBatch()).toEqual({ attempted: 1, submitted: 0, retried: 0, deadLettered: 1 });
-
-    const events = await harness.repository.listByTenant('tenant-123');
-    const deadLetters = await harness.repository.listDeadLetters('tenant-123');
-    expect(events[0].status).toBe('dead_letter');
-    expect(deadLetters).toHaveLength(1);
-    expect(deadLetters[0]).toMatchObject({
-      eventId: usageEventPayload.eventId,
-      httpStatus: 503,
-      retryCount: 2
-    });
-
-    const dashboard = await request(harness.app)
-      .get('/api/metering/dashboard')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(dashboard.body.data.deadLetterCount).toBe(1);
-  });
-
-  it('publishes an OpenAPI spec for health, auth, and metering routes', async () => {
-    const response = await request(harness.app).get('/openapi.json');
+  it('publishes an OpenAPI spec for the health and auth routes', async () => {
+    const response = await request(app).get('/openapi.json');
     const document = await SwaggerParser.validate(response.body);
 
     expect(response.status).toBe(200);
     expect(document.paths).toHaveProperty('/health');
     expect(document.paths).toHaveProperty('/v1/auth/context');
-    expect(document.paths).toHaveProperty('/api/metering/events');
-    expect(document.paths).toHaveProperty('/api/metering/dashboard');
   });
 });

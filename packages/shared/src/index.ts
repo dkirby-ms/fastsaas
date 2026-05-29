@@ -1,75 +1,3 @@
-export type SubscriptionState = 'active' | 'trialing' | 'past_due' | 'suspended' | 'canceled';
-
-export interface PortalUser {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-}
-
-export interface UsageSummary {
-  activeMembers: number;
-  seatsPurchased: number;
-  apiRequestsThisMonth: number;
-}
-
-export interface SubscriptionSummary {
-  tenantId: string;
-  state: SubscriptionState;
-  planId: string;
-  planName: string;
-  billingCycle: 'monthly' | 'annual';
-  renewalDate: string;
-  amount: string;
-}
-
-export interface PortalAction {
-  id: 'resume' | 'suspend' | 'cancel';
-  label: string;
-  description: string;
-  tone: 'default' | 'warning' | 'danger';
-}
-
-export interface DashboardData {
-  user: PortalUser;
-  subscription: SubscriptionSummary;
-  usage: UsageSummary;
-  actions: PortalAction[];
-}
-
-export interface PlanFeature {
-  label: string;
-  included: boolean;
-}
-
-export interface PlanOption {
-  id: string;
-  name: string;
-  description: string;
-  priceMonthly: string;
-  recommended?: boolean;
-  features: PlanFeature[];
-}
-
-export interface PlansResponse {
-  currentPlanId: string;
-  availablePlans: PlanOption[];
-}
-
-export interface SettingsData {
-  displayName: string;
-  email: string;
-  company: string;
-  timezone: string;
-  notificationsEnabled: boolean;
-}
-
-export interface ApiErrorShape {
-  message: string;
-  code?: string;
-  status?: number;
-}
-
 export interface ApiError {
   code: string;
   message: string;
@@ -78,6 +6,7 @@ export interface ApiError {
 
 export interface ApiResponseMeta {
   requestId: string;
+  correlationId?: string;
   timestamp: string;
   version: string;
 }
@@ -91,13 +20,16 @@ export interface ApiResponse<T> {
 
 export interface AuthClaims {
   sub: string;
-  iss: string;
-  aud: string | string[];
+  iss?: string;
+  aud?: string | string[];
+  tenantId?: string;
   tenant_id?: string;
   tid?: string;
-  roles?: string[] | string;
+  email?: string;
+  oid?: string;
   scope?: string;
   scp?: string;
+  roles?: string[] | string;
   [key: string]: unknown;
 }
 
@@ -177,4 +109,51 @@ export interface MeteringWorkerRunResult {
   submitted: number;
   retried: number;
   deadLettered: number;
+}
+
+export type SubscriptionStatus = 'PendingActivation' | 'Active' | 'Suspended' | 'Unsubscribed';
+
+export interface SubscriptionAuditEntry {
+  id: string;
+  subscriptionId: string;
+  eventType: string;
+  source: string;
+  fromStatus: SubscriptionStatus | null;
+  toStatus: SubscriptionStatus;
+  correlationId: string;
+  requestId: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface Subscription {
+  id: string;
+  tenantId: string;
+  marketplaceSubscriptionId: string;
+  planId: string;
+  seats: number;
+  status: SubscriptionStatus;
+  offerId?: string;
+  purchaserTenantId?: string;
+  beneficiaryTenantId?: string;
+  correlationId: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  auditLog: SubscriptionAuditEntry[];
+}
+
+export interface CreateSubscriptionRequest {
+  marketplaceToken: string;
+  planId?: string;
+  seats?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MarketplaceWebhookPayload {
+  action: 'Suspend' | 'Unsubscribe' | 'Reinstate';
+  marketplaceSubscriptionId: string;
+  requestId?: string;
+  correlationId?: string;
+  details?: Record<string, unknown>;
 }

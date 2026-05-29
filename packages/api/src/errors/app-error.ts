@@ -9,7 +9,7 @@ export class AppError extends Error {
     this.name = 'AppError';
   }
 
-  static badRequest(message = 'The request payload is invalid', details?: Record<string, unknown>): AppError {
+  static badRequest(message = 'The request is invalid', details?: Record<string, unknown>): AppError {
     return new AppError(400, 'BAD_REQUEST', message, details);
   }
 

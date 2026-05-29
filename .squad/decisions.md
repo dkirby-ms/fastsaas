@@ -67,4 +67,3 @@ Created squad routing labels for future issue triaging:
 - **Context:** Issue #5 staging deployment foundation
 - **Decision:** Use a two-phase Bicep deployment. First deploy shared Azure resources with `deployContainerApps=false`, then build and push images to ACR, then redeploy with `deployContainerApps=true` so Container Apps always reference existing tags.
 - **Rationale:** This keeps one Bicep entrypoint, avoids failed Container Apps revisions caused by missing images, and supports rollback by redeploying an older image tag.
-

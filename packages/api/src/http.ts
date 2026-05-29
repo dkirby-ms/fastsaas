@@ -1,9 +1,3 @@
-import type { ParamsDictionary, Request } from 'express-serve-static-core';
-import type { ParsedQs } from 'qs';
+import type { Request } from 'express';
 
-export type ApiRequest<
-  P = ParamsDictionary,
-  ResBody = unknown,
-  ReqBody = unknown,
-  ReqQuery = ParsedQs
-> = Request<P, ResBody, ReqBody, ReqQuery>;
+export type ApiRequest = Request;

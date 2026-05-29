@@ -14,7 +14,6 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: Mete
   const app = express();
   const openApiSpec = buildOpenApiSpec(config);
   const meteringRuntime = createMeteringRuntime(config, dependencies);
-  const apiRouter = createV1Router(config, meteringRuntime.service);
 
   app.disable('x-powered-by');
   app.use(express.json());
@@ -26,8 +25,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: Mete
   });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, { explorer: true }));
 
-  app.use('/api', apiRouter);
-  app.use('/v1', apiRouter);
+  app.use('/v1', createV1Router(config, meteringRuntime.service));
   app.use(notFoundHandler);
   app.use(errorHandler);
 

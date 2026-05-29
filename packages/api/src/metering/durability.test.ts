@@ -281,6 +281,7 @@ function normalize(query: string): string {
 
 function createWorkerConfig() {
   return createConfig({
+    AUTH_BYPASS_ENABLED: 'true',
     METERING_BATCH_SIZE: '10',
     METERING_CLAIM_LEASE_MS: '60000',
     METERING_MAX_RETRIES: '2',
