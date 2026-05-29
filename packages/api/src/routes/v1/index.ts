@@ -5,11 +5,14 @@ import type { SubscriptionService } from '../../services/subscription-service';
 import { createAuthRouter } from './auth';
 import { createSubscriptionsRouter } from './subscriptions';
 
-export function createV1Router(config: ApiConfig, subscriptionService: SubscriptionService) {
+export function createV1Router(config: ApiConfig, subscriptionService?: SubscriptionService) {
   const router = Router();
 
   router.use('/auth', createAuthRouter(config));
-  router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService));
+
+  if (subscriptionService) {
+    router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService));
+  }
 
   return router;
 }

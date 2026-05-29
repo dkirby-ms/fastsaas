@@ -1,51 +1,48 @@
 import { randomUUID } from 'node:crypto';
-
-import type { RequestHandler } from 'express';
 import pinoHttp from 'pino-http';
 
-import type { ApiLogger } from '../lib/logger';
 import { logger } from '../lib/logger';
-import type { ApiRequest } from '../http';
 
-export function createRequestLogger(appLogger: ApiLogger) {
-  return pinoHttp({
-    logger: appLogger,
-    genReqId: (req, res) => {
-      const headerValue = req.headers['x-request-id'];
-      const requestId = Array.isArray(headerValue) ? headerValue[0] : headerValue ?? randomUUID();
-      res.setHeader('x-request-id', requestId);
-      return requestId;
-    },
-    customLogLevel: (_req, res, error) => {
-      if (error || res.statusCode >= 500) {
-        return 'error';
-      }
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
-      if (res.statusCode >= 400) {
-        return 'warn';
-      }
+function sanitizeRequestId(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
 
-      return 'info';
-    },
-    serializers: {
-      req: (req) => ({
-        id: req.id,
-        method: req.method,
-        url: req.url,
-        correlationId: (req as ApiRequest).correlationId
-      }),
-      res: (res) => ({
-        statusCode: res.statusCode
-      })
-    }
-  });
+  if (!trimmed || trimmed.length > 128 || !REQUEST_ID_PATTERN.test(trimmed)) {
+    return undefined;
+  }
+
+  return trimmed;
 }
 
-export const requestLogger = createRequestLogger(logger);
+export const requestLogger = pinoHttp({
+  logger,
+  genReqId: (req, res) => {
+    const headerValue = req.headers['x-request-id'];
+    const rawRequestId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    const requestId = sanitizeRequestId(rawRequestId) ?? randomUUID();
+    res.setHeader('x-request-id', requestId);
+    return requestId;
+  },
+  customLogLevel: (_req, res, error) => {
+    if (error || res.statusCode >= 500) {
+      return 'error';
+    }
 
-export const correlationContext: RequestHandler = (req: ApiRequest, res, next) => {
-  const correlationHeader = req.header('x-correlation-id') ?? req.header('x-ms-requestid');
-  req.correlationId = correlationHeader ?? String(req.id ?? randomUUID());
-  res.setHeader('x-correlation-id', req.correlationId);
-  next();
-};
+    if (res.statusCode >= 400) {
+      return 'warn';
+    }
+
+    return 'info';
+  },
+  serializers: {
+    req: (req) => ({
+      id: req.id,
+      method: req.method,
+      url: req.url
+    }),
+    res: (res) => ({
+      statusCode: res.statusCode
+    })
+  }
+});

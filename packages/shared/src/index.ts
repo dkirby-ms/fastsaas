@@ -20,6 +20,10 @@ export interface ApiResponse<T> {
 
 export interface AuthClaims {
   sub: string;
+  iss: string;
+  aud: string | string[];
+  tenant_id?: string;
+  tid?: string;
   tenantId?: string;
   email?: string;
   scope?: string;

@@ -14,7 +14,7 @@ export function buildOpenApiSpec(config: ApiConfig) {
       info: {
         title: 'FastSaaS API',
         version: config.apiVersion,
-        description: 'Backend API for authentication, tenant context, subscription lifecycle management, and marketplace webhooks.'
+        description: 'Foundation API for authentication, tenant context, subscription lifecycle management, and marketplace webhooks.'
       },
       servers: [
         {
