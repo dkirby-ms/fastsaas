@@ -21,4 +21,6 @@ Assigned to FIDO:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29T14:30:29.387-05:00:** Customer portal MVP lives in `packages/portal/` as a Next.js App Router app with Tailwind, NextAuth credentials scaffolding, TanStack Query data fetching, and a mock-capable API client for backend-parallel development.
+- **2026-05-29T14:30:29.387-05:00:** Reusable portal contract types now live in `packages/shared/src/index.ts`, and the portal shell/navigation pattern is centered around `packages/portal/components/portal-shell.tsx` plus page clients in `packages/portal/components/*-client.tsx`.
+- **2026-05-29T14:30:29.387-05:00:** Portal validation is workspace-scoped: `npm run typecheck --workspace=@fastsaas/portal` and `npm run build --workspace=@fastsaas/portal`.
