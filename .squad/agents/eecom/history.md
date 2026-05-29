@@ -30,4 +30,4 @@ Assigned to EECOM:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.

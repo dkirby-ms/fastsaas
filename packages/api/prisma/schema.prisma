@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UsageEventStatus {
+  pending
+  retry_scheduled
+  submitted
+  dead_letter
+}
+
+model UsageEvent {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @db.Uuid
+  eventId          String           @db.VarChar(255)
+  subscriptionId   String           @db.Uuid
+  dimensionId      String           @db.Uuid
+  quantity         Decimal          @db.Decimal(10, 2)
+  eventTimestamp   DateTime         @db.Timestamp(6)
+  idempotencyKey   String           @unique @db.VarChar(255)
+  status           UsageEventStatus @default(pending)
+  retryCount       Int              @default(0)
+  nextAttemptAt    DateTime?        @db.Timestamp(6)
+  submittedAt      DateTime?        @db.Timestamp(6)
+  lastErrorCode    String?          @db.VarChar(100)
+  lastErrorMessage String?          @db.Text
+  lastHttpStatus   Int?
+  metadata         Json             @default("{}")
+  createdAt        DateTime         @default(now()) @db.Timestamp(6)
+  updatedAt        DateTime         @updatedAt @db.Timestamp(6)
+  deadLetter       UsageEventDeadLetter?
+
+  @@unique([tenantId, eventId, eventTimestamp], map: "usage_events_tenant_event_ts_key")
+  @@index([tenantId, subscriptionId, eventTimestamp(sort: Desc)], map: "idx_usage_events_tenant_subscription_ts")
+  @@index([tenantId, dimensionId, eventTimestamp(sort: Desc)], map: "idx_usage_events_tenant_dimension_ts")
+  @@index([status, nextAttemptAt], map: "idx_usage_events_status_next_attempt_at")
+  @@map("usage_events")
+}
+
+model UsageEventDeadLetter {
+  id           String    @id @default(uuid()) @db.Uuid
+  usageEventId String    @unique @db.Uuid
+  tenantId     String    @db.Uuid
+  eventId      String    @db.VarChar(255)
+  reason       String    @db.Text
+  httpStatus   Int?
+  retryCount   Int
+  payload      Json
+  failedAt     DateTime  @default(now()) @db.Timestamp(6)
+  usageEvent   UsageEvent @relation(fields: [usageEventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, failedAt(sort: Desc)], map: "idx_usage_event_dead_letters_tenant_failed_at")
+  @@map("usage_event_dead_letters")
+}
