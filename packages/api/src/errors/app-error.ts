@@ -9,6 +9,10 @@ export class AppError extends Error {
     this.name = 'AppError';
   }
 
+  static badRequest(message = 'The request is invalid', details?: Record<string, unknown>): AppError {
+    return new AppError(400, 'BAD_REQUEST', message, details);
+  }
+
   static unauthorized(message = 'Authentication is required', details?: Record<string, unknown>): AppError {
     return new AppError(401, 'AUTH_UNAUTHORIZED', message, details);
   }
