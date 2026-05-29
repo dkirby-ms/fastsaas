@@ -1,3 +1,75 @@
+export type SubscriptionState = 'active' | 'trialing' | 'past_due' | 'suspended' | 'canceled';
+
+export interface PortalUser {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+}
+
+export interface UsageSummary {
+  activeMembers: number;
+  seatsPurchased: number;
+  apiRequestsThisMonth: number;
+}
+
+export interface SubscriptionSummary {
+  tenantId: string;
+  state: SubscriptionState;
+  planId: string;
+  planName: string;
+  billingCycle: 'monthly' | 'annual';
+  renewalDate: string;
+  amount: string;
+}
+
+export interface PortalAction {
+  id: 'resume' | 'suspend' | 'cancel';
+  label: string;
+  description: string;
+  tone: 'default' | 'warning' | 'danger';
+}
+
+export interface DashboardData {
+  user: PortalUser;
+  subscription: SubscriptionSummary;
+  usage: UsageSummary;
+  actions: PortalAction[];
+}
+
+export interface PlanFeature {
+  label: string;
+  included: boolean;
+}
+
+export interface PlanOption {
+  id: string;
+  name: string;
+  description: string;
+  priceMonthly: string;
+  recommended?: boolean;
+  features: PlanFeature[];
+}
+
+export interface PlansResponse {
+  currentPlanId: string;
+  availablePlans: PlanOption[];
+}
+
+export interface SettingsData {
+  displayName: string;
+  email: string;
+  company: string;
+  timezone: string;
+  notificationsEnabled: boolean;
+}
+
+export interface ApiErrorShape {
+  message: string;
+  code?: string;
+  status?: number;
+}
+
 export interface ApiError {
   code: string;
   message: string;
@@ -20,11 +92,15 @@ export interface ApiResponse<T> {
 
 export interface AuthClaims {
   sub: string;
+  iss: string;
+  aud: string | string[];
+  tenant_id?: string;
+  tid?: string;
   tenantId?: string;
   email?: string;
+  roles?: string[] | string;
   scope?: string;
   scp?: string;
-  roles?: string[] | string;
   [key: string]: unknown;
 }
 
