@@ -5,14 +5,16 @@
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run build --workspace @fastsaas/shared && npm run prisma:generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "npm run build --workspace @fastsaas/shared && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fastsaas/shared": "file:../shared",
+    "@prisma/client": "^5.22.0",
     "express": "^4.21.1",
     "jose": "^5.9.6",
     "pino": "^9.5.0",
@@ -27,6 +29,7 @@
     "@types/supertest": "^6.0.3",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "prisma": "^5.22.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "vitest": "^2.1.8"

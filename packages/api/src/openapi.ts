@@ -14,7 +14,7 @@ export function buildOpenApiSpec(config: ApiConfig) {
       info: {
         title: 'FastSaaS API',
         version: config.apiVersion,
-        description: 'Foundation API for authentication, tenant context, and core platform endpoints.'
+        description: 'Backend API for authentication, tenant context, subscription lifecycle management, and marketplace webhooks.'
       },
       servers: [
         {
@@ -34,8 +34,12 @@ export function buildOpenApiSpec(config: ApiConfig) {
     apis: [
       join(sourceRoot, 'routes', 'health.ts'),
       join(sourceRoot, 'routes', 'v1', 'auth.ts'),
+      join(sourceRoot, 'routes', 'v1', 'subscriptions.ts'),
+      join(sourceRoot, 'routes', 'webhooks', 'marketplace.ts'),
       join(runtimeRoot, 'routes', 'health.js'),
-      join(runtimeRoot, 'routes', 'v1', 'auth.js')
+      join(runtimeRoot, 'routes', 'v1', 'auth.js'),
+      join(runtimeRoot, 'routes', 'v1', 'subscriptions.js'),
+      join(runtimeRoot, 'routes', 'webhooks', 'marketplace.js')
     ]
   };
 
