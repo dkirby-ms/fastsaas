@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UsageEventStatus {
+  pending
+  retry_scheduled
+  submitted
+  dead_letter
+}
+
+model UsageEvent {
+  id               String                @id
+  tenantId         String
+  eventId          String                @db.VarChar(255)
+  subscriptionId   String
+  planId           String                @db.VarChar(255)
+  dimensionId      String                @db.VarChar(255)
+  quantity         Decimal               @db.Decimal(18, 6)
+  eventTimestamp   DateTime              @db.Timestamptz(6)
+  idempotencyKey   String                @db.VarChar(255)
+  status           UsageEventStatus      @default(pending)
+  retryCount       Int                   @default(0)
+  nextAttemptAt    DateTime?             @db.Timestamptz(6)
+  submittedAt      DateTime?             @db.Timestamptz(6)
+  lastErrorCode    String?               @db.VarChar(100)
+  lastErrorMessage String?               @db.Text
+  lastHttpStatus   Int?
+  metadata         Json                  @default("{}")
+  claimToken       String?               @db.VarChar(255)
+  claimedAt        DateTime?             @db.Timestamptz(6)
+  claimExpiresAt   DateTime?             @db.Timestamptz(6)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @db.Timestamptz(6)
+  deadLetter       UsageEventDeadLetter?
+
+  @@index([status, nextAttemptAt, claimExpiresAt, eventTimestamp, createdAt], map: "idx_usage_events_due")
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_usage_events_tenant_created_at")
+  @@index([tenantId, idempotencyKey, createdAt(sort: Desc)], map: "idx_usage_events_dedupe_lookup")
+  @@index([tenantId, eventId, eventTimestamp, createdAt(sort: Desc)], map: "idx_usage_events_event_lookup")
+  @@map("usage_events")
+}
+
+model UsageEventDeadLetter {
+  id           String     @id
+  usageEventId String     @unique
+  tenantId     String
+  eventId      String     @db.VarChar(255)
+  reason       String     @db.Text
+  httpStatus   Int?
+  retryCount   Int
+  payload      Json
+  failedAt     DateTime   @default(now()) @db.Timestamptz(6)
+  usageEvent   UsageEvent @relation(fields: [usageEventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, failedAt(sort: Desc)], map: "idx_usage_event_dead_letters_tenant_failed_at")
+  @@map("usage_event_dead_letters")
+}
+
+enum SubscriptionStatus {
+  PendingActivation
+  Active
+  Suspended
+  Unsubscribed
+}
+
+model Subscription {
+  id                        String                 @id @default(uuid())
+  tenantId                  String
+  marketplaceSubscriptionId String                 @unique
+  planId                    String
+  seats                     Int                    @default(1)
+  status                    SubscriptionStatus
+  offerId                   String?
+  purchaserTenantId         String?
+  beneficiaryTenantId       String?
+  correlationId             String
+  metadata                  Json?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  auditLogs                 SubscriptionAuditLog[]
+
+  @@index([tenantId, status])
+}
+
+model SubscriptionAuditLog {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  eventType      String
+  source         String
+  fromStatus     SubscriptionStatus?
+  toStatus       SubscriptionStatus
+  correlationId  String
+  requestId      String
+  details        Json?
+  createdAt      DateTime            @default(now())
+  subscription   Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+  @@index([correlationId, createdAt])
+}
+
+model MarketplaceWebhookEvent {
+  id                        String   @id @default(uuid())
+  marketplaceSubscriptionId String
+  action                    String
+  correlationId             String
+  requestId                 String
+  payload                   Json
+  status                    String
+  errorMessage              String?
+  createdAt                 DateTime @default(now())
+  processedAt               DateTime?
+
+  @@index([marketplaceSubscriptionId, createdAt])
+}

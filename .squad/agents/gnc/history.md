@@ -45,3 +45,9 @@ _No learnings recorded yet._
 - **2026-05-29T15:29:10.202-05:00 — Entra ID auth hardening:** Replaced HMAC bearer-token validation with Entra-compatible RS256/JWKS validation using `createRemoteJWKSet`, tenant context now prefers `tid`/`oid`, and dev-only bypass is gated by `AUTH_BYPASS_ENABLED` instead of a fallback secret.
 - **2026-05-29T15:29:10.202-05:00 — Validation pattern:** Integration coverage can use a local JWKS endpoint plus `jose`-signed RS256 test tokens to exercise real asymmetric verification paths, including missing-tenant-claim failures.
 - **2026-05-29T15:29:10.202-05:00 — Config approach:** API auth now depends on `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, optional issuer/audience/JWKS overrides, and sanitized `x-request-id` reflection to keep log/response metadata safe.
+- **2026-05-29:** Metering durability must use a PostgreSQL-backed outbox with expiring claim leases; in-memory storage is only acceptable for non-production or injected test harnesses.
+- **2026-05-29:** Azure Marketplace metering submissions must map internal events to `{ resourceId, quantity, dimension, effectiveStartTime, planId }`, and the event contract now requires `planId` at ingest time.
+
+## Cross-Team Updates
+
+- **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. GNC should begin validating deployment integration requirements.

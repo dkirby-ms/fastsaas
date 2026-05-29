@@ -42,3 +42,7 @@ Assigned to FIDO:
 
 - **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
 _No learnings recorded yet._
+
+## Cross-Team Updates
+
+- **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. FIDO should review API contracts for portal integration.

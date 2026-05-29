@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fastsaas-postgres
+    environment:
+      POSTGRES_DB: fastsaas
+      POSTGRES_USER: fastsaas
+      POSTGRES_PASSWORD: fastsaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: fastsaas-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+      target: runtime
+      args:
+        SERVICE_NAME: api
+        SERVICE_PORT: 3000
+    container_name: fastsaas-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_NAME: api
+      PORT: 3000
+      DATABASE_URL: postgresql://fastsaas:fastsaas@postgres:5432/fastsaas?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      HEALTH_PATH: /health
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  portal:
+    build:
+      context: .
+      dockerfile: packages/portal/Dockerfile
+      target: runtime
+      args:
+        SERVICE_NAME: portal
+        SERVICE_PORT: 3001
+    container_name: fastsaas-portal
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      APP_NAME: portal
+      PORT: 3001
+      API_BASE_URL: http://api:3000
+      HEALTH_PATH: /health
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-data:
+  redis-data:
