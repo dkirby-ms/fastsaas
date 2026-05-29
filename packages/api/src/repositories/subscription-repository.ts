@@ -24,6 +24,7 @@ export interface TransitionSubscriptionInput {
 }
 
 export interface RecordedWebhookEvent {
+  idempotencyKey: string;
   marketplaceSubscriptionId: string;
   action: string;
   correlationId: string;
@@ -38,6 +39,7 @@ export interface SubscriptionRepository {
   createSubscription(input: CreateSubscriptionInput): Promise<Subscription>;
   findById(subscriptionId: string): Promise<Subscription | null>;
   findByMarketplaceSubscriptionId(marketplaceSubscriptionId: string): Promise<Subscription | null>;
+  findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null>;
   listByTenant(tenantId: string): Promise<Subscription[]>;
   transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription>;
   recordWebhookEvent(event: RecordedWebhookEvent): Promise<void>;
@@ -128,7 +130,7 @@ function mapSubscription(record: {
 export class InMemorySubscriptionRepository implements SubscriptionRepository {
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly marketplaceIndex = new Map<string, string>();
-  private readonly webhookEvents: RecordedWebhookEvent[] = [];
+  private readonly webhookEvents = new Map<string, RecordedWebhookEvent>();
 
   async createSubscription(input: CreateSubscriptionInput): Promise<Subscription> {
     const createdAt = input.auditEntry.createdAt;
@@ -177,6 +179,10 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       .map((subscription) => clone(subscription));
   }
 
+  async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
+    return clone(this.webhookEvents.get(idempotencyKey) ?? null);
+  }
+
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
     const existing = this.subscriptions.get(input.subscriptionId);
     if (!existing) {
@@ -196,7 +202,7 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
   }
 
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {
-    this.webhookEvents.push(clone(event));
+    this.webhookEvents.set(event.idempotencyKey, clone(event));
   }
 }
 
@@ -298,6 +304,28 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
     return subscriptions.map((subscription) => mapSubscription(subscription as SubscriptionWithAudit));
   }
 
+  async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
+    const event = await this.prisma.marketplaceWebhookEvent.findUnique({
+      where: { idempotencyKey }
+    });
+
+    if (!event) {
+      return null;
+    }
+
+    return {
+      idempotencyKey: event.idempotencyKey,
+      marketplaceSubscriptionId: event.marketplaceSubscriptionId,
+      action: event.action,
+      correlationId: event.correlationId,
+      requestId: event.requestId,
+      payload: asRecord(event.payload),
+      status: event.status as RecordedWebhookEvent['status'],
+      errorMessage: event.errorMessage ?? undefined,
+      processedAt: event.processedAt?.toISOString()
+    };
+  }
+
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
     const subscription = await this.prisma.$transaction(async (transaction) => {
       await transaction.subscription.update({
@@ -339,8 +367,12 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   }
 
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {
-    await this.prisma.marketplaceWebhookEvent.create({
-      data: {
+    await this.prisma.marketplaceWebhookEvent.upsert({
+      where: {
+        idempotencyKey: event.idempotencyKey
+      },
+      create: {
+        idempotencyKey: event.idempotencyKey,
         marketplaceSubscriptionId: event.marketplaceSubscriptionId,
         action: event.action,
         correlationId: event.correlationId,
@@ -349,6 +381,16 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
         status: event.status,
         errorMessage: event.errorMessage,
         processedAt: event.processedAt ? new Date(event.processedAt) : undefined
+      },
+      update: {
+        marketplaceSubscriptionId: event.marketplaceSubscriptionId,
+        action: event.action,
+        correlationId: event.correlationId,
+        requestId: event.requestId,
+        payload: event.payload as Prisma.InputJsonValue,
+        status: event.status,
+        errorMessage: event.errorMessage,
+        processedAt: event.processedAt ? new Date(event.processedAt) : null
       }
     });
   }

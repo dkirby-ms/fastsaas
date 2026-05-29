@@ -30,6 +30,15 @@ interface SubscriptionActionInput extends ActorContext {
   details?: Record<string, unknown>;
 }
 
+interface ProcessMarketplaceWebhookInput extends MarketplaceWebhookPayload {
+  idempotencyKey: string;
+}
+
+interface ProcessMarketplaceWebhookResult {
+  subscription: Subscription;
+  duplicate: boolean;
+}
+
 const allowedTransitions: Record<SubscriptionStatus, SubscriptionStatus[]> = {
   PendingActivation: ['Active', 'Unsubscribed'],
   Active: ['Suspended', 'Unsubscribed'],
@@ -39,6 +48,21 @@ const allowedTransitions: Record<SubscriptionStatus, SubscriptionStatus[]> = {
 
 function normalizeDetails(details?: Record<string, unknown>): Record<string, unknown> {
   return details ? { ...details } : {};
+}
+
+function getTargetStatus(action: MarketplaceWebhookPayload['action']): SubscriptionStatus {
+  switch (action) {
+    case 'Suspend':
+      return 'Suspended';
+    case 'Unsubscribe':
+      return 'Unsubscribed';
+    case 'Reinstate':
+      return 'Active';
+    default: {
+      const unsupportedAction: never = action;
+      return unsupportedAction;
+    }
+  }
 }
 
 function buildAuditEntry(input: {
@@ -152,7 +176,13 @@ export class SubscriptionService {
 
     if (input.source === 'api') {
       await this.withFulfillment('activate', input, subscription, async () => {
-        await this.fulfillmentClient.activateSubscription(subscription.marketplaceSubscriptionId, input.requestId, input.correlationId);
+        await this.fulfillmentClient.activateSubscription(
+          subscription.marketplaceSubscriptionId,
+          subscription.planId,
+          subscription.seats,
+          input.requestId,
+          input.correlationId
+        );
       });
     }
 
@@ -185,10 +215,11 @@ export class SubscriptionService {
     return this.transition(subscription, 'Unsubscribed', input, 'Unsubscribe', input.details);
   }
 
-  async processMarketplaceWebhook(payload: MarketplaceWebhookPayload): Promise<Subscription> {
+  async processMarketplaceWebhook(payload: ProcessMarketplaceWebhookInput): Promise<ProcessMarketplaceWebhookResult> {
     const requestId = payload.requestId ?? randomUUID();
     const correlationId = payload.correlationId ?? requestId;
     const webhookEventBase: RecordedWebhookEvent = {
+      idempotencyKey: payload.idempotencyKey,
       marketplaceSubscriptionId: payload.marketplaceSubscriptionId,
       action: payload.action,
       requestId,
@@ -202,14 +233,44 @@ export class SubscriptionService {
       processedAt: new Date().toISOString()
     };
 
-    try {
-      const subscription = await this.repository.findByMarketplaceSubscriptionId(payload.marketplaceSubscriptionId);
-      if (!subscription) {
-        throw AppError.notFound('Subscription for marketplace webhook was not found', {
-          marketplaceSubscriptionId: payload.marketplaceSubscriptionId
-        });
-      }
+    const existingEvent = await this.repository.findWebhookEventByIdempotencyKey(payload.idempotencyKey);
+    const subscription = await this.repository.findByMarketplaceSubscriptionId(payload.marketplaceSubscriptionId);
+    if (!subscription) {
+      await this.repository.recordWebhookEvent({
+        ...webhookEventBase,
+        status: 'failed',
+        errorMessage: 'Subscription for marketplace webhook was not found'
+      });
+      throw AppError.notFound('Subscription for marketplace webhook was not found', {
+        marketplaceSubscriptionId: payload.marketplaceSubscriptionId
+      });
+    }
 
+    if (existingEvent?.status === 'processed') {
+      return {
+        subscription,
+        duplicate: true
+      };
+    }
+
+    const targetStatus = getTargetStatus(payload.action);
+    if (subscription.status === targetStatus) {
+      await this.repository.recordWebhookEvent({
+        ...webhookEventBase,
+        payload: {
+          ...webhookEventBase.payload,
+          duplicate: true,
+          noop: true
+        }
+      });
+
+      return {
+        subscription,
+        duplicate: true
+      };
+    }
+
+    try {
       const actionContext: SubscriptionActionInput = {
         subscriptionId: subscription.id,
         tenantId: subscription.tenantId,
@@ -237,7 +298,10 @@ export class SubscriptionService {
       }
 
       await this.repository.recordWebhookEvent(webhookEventBase);
-      return updatedSubscription;
+      return {
+        subscription: updatedSubscription,
+        duplicate: false
+      };
     } catch (error) {
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
@@ -303,7 +367,7 @@ export class SubscriptionService {
   }
 
   private async withFulfillment<T>(
-    action: 'resolve' | 'activate' | 'suspend' | 'unsubscribe',
+    action: 'resolve' | 'activate' | 'suspend' | 'unsubscribe' | 'update' | 'reinstate',
     context: Pick<ActorContext, 'requestId' | 'correlationId'>,
     subscription: Subscription | undefined,
     operation: () => Promise<T>

@@ -1,6 +1,7 @@
 export interface ApiConfig {
   port: number;
   apiVersion: string;
+  databaseUrl?: string;
   auth: {
     issuer: string;
     audience: string[];
@@ -13,6 +14,13 @@ export interface ApiConfig {
     bypassEnabled: boolean;
     devUserId: string;
     devTenantId: string;
+  };
+  marketplace: {
+    baseUrl: string;
+    apiVersion: string;
+    authToken: string;
+    webhookSecret: string;
+    webhookTimestampToleranceMs: number;
   };
   database: {
     url?: string;
@@ -68,6 +76,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   return {
     port: Number(env.API_PORT ?? 3000),
     apiVersion: env.API_VERSION ?? 'v1',
+    databaseUrl: env.DATABASE_URL?.trim() || undefined,
     auth: {
       issuer: normalizeUrl(env.AZURE_AD_ISSUER ?? `https://login.microsoftonline.com/${resolvedTenantId}/v2.0`),
       audience: parseAudiences(env.AZURE_AD_AUDIENCE, resolvedClientId),
@@ -80,6 +89,13 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       bypassEnabled,
       devUserId: env.AUTH_DEV_USER_ID ?? 'dev-user',
       devTenantId: env.AUTH_DEV_TENANT_ID ?? 'dev-tenant'
+    },
+    marketplace: {
+      baseUrl: normalizeUrl(env.MARKETPLACE_BASE_URL ?? 'https://marketplaceapi.microsoft.com'),
+      apiVersion: env.MARKETPLACE_API_VERSION ?? '2018-08-31',
+      authToken: env.MARKETPLACE_AUTH_TOKEN ?? 'local-marketplace-token',
+      webhookSecret: env.MARKETPLACE_WEBHOOK_SECRET ?? 'local-marketplace-webhook-secret',
+      webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },
     database: {
       url: env.DATABASE_URL

@@ -9,15 +9,26 @@ import { requestLogger } from './middleware/request-logger';
 import { buildOpenApiSpec } from './openapi';
 import { healthRouter } from './routes/health';
 import { createV1Router } from './routes/v1';
+import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
+import type { SubscriptionService } from './services/subscription-service';
 
-export function createApp(config: ApiConfig = createConfig(), dependencies: MeteringRuntimeDependencies = {}) {
+export interface AppDependencies extends MeteringRuntimeDependencies {
+  subscriptionService?: SubscriptionService;
+}
+
+export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
   const app = express();
   const openApiSpec = buildOpenApiSpec(config);
   const meteringRuntime = createMeteringRuntime(config, dependencies);
 
   app.disable('x-powered-by');
-  app.use(express.json());
   app.use(requestLogger);
+
+  if (dependencies.subscriptionService) {
+    app.use('/api/webhooks', createMarketplaceWebhookRouter(config, dependencies.subscriptionService));
+  }
+
+  app.use(express.json());
 
   app.use(healthRouter);
   app.get('/openapi.json', (_req, res) => {
@@ -25,7 +36,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: Mete
   });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, { explorer: true }));
 
-  app.use('/v1', createV1Router(config, meteringRuntime.service));
+  app.use('/v1', createV1Router(config, meteringRuntime.service, dependencies.subscriptionService));
   app.use(notFoundHandler);
   app.use(errorHandler);
 

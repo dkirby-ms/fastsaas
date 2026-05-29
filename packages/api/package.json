@@ -5,11 +5,12 @@
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run prisma:generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "npm run prisma:generate && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fastsaas/shared": "file:../shared",
