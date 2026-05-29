@@ -41,7 +41,8 @@ Assigned to FIDO:
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
-_No learnings recorded yet._
+- **2026-05-29T16:53:13.479-05:00:** Portal modernization moved auth to `packages/portal/auth.ts` with Auth.js v5-style exports (`auth`, `handlers`, `signIn`, `signOut`) and Microsoft Entra ID refresh-token rotation preserved.
+- **2026-05-29T16:53:13.479-05:00:** Portal validation now succeeds on Next 15/React 19 with `npm run typecheck --workspace=@fastsaas/portal` using Next compile mode and `npm run build --workspace=@fastsaas/portal` for full production verification.
 
 ## Cross-Team Updates
 
