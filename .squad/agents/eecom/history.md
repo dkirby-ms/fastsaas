@@ -30,4 +30,6 @@ Assigned to EECOM:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29T14:30:29.387-05:00:** API foundation now lives in `packages/api/` with Express + TypeScript, `packages/shared/src/index.ts` carries shared auth/response types, and the protected bootstrap route is `GET /v1/auth/context`.
+- **2026-05-29T14:30:29.387-05:00:** Auth uses `jose` JWT verification plus tenant-context middleware that reads `tenant_id`, `tid`, or `extension_tenant_id`, and global JSON logging/error handling is wired through `src/middleware/`.
+- **2026-05-29T14:30:29.387-05:00:** OpenAPI bootstrap is published at `/openapi.json` and `/docs`, with integration coverage in `packages/api/src/__tests__/app.integration.test.ts` for 401, 403, 200, and spec validation.

@@ -1,0 +1,23 @@
+export class AppError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    public readonly code: string,
+    message: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+
+  static unauthorized(message = 'Authentication is required', details?: Record<string, unknown>): AppError {
+    return new AppError(401, 'AUTH_UNAUTHORIZED', message, details);
+  }
+
+  static forbidden(message = 'You do not have access to this resource', details?: Record<string, unknown>): AppError {
+    return new AppError(403, 'AUTH_FORBIDDEN', message, details);
+  }
+
+  static notFound(message = 'The requested resource was not found', details?: Record<string, unknown>): AppError {
+    return new AppError(404, 'NOT_FOUND', message, details);
+  }
+}
