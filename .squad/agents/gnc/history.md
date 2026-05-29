@@ -19,6 +19,24 @@ Assigned to GNC:
 
 **Coordination:** Coordinate with EECOM on API/subscription/metering stability before deploying staging. Portal (#4 FIDO) will be integrated into staging environment.
 
+## Orchestration — 2026-05-29T19:30:29Z
+
+**#5 Containerized Staging Deployment — COMPLETE**
+- Docker Compose, Dockerfiles, Bicep infrastructure-as-code modules
+- GitHub Actions deploy workflow, deployment runbook
+- Two-phase Bicep strategy: deploy shared resources first (`deployContainerApps=false`), build/push images to ACR, redeploy with `deployContainerApps=true`
+- Ensures Container Apps always reference valid image tags; enables rollback by redeploying older tags
+
+**Cross-team info:**
+- EECOM API foundation (PR #7) ready for staging integration
+- FIDO portal MVP (PR #8) ready for staging integration
+- Both services containerized and staging infrastructure supports deployment of both
+- Decision: Two-phase Bicep avoids failed Container Apps revisions and enables safe rollback
+
+## Learnings
+
+- **2026-05-29T19:30:29Z:** Staging infrastructure complete. Two-phase Bicep deployment strategy ensures Container Apps reliability and rollback safety. API (EECOM) and portal (FIDO) ready for staging integration.
+- **2026-05-29T21:10:05Z:** Portal auth now mirrors the Entra-backed API contract: `packages/portal/lib/auth.ts` uses NextAuth Azure AD with a required `NEXTAUTH_SECRET`, `packages/portal/lib/api-client.ts` forwards the session access token as `Authorization: Bearer`, and portal env config must include both the portal app credentials and API audience (`AZURE_AD_API_CLIENT_ID` / optional `AZURE_AD_API_SCOPE`).
 ## Learnings
 
 - **2026-05-29T15:29:10.202-05:00 — Entra ID auth hardening:** Replaced HMAC bearer-token validation with Entra-compatible RS256/JWKS validation using `createRemoteJWKSet`, tenant context now prefers `tid`/`oid`, and dev-only bypass is gated by `AUTH_BYPASS_ENABLED` instead of a fallback secret.

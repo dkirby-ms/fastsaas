@@ -61,3 +61,61 @@ model UsageEventDeadLetter {
   @@index([tenantId, failedAt(sort: Desc)], map: "idx_usage_event_dead_letters_tenant_failed_at")
   @@map("usage_event_dead_letters")
 }
+
+enum SubscriptionStatus {
+  PendingActivation
+  Active
+  Suspended
+  Unsubscribed
+}
+
+model Subscription {
+  id                        String                 @id @default(uuid())
+  tenantId                  String
+  marketplaceSubscriptionId String                 @unique
+  planId                    String
+  seats                     Int                    @default(1)
+  status                    SubscriptionStatus
+  offerId                   String?
+  purchaserTenantId         String?
+  beneficiaryTenantId       String?
+  correlationId             String
+  metadata                  Json?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  auditLogs                 SubscriptionAuditLog[]
+
+  @@index([tenantId, status])
+}
+
+model SubscriptionAuditLog {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  eventType      String
+  source         String
+  fromStatus     SubscriptionStatus?
+  toStatus       SubscriptionStatus
+  correlationId  String
+  requestId      String
+  details        Json?
+  createdAt      DateTime            @default(now())
+  subscription   Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+  @@index([correlationId, createdAt])
+}
+
+model MarketplaceWebhookEvent {
+  id                        String   @id @default(uuid())
+  marketplaceSubscriptionId String
+  action                    String
+  correlationId             String
+  requestId                 String
+  payload                   Json
+  status                    String
+  errorMessage              String?
+  createdAt                 DateTime @default(now())
+  processedAt               DateTime?
+
+  @@index([marketplaceSubscriptionId, createdAt])
+}

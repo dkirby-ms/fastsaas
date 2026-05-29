@@ -1,0 +1,39 @@
+{
+  "agents": {
+    "kranz": {
+      "persistent_name": "Kranz",
+      "universe": "Apollo 13 (Mission Control)",
+      "created_at": "2026-05-29T14:13:36Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "fido": {
+      "persistent_name": "FIDO",
+      "universe": "Apollo 13 (Mission Control)",
+      "created_at": "2026-05-29T14:13:36Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "eecom": {
+      "persistent_name": "EECOM",
+      "universe": "Apollo 13 (Mission Control)",
+      "created_at": "2026-05-29T14:13:36Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "retro": {
+      "persistent_name": "RETRO",
+      "universe": "Apollo 13 (Mission Control)",
+      "created_at": "2026-05-29T14:13:36Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    "gnc": {
+      "persistent_name": "GNC",
+      "universe": "Apollo 13 (Mission Control)",
+      "created_at": "2026-05-29T14:13:36Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  }
+}

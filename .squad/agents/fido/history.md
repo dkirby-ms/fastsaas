@@ -21,6 +21,26 @@ Assigned to FIDO:
 
 ## Learnings
 
+- **2026-05-29T14:30:29.387-05:00:** Customer portal MVP lives in `packages/portal/` as a Next.js App Router app with Tailwind, NextAuth credentials scaffolding, TanStack Query data fetching, and a mock-capable API client for backend-parallel development.
+- **2026-05-29T14:30:29.387-05:00:** Reusable portal contract types now live in `packages/shared/src/index.ts`, and the portal shell/navigation pattern is centered around `packages/portal/components/portal-shell.tsx` plus page clients in `packages/portal/components/*-client.tsx`.
+- **2026-05-29T14:30:29.387-05:00:** Portal validation is workspace-scoped: `npm run typecheck --workspace=@fastsaas/portal` and `npm run build --workspace=@fastsaas/portal`.
+
+## Orchestration — 2026-05-29T19:30:29Z
+
+**#4 Customer Portal MVP — COMPLETE (PR #8)**
+- Next.js App Router + Tailwind CSS, auth scaffold, dashboard/plan/settings pages
+- Mock API client with TanStack Query supports parallel EECOM development
+- Ready for live API integration when EECOM endpoints stabilize
+- Staging deployment (GNC) will integrate portal into containerized environment
+
+**Cross-team info:**
+- EECOM API foundation (PR #7) includes JWT auth, tenant middleware, OpenAPI docs. Portal endpoints ready to integrate.
+- GNC staging supports portal deployment with two-phase Bicep strategy for safe rollback
+- Decision: Portal abstracted API client means zero rework to switch from mock to real endpoints
+
+## Learnings
+
+- **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
 _No learnings recorded yet._
 
 ## Cross-Team Updates
