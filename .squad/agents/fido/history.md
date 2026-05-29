@@ -41,3 +41,4 @@ Assigned to FIDO:
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
+_No learnings recorded yet._

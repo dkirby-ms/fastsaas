@@ -78,6 +78,7 @@ export interface ApiError {
 
 export interface ApiResponseMeta {
   requestId: string;
+  correlationId?: string;
   timestamp: string;
   version: string;
 }
@@ -95,6 +96,8 @@ export interface AuthClaims {
   aud: string | string[];
   tenant_id?: string;
   tid?: string;
+  tenantId?: string;
+  email?: string;
   roles?: string[] | string;
   scope?: string;
   scp?: string;
@@ -107,4 +110,51 @@ export interface RequestContext {
   userId: string;
   scopes: string[];
   roles: string[];
+}
+
+export type SubscriptionStatus = 'PendingActivation' | 'Active' | 'Suspended' | 'Unsubscribed';
+
+export interface SubscriptionAuditEntry {
+  id: string;
+  subscriptionId: string;
+  eventType: string;
+  source: string;
+  fromStatus: SubscriptionStatus | null;
+  toStatus: SubscriptionStatus;
+  correlationId: string;
+  requestId: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface Subscription {
+  id: string;
+  tenantId: string;
+  marketplaceSubscriptionId: string;
+  planId: string;
+  seats: number;
+  status: SubscriptionStatus;
+  offerId?: string;
+  purchaserTenantId?: string;
+  beneficiaryTenantId?: string;
+  correlationId: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  auditLog: SubscriptionAuditEntry[];
+}
+
+export interface CreateSubscriptionRequest {
+  marketplaceToken: string;
+  planId?: string;
+  seats?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MarketplaceWebhookPayload {
+  action: 'Suspend' | 'Unsubscribe' | 'Reinstate';
+  marketplaceSubscriptionId: string;
+  requestId?: string;
+  correlationId?: string;
+  details?: Record<string, unknown>;
 }
