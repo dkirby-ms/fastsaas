@@ -30,6 +30,7 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
    *             required:
    *               - eventId
    *               - subscriptionId
+   *               - planId
    *               - dimensionId
    *               - quantity
    *               - timestamp
@@ -37,6 +38,8 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
    *               eventId:
    *                 type: string
    *               subscriptionId:
+   *                 type: string
+   *               planId:
    *                 type: string
    *               dimensionId:
    *                 type: string

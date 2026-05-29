@@ -21,7 +21,8 @@ Assigned to GNC:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-05-29:** Metering durability must use a PostgreSQL-backed outbox with expiring claim leases; in-memory storage is only acceptable for non-production or injected test harnesses.
+- **2026-05-29:** Azure Marketplace metering submissions must map internal events to `{ resourceId, quantity, dimension, effectiveStartTime, planId }`, and the event contract now requires `planId` at ingest time.
 
 ## Cross-Team Updates
 

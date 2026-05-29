@@ -114,6 +114,7 @@ export type UsageEventStatus = 'pending' | 'retry_scheduled' | 'submitted' | 'de
 export interface UsageEventIngestRequest {
   eventId: string;
   subscriptionId: string;
+  planId: string;
   dimensionId: string;
   quantity: number;
   timestamp: string;
@@ -126,6 +127,7 @@ export interface UsageEventRecord {
   tenantId: string;
   eventId: string;
   subscriptionId: string;
+  planId: string;
   dimensionId: string;
   quantity: number;
   timestamp: string;

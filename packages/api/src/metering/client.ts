@@ -1,13 +1,18 @@
 import { logger } from '../lib/logger';
 
+export interface MarketplaceUsageEventPayload {
+  resourceId: string;
+  quantity: number;
+  dimension: string;
+  effectiveStartTime: string;
+  planId: string;
+}
+
 export interface MarketplaceSubmitUsageEvent {
   tenantId: string;
   eventId: string;
-  subscriptionId: string;
-  dimensionId: string;
-  quantity: number;
-  timestamp: string;
   idempotencyKey: string;
+  payload: MarketplaceUsageEventPayload;
 }
 
 export interface MarketplaceMeteringClient {
@@ -41,7 +46,7 @@ export class HttpMarketplaceMeteringClient implements MarketplaceMeteringClient 
         'content-type': 'application/json',
         ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
       },
-      body: JSON.stringify(event)
+      body: JSON.stringify(event.payload)
     });
 
     if (!response.ok) {

@@ -108,6 +108,7 @@ function createHarness(script: Array<'success' | MarketplaceMeteringError> = [])
 const usageEventPayload = {
   eventId: 'evt_001',
   subscriptionId: 'sub_001',
+  planId: 'plan-growth',
   dimensionId: 'dim_api_requests',
   quantity: 42,
   timestamp: '2026-05-29T14:00:00.000Z'
@@ -157,6 +158,7 @@ describe('API foundation and metering baseline', () => {
     expect(events[0]).toMatchObject({
       eventId: usageEventPayload.eventId,
       subscriptionId: usageEventPayload.subscriptionId,
+      planId: usageEventPayload.planId,
       status: 'pending',
       retryCount: 0
     });

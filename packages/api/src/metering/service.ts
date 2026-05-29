@@ -18,6 +18,10 @@ function validateRequest(event: UsageEventIngestRequest): void {
     throw AppError.badRequest('subscriptionId is required');
   }
 
+  if (!event.planId?.trim()) {
+    throw AppError.badRequest('planId is required');
+  }
+
   if (!event.dimensionId?.trim()) {
     throw AppError.badRequest('dimensionId is required');
   }

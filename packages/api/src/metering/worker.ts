@@ -1,10 +1,10 @@
-import type { MeteringWorkerRunResult, UsageEventRecord } from '@fastsaas/shared';
+import type { MeteringWorkerRunResult } from '@fastsaas/shared';
 
 import type { ApiConfig } from '../config';
 import { logger } from '../lib/logger';
 import type { Clock } from './clock';
-import { MarketplaceMeteringError, type MarketplaceMeteringClient } from './client';
-import type { UsageEventRepository } from './repository';
+import { MarketplaceMeteringError, type MarketplaceMeteringClient, type MarketplaceSubmitUsageEvent, type MarketplaceUsageEventPayload } from './client';
+import type { ClaimedUsageEventRecord, UsageEventRepository } from './repository';
 
 function computeRetryDelayMs(retryCount: number, config: ApiConfig, random: () => number): number {
   const exponentialDelay = config.metering.retryBaseDelayMs * Math.pow(2, Math.max(0, retryCount - 1));
@@ -14,6 +14,25 @@ function computeRetryDelayMs(retryCount: number, config: ApiConfig, random: () =
 
 function isRetryable(error: MarketplaceMeteringError): boolean {
   return error.statusCode === 429 || [500, 502, 503, 504].includes(error.statusCode);
+}
+
+function buildMarketplacePayload(event: ClaimedUsageEventRecord): MarketplaceUsageEventPayload {
+  return {
+    resourceId: event.subscriptionId,
+    quantity: event.quantity,
+    dimension: event.dimensionId,
+    effectiveStartTime: event.timestamp,
+    planId: event.planId
+  };
+}
+
+function buildMarketplaceRequest(event: ClaimedUsageEventRecord): MarketplaceSubmitUsageEvent {
+  return {
+    tenantId: event.tenantId,
+    eventId: event.eventId,
+    idempotencyKey: event.idempotencyKey,
+    payload: buildMarketplacePayload(event)
+  };
 }
 
 export class MeteringOutboxWorker {
@@ -26,7 +45,11 @@ export class MeteringOutboxWorker {
   ) {}
 
   async runNextBatch(): Promise<MeteringWorkerRunResult> {
-    const dueEvents = await this.repository.findDueBatch(this.clock.now(), this.config.metering.batchSize);
+    const dueEvents = await this.repository.claimDueBatch(
+      this.clock.now(),
+      this.config.metering.batchSize,
+      this.config.metering.claimLeaseMs
+    );
     const result: MeteringWorkerRunResult = {
       attempted: dueEvents.length,
       submitted: 0,
@@ -42,10 +65,10 @@ export class MeteringOutboxWorker {
     return result;
   }
 
-  private async processEvent(event: UsageEventRecord): Promise<'submitted' | 'retried' | 'deadLettered'> {
+  private async processEvent(event: ClaimedUsageEventRecord): Promise<'submitted' | 'retried' | 'deadLettered'> {
     try {
       await this.trySubmit(event, false);
-      await this.repository.markSubmitted(event.id, this.clock.now());
+      await this.repository.markSubmitted(event, this.clock.now());
       return 'submitted';
     } catch (error) {
       const marketplaceError = error instanceof MarketplaceMeteringError
@@ -58,7 +81,7 @@ export class MeteringOutboxWorker {
           : computeRetryDelayMs(event.retryCount + 1, this.config, this.random);
         const nextAttemptAt = new Date(this.clock.now().getTime() + delayMs);
 
-        await this.repository.scheduleRetry(event.id, event.retryCount + 1, nextAttemptAt, {
+        await this.repository.scheduleRetry(event, event.retryCount + 1, nextAttemptAt, {
           code: `HTTP_${marketplaceError.statusCode}`,
           message: marketplaceError.message,
           httpStatus: marketplaceError.statusCode
@@ -68,7 +91,7 @@ export class MeteringOutboxWorker {
         return 'retried';
       }
 
-      await this.repository.markDeadLetter(event.id, {
+      await this.repository.markDeadLetter(event, {
         usageEventId: event.id,
         tenantId: event.tenantId,
         eventId: event.eventId,
@@ -76,10 +99,7 @@ export class MeteringOutboxWorker {
         httpStatus: marketplaceError.statusCode,
         retryCount: event.retryCount,
         payload: {
-          subscriptionId: event.subscriptionId,
-          dimensionId: event.dimensionId,
-          quantity: event.quantity,
-          timestamp: event.timestamp,
+          ...buildMarketplacePayload(event),
           idempotencyKey: event.idempotencyKey
         }
       }, this.clock.now());
@@ -89,17 +109,9 @@ export class MeteringOutboxWorker {
     }
   }
 
-  private async trySubmit(event: UsageEventRecord, refreshed: boolean): Promise<void> {
+  private async trySubmit(event: ClaimedUsageEventRecord, refreshed: boolean): Promise<void> {
     try {
-      await this.client.submitUsageEvent({
-        tenantId: event.tenantId,
-        eventId: event.eventId,
-        subscriptionId: event.subscriptionId,
-        dimensionId: event.dimensionId,
-        quantity: event.quantity,
-        timestamp: event.timestamp,
-        idempotencyKey: event.idempotencyKey
-      });
+      await this.client.submitUsageEvent(buildMarketplaceRequest(event));
     } catch (error) {
       const marketplaceError = error instanceof MarketplaceMeteringError
         ? error
@@ -115,3 +127,5 @@ export class MeteringOutboxWorker {
     }
   }
 }
+
+export { buildMarketplacePayload };
