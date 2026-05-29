@@ -31,3 +31,9 @@ Assigned to EECOM:
 ## Learnings
 
 - **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
+
+## Completed Work
+
+- **2026-05-29 Phase 1 Round 2:**
+  - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
+  - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.

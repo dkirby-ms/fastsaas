@@ -22,3 +22,7 @@ Assigned to GNC:
 ## Learnings
 
 _No learnings recorded yet._
+
+## Cross-Team Updates
+
+- **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. GNC should begin validating deployment integration requirements.
