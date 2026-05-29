@@ -30,4 +30,6 @@ Assigned to EECOM:
 
 ## Learnings
 
-_No learnings recorded yet._
+- Staging deployment lives in `.github/workflows/deploy-staging.yml`; use step `env` plus shell-side validation for `workflow_dispatch` inputs before writing values into `GITHUB_ENV`.
+- Staging infra is defined in `infrastructure/bicep/main.bicep` with reusable modules under `infrastructure/bicep/modules/`; container pulls should use managed identities, while PostgreSQL/Redis/ACR stay on private networking.
+- The real backend service is the Express API in `packages/api/`, backed by shared workspace types in `packages/shared/`; the API container should build the TypeScript app and start `packages/api/dist/server.js` instead of generating a placeholder server.

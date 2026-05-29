@@ -10,19 +10,10 @@ param cpu string = '0.5'
 param memory string = '1Gi'
 param healthPath string = '/health'
 param registryServer string = ''
-param registryUsername string = ''
-@secure()
-param registryPassword string = ''
+param managedIdentityResourceId string
 param envVars array = []
 param secretEnvVars array = []
 param tags object = {}
-
-var registrySecrets = empty(registryServer) ? [] : [
-  {
-    name: 'acr-password'
-    value: registryPassword
-  }
-]
 
 var appSecrets = [for item in secretEnvVars: {
   name: item.secretName
@@ -32,8 +23,7 @@ var appSecrets = [for item in secretEnvVars: {
 var registries = empty(registryServer) ? [] : [
   {
     server: registryServer
-    username: registryUsername
-    passwordSecretRef: 'acr-password'
+    identity: managedIdentityResourceId
   }
 ]
 
@@ -41,6 +31,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
   tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentityResourceId}': {}
+    }
+  }
   properties: {
     managedEnvironmentId: environmentId
     configuration: {
@@ -52,7 +48,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         allowInsecure: false
       }
       registries: registries
-      secrets: concat(registrySecrets, appSecrets)
+      secrets: appSecrets
     }
     template: {
       containers: [

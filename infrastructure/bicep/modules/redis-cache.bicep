@@ -17,7 +17,7 @@ resource redis 'Microsoft.Cache/Redis@2024-03-01' = {
       capacity: capacity
     }
     minimumTlsVersion: minimumTlsVersion
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
     redisConfiguration: {
       'maxmemory-policy': 'allkeys-lru'
     }

@@ -51,13 +51,21 @@ jobs:
 
       - name: Resolve deployment values
         shell: bash
+        env:
+          IMAGE_TAG_INPUT: ${{ inputs.imageTag }}
+          SKIP_BUILD_INPUT: ${{ inputs.skipBuild }}
         run: |
-          if [ -n "${{ inputs.imageTag }}" ]; then
-            echo "IMAGE_TAG=${{ inputs.imageTag }}" >> "$GITHUB_ENV"
+          if [ -n "$IMAGE_TAG_INPUT" ]; then
+            if [[ ! "$IMAGE_TAG_INPUT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+              echo "imageTag must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" >&2
+              exit 1
+            fi
+            printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG_INPUT" >> "$GITHUB_ENV"
           else
-            echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+            printf 'IMAGE_TAG=%s\n' "$GITHUB_SHA" >> "$GITHUB_ENV"
           fi
-          echo "SKIP_BUILD=${{ inputs.skipBuild }}" >> "$GITHUB_ENV"
+
+          printf 'SKIP_BUILD=%s\n' "$SKIP_BUILD_INPUT" >> "$GITHUB_ENV"
 
       - name: Ensure resource group
         run: az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
@@ -80,23 +88,23 @@ jobs:
           echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
           echo "acr_login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
 
-      - name: Log in to Azure Container Registry
+      - name: Build API image in ACR
         if: env.SKIP_BUILD != 'true'
-        run: az acr login --name "${{ steps.bootstrap.outputs.acr_name }}"
-
-      - name: Build and push API image
-        if: env.SKIP_BUILD != 'true'
-        shell: bash
         run: |
-          docker build --file packages/api/Dockerfile --target runtime --build-arg SERVICE_NAME=api --build-arg SERVICE_PORT=3000 --tag "${{ steps.bootstrap.outputs.acr_login_server }}/fastsaas-api:${IMAGE_TAG}" .
-          docker push "${{ steps.bootstrap.outputs.acr_login_server }}/fastsaas-api:${IMAGE_TAG}"
+          az acr build \
+            --registry "${{ steps.bootstrap.outputs.acr_name }}" \
+            --image "fastsaas-api:${IMAGE_TAG}" \
+            --file packages/api/Dockerfile \
+            .
 
-      - name: Build and push portal image
+      - name: Build portal image in ACR
         if: env.SKIP_BUILD != 'true'
-        shell: bash
         run: |
-          docker build --file packages/portal/Dockerfile --target runtime --build-arg SERVICE_NAME=portal --build-arg SERVICE_PORT=3001 --tag "${{ steps.bootstrap.outputs.acr_login_server }}/fastsaas-portal:${IMAGE_TAG}" .
-          docker push "${{ steps.bootstrap.outputs.acr_login_server }}/fastsaas-portal:${IMAGE_TAG}"
+          az acr build \
+            --registry "${{ steps.bootstrap.outputs.acr_name }}" \
+            --image "fastsaas-portal:${IMAGE_TAG}" \
+            --file packages/portal/Dockerfile \
+            .
 
       - name: Deploy container apps
         run: |

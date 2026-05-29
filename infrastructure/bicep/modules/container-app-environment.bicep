@@ -1,6 +1,7 @@
 param name string
 param logAnalyticsWorkspaceName string
 param location string
+param infrastructureSubnetId string
 param tags object = {}
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -29,6 +30,10 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         customerId: workspace.properties.customerId
         sharedKey: listKeys(workspace.id, '2023-09-01').primarySharedKey
       }
+    }
+    vnetConfiguration: {
+      infrastructureSubnetId: infrastructureSubnetId
+      internal: false
     }
   }
 }

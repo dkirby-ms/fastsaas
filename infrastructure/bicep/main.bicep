@@ -34,12 +34,130 @@ var managedEnvironmentName = '${environmentName}-cae'
 var logAnalyticsWorkspaceName = '${environmentName}-logs'
 var apiAppName = '${environmentName}-api'
 var portalAppName = '${environmentName}-portal'
+var apiIdentityName = '${environmentName}-api-pull'
+var portalIdentityName = '${environmentName}-portal-pull'
 var databaseName = 'fastsaas'
+var virtualNetworkName = '${environmentName}-network'
+var containerAppsSubnetName = 'container-apps'
+var postgresSubnetName = 'postgres'
+var privateEndpointsSubnetName = 'private-endpoints'
+var postgresPrivateDnsZoneName = 'privatelink.postgres.database.azure.com'
+var redisPrivateDnsZoneName = 'privatelink.redis.cache.windows.net'
+var acrPrivateDnsZoneName = 'privatelink.azurecr.io'
+var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var mergedTags = union(tags, {
   environment: environmentName
   managedBy: 'bicep'
   workload: 'fastsaas'
 })
+
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
+  name: virtualNetworkName
+  location: location
+  tags: mergedTags
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.42.0.0/16'
+      ]
+    }
+    subnets: [
+      {
+        name: containerAppsSubnetName
+        properties: {
+          addressPrefix: '10.42.0.0/23'
+          delegations: [
+            {
+              name: 'containerAppsDelegation'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: postgresSubnetName
+        properties: {
+          addressPrefix: '10.42.2.0/24'
+          delegations: [
+            {
+              name: 'postgresDelegation'
+              properties: {
+                serviceName: 'Microsoft.DBforPostgreSQL/flexibleServers'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: privateEndpointsSubnetName
+        properties: {
+          addressPrefix: '10.42.3.0/24'
+          privateEndpointNetworkPolicies: 'Disabled'
+        }
+      }
+    ]
+  }
+}
+
+var containerAppsSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, containerAppsSubnetName)
+var postgresSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, postgresSubnetName)
+var privateEndpointsSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, privateEndpointsSubnetName)
+
+resource postgresPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: postgresPrivateDnsZoneName
+  location: 'global'
+  tags: mergedTags
+}
+
+resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  name: '${environmentName}-postgres-link'
+  parent: postgresPrivateDnsZone
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource redisPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: redisPrivateDnsZoneName
+  location: 'global'
+  tags: mergedTags
+}
+
+resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  name: '${environmentName}-redis-link'
+  parent: redisPrivateDnsZone
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource acrPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: acrPrivateDnsZoneName
+  location: 'global'
+  tags: mergedTags
+}
+
+resource acrPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  name: '${environmentName}-acr-link'
+  parent: acrPrivateDnsZone
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
 
 module containerRegistry './modules/container-registry.bicep' = {
   name: 'containerRegistry'
@@ -58,6 +176,8 @@ module postgres './modules/postgres-flexible-server.bicep' = {
     administratorLogin: postgresAdministratorLogin
     administratorPassword: postgresAdminPassword
     databaseName: databaseName
+    delegatedSubnetResourceId: postgresSubnetId
+    privateDnsZoneId: postgresPrivateDnsZone.id
     tags: mergedTags
   }
 }
@@ -77,11 +197,125 @@ module managedEnvironment './modules/container-app-environment.bicep' = {
     name: managedEnvironmentName
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
     location: location
+    infrastructureSubnetId: containerAppsSubnetId
     tags: mergedTags
   }
 }
 
-var acrCredentials = listCredentials(containerRegistry.outputs.id, '2023-07-01')
+resource containerRegistryResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  id: containerRegistry.outputs.id
+}
+
+resource redisResource 'Microsoft.Cache/Redis@2024-03-01' existing = {
+  id: redis.outputs.id
+}
+
+resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
+  name: '${registryName}-pe'
+  location: location
+  tags: mergedTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'acrRegistry'
+        properties: {
+          privateLinkServiceId: containerRegistry.outputs.id
+          groupIds: [
+            'registry'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource acrPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = {
+  name: 'default'
+  parent: acrPrivateEndpoint
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'acr-dns'
+        properties: {
+          privateDnsZoneId: acrPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
+resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
+  name: '${redisName}-pe'
+  location: location
+  tags: mergedTags
+  properties: {
+    subnet: {
+      id: privateEndpointsSubnetId
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'redisCache'
+        properties: {
+          privateLinkServiceId: redis.outputs.id
+          groupIds: [
+            'redisCache'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+resource redisPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = {
+  name: 'default'
+  parent: redisPrivateEndpoint
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'redis-dns'
+        properties: {
+          privateDnsZoneId: redisPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
+resource apiRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (deployContainerApps) {
+  name: apiIdentityName
+  location: location
+  tags: mergedTags
+}
+
+resource portalRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (deployContainerApps) {
+  name: portalIdentityName
+  location: location
+  tags: mergedTags
+}
+
+resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
+  name: guid(containerRegistry.outputs.id, apiRegistryIdentity.id, acrPullRoleDefinitionId)
+  scope: containerRegistryResource
+  properties: {
+    principalId: apiRegistryIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinitionId)
+  }
+}
+
+resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
+  name: guid(containerRegistry.outputs.id, portalRegistryIdentity.id, acrPullRoleDefinitionId)
+  scope: containerRegistryResource
+  properties: {
+    principalId: portalRegistryIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinitionId)
+  }
+}
+
 var redisKeys = listKeys(redis.outputs.id, '2024-03-01')
 var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImageTag}'
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
@@ -98,20 +332,11 @@ module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
     targetPort: 3000
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
-    registryUsername: acrCredentials.username
-    registryPassword: acrCredentials.passwords[0].value
+    managedIdentityResourceId: apiRegistryIdentity.id
     envVars: [
       {
-        name: 'APP_NAME'
-        value: 'api'
-      }
-      {
-        name: 'PORT'
+        name: 'API_PORT'
         value: '3000'
-      }
-      {
-        name: 'HEALTH_PATH'
-        value: '/health'
       }
       {
         name: 'NODE_ENV'
@@ -144,8 +369,7 @@ module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
     targetPort: 3001
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
-    registryUsername: acrCredentials.username
-    registryPassword: acrCredentials.passwords[0].value
+    managedIdentityResourceId: portalRegistryIdentity.id
     envVars: [
       {
         name: 'APP_NAME'

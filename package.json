@@ -1,0 +1,17 @@
+{
+  "name": "fastsaas",
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "packages/shared",
+    "packages/api"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @fastsaas/shared && npm run build --workspace @fastsaas/api",
+    "test": "npm run test --workspace @fastsaas/api",
+    "typecheck": "npm run build --workspace @fastsaas/shared && npm run typecheck --workspace @fastsaas/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

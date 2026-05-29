@@ -8,6 +8,8 @@ param serverSku string = 'Standard_B1ms'
 param serverVersion string = '16'
 param storageSizeGb int = 32
 param backupRetentionDays int = 7
+param delegatedSubnetResourceId string
+param privateDnsZoneId string
 param tags object = {}
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' = {
@@ -31,22 +33,15 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' =
       mode: 'Disabled'
     }
     network: {
-      publicNetworkAccess: 'Enabled'
+      delegatedSubnetResourceId: delegatedSubnetResourceId
+      privateDnsZoneArmResourceId: privateDnsZoneId
+      publicNetworkAccess: 'Disabled'
     }
     storage: {
       storageSizeGB: storageSizeGb
       autoGrow: 'Enabled'
       tier: 'P4'
     }
-  }
-}
-
-resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-12-01-preview' = {
-  name: 'AllowAzureServicesAndResourcesWithinAzureIps'
-  parent: server
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
   }
 }
 
