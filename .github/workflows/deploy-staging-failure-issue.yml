@@ -1,0 +1,149 @@
+name: Create issue for staging deploy failures
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy staging
+    types:
+      - completed
+
+permissions:
+  actions: read
+  issues: write
+  contents: read
+
+jobs:
+  create-issue:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update squad issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run = context.payload.workflow_run;
+            const runUrl = run.html_url || `${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${run.id}`;
+            const timestamp = run.updated_at || new Date().toISOString();
+            const shortSha = run.head_sha ? run.head_sha.slice(0, 7) : 'unknown';
+            const actor = run.triggering_actor?.login || run.actor?.login || 'unknown';
+
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: 'squad' });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: 'squad',
+                color: '9B8FCC',
+                description: 'Squad triage inbox — Lead will assign to a member'
+              });
+            }
+
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner,
+              repo,
+              run_id: run.id,
+              per_page: 100
+            });
+
+            const failedJobs = jobs.filter(job => job.conclusion === 'failure');
+            const primaryFailedJob = failedJobs[0] || jobs.find(job => job.conclusion && job.conclusion !== 'success') || jobs[0];
+            const primaryFailedStep = primaryFailedJob?.steps?.find(step => step.conclusion === 'failure') || null;
+            const failedJobName = primaryFailedJob?.name || 'Unknown job';
+            const failedStepName = primaryFailedStep?.name || 'Unknown step';
+            const title = `Deploy staging failed (${run.head_branch || 'unknown branch'}): ${failedStepName}`;
+
+            const failureKey = [
+              run.name || 'deploy-staging',
+              run.head_branch || 'unknown-branch',
+              failedJobName,
+              failedStepName
+            ]
+              .map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
+              .join(':');
+
+            const failureMarker = `<!-- deploy-staging-failure-key:${failureKey} -->`;
+            const failedContexts = failedJobs.length
+              ? failedJobs.map(job => {
+                  const failedStep = job.steps?.find(step => step.conclusion === 'failure');
+                  const startedAt = failedStep?.started_at || job.started_at || 'unknown';
+                  return [
+                    `- Job: \`${job.name}\``,
+                    failedStep ? `  - Failed step: \`${failedStep.name}\`` : '  - Failed step: `unknown`',
+                    `  - Started at: \`${startedAt}\``
+                  ].join('\n');
+                }).join('\n')
+              : '- Unable to determine the failed job from the workflow run metadata.';
+
+            const body = [
+              failureMarker,
+              '# Deploy staging failure',
+              '',
+              '## Summary',
+              `- Workflow run: [${run.name || 'Deploy staging'} #${run.run_number} (attempt ${run.run_attempt})](${runUrl})`,
+              `- Branch: \`${run.head_branch || 'unknown'}\``,
+              `- Commit: \`${shortSha}\``,
+              `- Triggered by: \`${actor}\``,
+              `- Likely failed job: \`${failedJobName}\``,
+              `- Likely failed step: \`${failedStepName}\``,
+              `- Timestamp: \`${timestamp}\``,
+              '',
+              '## Failed jobs',
+              failedContexts,
+              '',
+              '## Triage checklist',
+              '- Open the linked workflow run and inspect the failing step logs.',
+              '- Confirm whether the failure is infra/configuration related or caused by an application image/build input.',
+              '- Re-run the deployment after the fix is merged or the environment issue is resolved.'
+            ].join('\n');
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              labels: 'squad',
+              per_page: 100
+            });
+
+            const existingIssue = openIssues.find(issue => !issue.pull_request && issue.body?.includes(failureMarker));
+
+            if (existingIssue) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existingIssue.number,
+                title,
+                body
+              });
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existingIssue.number,
+                body: [
+                  'Another `Deploy staging` failure matched this open issue.',
+                  '',
+                  `- Workflow run: ${runUrl}`,
+                  `- Timestamp: \`${timestamp}\``
+                ].join('\n')
+              });
+
+              core.info(`Updated existing issue #${existingIssue.number}`);
+              return;
+            }
+
+            const createdIssue = await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['squad']
+            });
+
+            core.info(`Created issue #${createdIssue.data.number}`);

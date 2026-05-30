@@ -56,3 +56,5 @@ _No learnings recorded yet._
 
 - **2026-05-30T17:03:46.905+00:00:** Bicep `existing` resources in `infrastructure/bicep/main.bicep` must use `name`, not `id`, and deployment-start expressions such as role assignment GUID seeds or Redis key lookups should reference naming variables or existing-resource methods instead of module outputs.
 - **2026-05-30T17:03:46.905+00:00:** Container App `env` arrays in `infrastructure/bicep/modules/container-app.bicep` compile reliably when `concat()` with for-expressions is precomputed in a variable and then assigned inside the resource body.
+- **2026-05-30T17:20:36.580+00:00:** Staging deployment failure intake now lives in `.github/workflows/deploy-staging-failure-issue.yml` as a separate `workflow_run` handler that inspects failed jobs/steps and opens or updates a `squad` issue instead of embedding issue creation in `deploy-staging.yml`.
+- **2026-05-30T17:20:36.580+00:00:** Repeated GitHub Actions failure issues can be deduplicated by storing a hidden failure key in the issue body derived from workflow name, branch, job, and step, then updating the open issue when the same signature fails again.
