@@ -12,3 +12,4 @@ coverage/
 packages/*/dist/
 packages/*/.next/
 .env.local
+.env
