@@ -98,6 +98,8 @@ function validateIssuer(payload: JWTPayload, config: ApiConfig): void {
 function buildDevAuthClaims(config: ApiConfig): AuthClaims {
   return {
     sub: config.auth.devUserId,
+    iss: config.auth.issuer,
+    aud: config.auth.audience,
     oid: config.auth.devUserId,
     tid: config.auth.devTenantId,
     scp: config.auth.requiredScope,

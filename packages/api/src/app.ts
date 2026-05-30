@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import swaggerUi from 'swagger-ui-express';
 
 import { createConfig, type ApiConfig } from './config';
@@ -34,7 +34,10 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   app.get('/openapi.json', (_req, res) => {
     res.status(200).json(openApiSpec);
   });
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, { explorer: true }));
+
+  const swaggerServeHandlers = swaggerUi.serve as unknown as RequestHandler[];
+  const swaggerSetupHandler = swaggerUi.setup(openApiSpec, { explorer: true }) as unknown as RequestHandler;
+  app.use('/docs', ...swaggerServeHandlers, swaggerSetupHandler);
 
   app.use('/v1', createV1Router(config, meteringRuntime.service, dependencies.subscriptionService));
   app.use(notFoundHandler);

@@ -10,7 +10,10 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "dev:portal": "npm run dev --workspace=@fastsaas/portal"
+    "dev:portal": "npm run dev --workspace=@fastsaas/portal",
+    "squad:feed": "node scripts/squad-places/feed.mjs",
+    "squad:publish": "node scripts/squad-places/publish.mjs",
+    "squad:comment": "node scripts/squad-places/comment.mjs"
   },
   "devDependencies": {
     "turbo": "^2.0.14",

@@ -229,3 +229,5 @@ export interface MarketplaceWebhookPayload {
   correlationId?: string;
   details?: Record<string, unknown>;
 }
+
+export * from './squad-places.js';
