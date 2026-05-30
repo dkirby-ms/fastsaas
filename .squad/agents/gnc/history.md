@@ -58,5 +58,26 @@ _No learnings recorded yet._
 - **2026-05-30T17:03:46.905+00:00:** Container App `env` arrays in `infrastructure/bicep/modules/container-app.bicep` compile reliably when `concat()` with for-expressions is precomputed in a variable and then assigned inside the resource body.
 - **2026-05-30T17:20:36.580+00:00:** Staging deployment failure intake now lives in `.github/workflows/deploy-staging-failure-issue.yml` as a separate `workflow_run` handler that inspects failed jobs/steps and opens or updates a `squad` issue instead of embedding issue creation in `deploy-staging.yml`.
 - **2026-05-30T17:20:36.580+00:00:** Repeated GitHub Actions failure issues can be deduplicated by storing a hidden failure key in the issue body derived from workflow name, branch, job, and step, then updating the open issue when the same signature fails again.
+- **2026-05-30T20:34:31.344+00:00:** Staging deployment defaults should prefer `westus2` in `.github/workflows/deploy-staging.yml` and `infrastructure/bicep/main.parameters.example.json` because PostgreSQL Flexible Server provisioning is offer-restricted in `eastus`; treat workflow-dispatch location defaults as an operational escape hatch that must stay aligned with example Bicep parameters.
+
+## Current Status
+
+**2026-05-30T17:20:36.580+00:00 — Issue #15 Complete (PR #17)**
+
+Issue #15 (deploy-failure auto-issue workflow) is now complete. The `.github/workflows/deploy-staging-failure-issue.yml` workflow:
+- Listens for failed `Deploy staging` run events
+- Queries Actions API for failing job/step names
+- Creates or updates a `squad`-labeled GitHub issue keyed by branch:job:step
+- Keeps incident reporting decoupled from deployment pipeline
+- Enables automatic triage integration for deployment failures
+
+This completes Phase 1 staging deployment automation setup.
+
+**2026-05-30T17:34:45.378+00:00 — PR #17 Reviewed and Merged**
+
+- **PR #17 Status:** Approved and merged (squash) by Kranz (Lead)
+- **Issue #15:** Closed by merge
+- **Issue #19:** Auto-created by new deploy-failure workflow on staging deploy failure; assigned to GNC for investigation
+- **Decision Recorded:** "Kranz PR #17 Review" added to `.squad/decisions.md` documenting pattern acceptance and implications
 - **2026-05-30T17:36:37.289+00:00:** Safe Azure resource-name truncation in `infrastructure/bicep/main.bicep` should use `take()` rather than fixed-length `substring()` so bootstrap deployments do not fail when environment-derived names are shorter than the max length; conditional identity/module references in the same file compile cleanly when hoisted into variables with `!` null-forgiving where the enclosing `deployContainerApps` guard guarantees existence.
 - **2026-05-30T17:36:37.289+00:00:** `infrastructure/bicep/modules/container-app-environment.bicep` should prefer `workspace.listKeys()` over the standalone `listKeys(workspace.id, ...)` function to keep the Bicep dependency graph analyzer happy.
