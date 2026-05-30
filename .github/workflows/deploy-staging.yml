@@ -10,7 +10,7 @@ on:
       location:
         description: Azure region
         required: false
-        default: eastus
+        default: westus2
       environmentName:
         description: Logical environment name
         required: false
@@ -35,7 +35,7 @@ jobs:
     environment: staging
     env:
       RESOURCE_GROUP: ${{ inputs.resourceGroup || 'rg-fastsaas-staging' }}
-      LOCATION: ${{ inputs.location || 'eastus' }}
+      LOCATION: ${{ inputs.location || 'westus2' }}
       ENVIRONMENT_NAME: ${{ inputs.environmentName || 'staging' }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.STAGING_POSTGRES_ADMIN_PASSWORD }}
     steps:

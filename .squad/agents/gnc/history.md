@@ -58,6 +58,7 @@ _No learnings recorded yet._
 - **2026-05-30T17:03:46.905+00:00:** Container App `env` arrays in `infrastructure/bicep/modules/container-app.bicep` compile reliably when `concat()` with for-expressions is precomputed in a variable and then assigned inside the resource body.
 - **2026-05-30T17:20:36.580+00:00:** Staging deployment failure intake now lives in `.github/workflows/deploy-staging-failure-issue.yml` as a separate `workflow_run` handler that inspects failed jobs/steps and opens or updates a `squad` issue instead of embedding issue creation in `deploy-staging.yml`.
 - **2026-05-30T17:20:36.580+00:00:** Repeated GitHub Actions failure issues can be deduplicated by storing a hidden failure key in the issue body derived from workflow name, branch, job, and step, then updating the open issue when the same signature fails again.
+- **2026-05-30T20:34:31.344+00:00:** Staging deployment defaults should prefer `westus2` in `.github/workflows/deploy-staging.yml` and `infrastructure/bicep/main.parameters.example.json` because PostgreSQL Flexible Server provisioning is offer-restricted in `eastus`; treat workflow-dispatch location defaults as an operational escape hatch that must stay aligned with example Bicep parameters.
 
 ## Current Status
 
