@@ -27,6 +27,18 @@ var registries = empty(registryServer) ? [] : [
   }
 ]
 
+var plainEnvVars = [for item in envVars: {
+  name: item.name
+  value: item.value
+}]
+
+var secretRefEnvVars = [for item in secretEnvVars: {
+  name: item.name
+  secretRef: item.secretName
+}]
+
+var containerEnv = concat(plainEnvVars, secretRefEnvVars)
+
 resource app 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
@@ -55,16 +67,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: name
           image: containerImage
-          env: concat(
-            [for item in envVars: {
-              name: item.name
-              value: item.value
-            }],
-            [for item in secretEnvVars: {
-              name: item.name
-              secretRef: item.secretName
-            }]
-          )
+          env: containerEnv
           resources: {
             cpu: json(cpu)
             memory: memory

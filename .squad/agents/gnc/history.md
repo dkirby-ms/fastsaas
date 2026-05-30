@@ -51,3 +51,8 @@ _No learnings recorded yet._
 ## Cross-Team Updates
 
 - **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. GNC should begin validating deployment integration requirements.
+
+## Learnings
+
+- **2026-05-30T17:03:46.905+00:00:** Bicep `existing` resources in `infrastructure/bicep/main.bicep` must use `name`, not `id`, and deployment-start expressions such as role assignment GUID seeds or Redis key lookups should reference naming variables or existing-resource methods instead of module outputs.
+- **2026-05-30T17:03:46.905+00:00:** Container App `env` arrays in `infrastructure/bicep/modules/container-app.bicep` compile reliably when `concat()` with for-expressions is precomputed in a variable and then assigned inside the resource body.

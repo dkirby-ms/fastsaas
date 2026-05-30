@@ -203,11 +203,11 @@ module managedEnvironment './modules/container-app-environment.bicep' = {
 }
 
 resource containerRegistryResource 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  id: containerRegistry.outputs.id
+  name: registryName
 }
 
 resource redisResource 'Microsoft.Cache/Redis@2024-03-01' existing = {
-  id: redis.outputs.id
+  name: redisName
 }
 
 resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
@@ -297,7 +297,7 @@ resource portalRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentitie
 }
 
 resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
-  name: guid(containerRegistry.outputs.id, apiRegistryIdentity.id, acrPullRoleDefinitionId)
+  name: guid(resourceGroup().id, registryName, apiIdentityName, acrPullRoleDefinitionId)
   scope: containerRegistryResource
   properties: {
     principalId: apiRegistryIdentity.properties.principalId
@@ -307,7 +307,7 @@ resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-
 }
 
 resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
-  name: guid(containerRegistry.outputs.id, portalRegistryIdentity.id, acrPullRoleDefinitionId)
+  name: guid(resourceGroup().id, registryName, portalIdentityName, acrPullRoleDefinitionId)
   scope: containerRegistryResource
   properties: {
     principalId: portalRegistryIdentity.properties.principalId
@@ -316,7 +316,7 @@ resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
-var redisKeys = listKeys(redis.outputs.id, '2024-03-01')
+var redisKeys = redisResource.listKeys()
 var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImageTag}'
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
 var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${postgresAdminPassword}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
