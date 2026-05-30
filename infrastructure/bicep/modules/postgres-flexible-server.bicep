@@ -12,6 +12,8 @@ param delegatedSubnetResourceId string = ''
 param privateDnsZoneId string = ''
 param tags object = {}
 
+var isPublicMode = empty(delegatedSubnetResourceId)
+
 var serverProperties = union({
   administratorLogin: administratorLogin
   administratorLoginPassword: administratorPassword
@@ -29,7 +31,7 @@ var serverProperties = union({
     autoGrow: 'Enabled'
     tier: 'P4'
   }
-}, empty(delegatedSubnetResourceId) || empty(privateDnsZoneId) ? {} : {
+}, isPublicMode || empty(privateDnsZoneId) ? {} : {
   network: {
     delegatedSubnetResourceId: delegatedSubnetResourceId
     privateDnsZoneArmResourceId: privateDnsZoneId
@@ -54,6 +56,24 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-12-0
   properties: {
     charset: 'UTF8'
     collation: 'en_US.utf8'
+  }
+}
+
+resource allowAzureServicesFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (isPublicMode) {
+  parent: server
+  name: 'AllowAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+resource allowAllFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (isPublicMode) {
+  parent: server
+  name: 'AllowAllDev'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '255.255.255.255'
   }
 }
 
