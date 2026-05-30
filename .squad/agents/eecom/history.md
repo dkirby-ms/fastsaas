@@ -54,6 +54,22 @@ _No learnings recorded yet._
 - **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
 - **2026-05-30T21:21:50.014+00:00:** PostgreSQL Flexible Server public-mode deployments must create explicit firewall rules; this branch now adds Azure-services and dev-wide public rules only when no delegated subnet is configured, leaving private-mode deployments unchanged.
 
+## PR #24 — PostgreSQL Firewall Fix (2026-05-30T21:21:50.014+00:00)
+
+**Status:** Complete (commit 55a6ab4)
+
+**Context:** GNC opened PR #24 to make private endpoints optional (default: public for dev/staging). Kranz identified a critical gap: toggling off private resources without defining firewall access leaves PostgreSQL Flexible Server inaccessible even in "public mode."
+
+**Fix applied (commit 55a6ab4):**
+- When `usePrivateEndpoints=false` (public mode), Bicep now creates PostgreSQL firewall rules:
+  - `AllowAzureServices` (`0.0.0.0` to `0.0.0.0`) — enables Container Apps, Functions, other Azure services to reach the server
+  - `AllowAllDev` (`0.0.0.0` to `255.255.255.255`) — enables any public client (dev laptops, runners, etc.) for development convenience
+- When `usePrivateEndpoints=true` (private mode), firewall rules are omitted — network isolation via VNet/delegated subnet is the boundary
+
+**Outcome:** PR #24 re-reviewed and approved by Kranz. Merged (squash). User directive for public-default dev/staging and optional-private production is now complete.
+
+**Pattern:** Networking-mode toggles in infrastructure must pair negative logic (remove private resources) with positive logic (enable public access). Partial toggles are non-functional.
+
 ## Completed Work
 
 - **2026-05-29 Phase 1 Round 2:**

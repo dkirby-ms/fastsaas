@@ -82,3 +82,19 @@ This completes Phase 1 staging deployment automation setup.
 - **2026-05-30T17:36:37.289+00:00:** Safe Azure resource-name truncation in `infrastructure/bicep/main.bicep` should use `take()` rather than fixed-length `substring()` so bootstrap deployments do not fail when environment-derived names are shorter than the max length; conditional identity/module references in the same file compile cleanly when hoisted into variables with `!` null-forgiving where the enclosing `deployContainerApps` guard guarantees existence.
 - **2026-05-30T17:36:37.289+00:00:** `infrastructure/bicep/modules/container-app-environment.bicep` should prefer `workspace.listKeys()` over the standalone `listKeys(workspace.id, ...)` function to keep the Bicep dependency graph analyzer happy.
 - **2026-05-30T20:49:33.796+00:00:** Public endpoints now default in Bicep infrastructure via `usePrivateEndpoints` parameter (default: false). PR #24 makes all VNet/DNS/PE resources optional behind the flag, allowing dev/staging to use public endpoints while production can opt-in to private endpoints. Infrastructure validation passed.
+
+## PR #24 — Public Endpoints PR (2026-05-30T21:21:50.014+00:00)
+
+**Status:** Merged (squash)
+
+**Work completed:**
+- Opened PR #24: `feat(infra): make private endpoints optional, default to public`
+- Added `usePrivateEndpoints` parameter to Bicep infrastructure
+- Set default to `false` (public endpoints as default for dev/staging)
+- Conditionally gates all VNet/private-DNS/private-endpoint resources
+
+**Initial review rejection:** Kranz identified missing PostgreSQL firewall configuration for public mode. Public-mode infrastructure must not only remove private networking but also explicitly enable public access.
+
+**Resolution:** EECOM applied firewall fix (commit 55a6ab4) with `AllowAzureServices` and `AllowAllDev` rules for public mode. PR re-reviewed and approved by Kranz.
+
+**Key learning:** Infrastructure toggles that affect networking (private ↔ public) require bidirectional logic: negative (remove private resources) + positive (enable public access). Partial toggles produce non-functional deployments.

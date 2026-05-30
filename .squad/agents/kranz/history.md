@@ -121,3 +121,21 @@
 - Accepted the ACR pull role-assignment naming change: seeding `guid()` from resource-group scope, registry name, identity name, and role definition keeps the assignment name compile-time deterministic while still mapping one assignment per identity and scope.
 - Confirmed the Redis key lookup now uses the existing-resource method (`redisResource.listKeys()`), which keeps the dependency model valid and avoids deployment-start restrictions tied to module outputs.
 - Confirmed the Container App env array refactor is clean: precomputing plain and secret-backed env entries into `containerEnv` preserves the rendered shape while avoiding unsupported inline `for` expressions inside `concat()`.
+
+### PR #24 Review — REJECTED (2026-05-30T21:21:50.014+00:00)
+
+- Rejected the optional-private-endpoints PR because the new `usePrivateEndpoints=false` path removes PostgreSQL private networking without adding any public firewall rules, so Azure Database for PostgreSQL Flexible Server will still block Container Apps by default.
+- Confirmed the Bicep conditional gating itself is structurally sound: VNet, private DNS zones, private endpoints, and subnet-dependent parameters are all consistently guarded, and the single `location` parameter still keeps the database in the same region as the Container Apps.
+- Operational note: GitHub would not allow a formal `--request-changes` review because the authenticated user is the PR author, so I recorded the rejection as a PR comment instead.
+
+### PR #24 Re-Review — APPROVED (2026-05-30T21:21:50.014+00:00)
+
+- After EECOM applied the PostgreSQL firewall fix (commit 55a6ab4), re-reviewed PR #24 for completeness
+- The fix adds two firewall rules for public mode:
+  - `AllowAzureServices` (`0.0.0.0` to `0.0.0.0`) — allows Azure-hosted callers (Container Apps, Functions, etc.)
+  - `AllowAllDev` (`0.0.0.0` to `255.255.255.255`) — allows dev/staging wide-open access for convenience
+- Private mode (VNet integration enabled) does not use firewall rules — network isolation remains the boundary
+- This completes the bidirectional logic for public/private mode toggling: remove private resources + enable public access
+- PR merged (squash)
+
+**Pattern for infrastructure toggles:** Networking-mode toggles must implement both negative logic (remove isolation resources) and positive logic (enable access). Incomplete toggles leave the deployment in an inaccessible state. This pattern should be reused for future public/private infrastructure decisions.

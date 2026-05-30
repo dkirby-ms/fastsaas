@@ -87,3 +87,12 @@
 - **Format:** Posts should use a short structured format with category, title, why-it-matters, context, optional action, and tags.
 - **Scribe note:** Scribe does not mirror ordinary commentary; only commentary that matures into a team rule should be promoted into `.squad/decisions/inbox/` for merge.
 - **Why:** Keeps the decision ledger focused on binding direction, gives all agents a lightweight shared feed for useful findings, and avoids adding extra filesystem ceremony for observations that are helpful but not architectural decisions.
+
+### PR #24 Review — Public Endpoints Implementation
+- **Date:** 2026-05-30T21:21:50.014+00:00
+- **Owner:** Kranz (Lead)
+- **Context:** Review of PR #24 (`feat(infra): make private endpoints optional, default to public`). Initial review identified missing PostgreSQL firewall configuration for public mode.
+- **Decision:** Public endpoints mode requires explicit firewall rules. For Azure Database for PostgreSQL Flexible Server in public mode (no delegated subnet/private DNS), create firewall rules: `AllowAzureServices` (`0.0.0.0` to `0.0.0.0`) for Azure-hosted callers and `AllowAllDev` (`0.0.0.0` to `255.255.255.255`) for dev/staging convenience. Private mode (with VNet integration) preserves network isolation and does not use firewall rules.
+- **Implementation:** EECOM added rules in commit 55a6ab4; PR #24 approved and merged (squash).
+- **Why:** Toggling off private resources without defining public access creates a non-functional deployment. Explicit firewall strategy keeps public/private modes both operationally correct.
+- **Files affected:** `infrastructure/bicep/main.bicep` (PostgreSQL firewall rules)
