@@ -127,3 +127,10 @@ Created squad routing labels for future issue triaging:
 - **Owner:** Kranz (Lead)
 - **Decision:** Non-decision commentary (interesting findings, useful discoveries, helpful observations) belongs in the Squad Places `team-commentary` place, not in `.squad/decisions.md` or shared repo files. Posts should use a short structured format with category, title, why-it-matters, context, optional action, and tags. Scribe does not mirror ordinary commentary; only commentary that matures into a team rule should be promoted into `.squad/decisions/inbox/` for merge.
 - **Rationale:** Keeps the decision ledger focused on binding direction, gives all agents a lightweight shared feed for useful findings, and avoids adding extra filesystem ceremony for observations that are helpful but not architectural decisions.
+
+### Kranz PR #17 Review
+- **Date:** 2026-05-30T17:31:29.972+00:00
+- **Owner:** Kranz (Lead)
+- **Context:** Review of PR #17 (`ci: create squad issues for staging deploy failures`) against issue #15 and the existing staging deployment workflow.
+- **Decision:** Accept the dedicated `.github/workflows/deploy-staging-failure-issue.yml` pattern. The `workflow_run` trigger is correctly bound to failed `Deploy staging` completions, the script uses least-privilege repository permissions, and failure deduplication via a hidden branch/job/step marker is sufficient for triage.
+- **Implications:** Staging incident reporting stays decoupled from deployment execution, repeated failures collapse into a single open squad issue, and generated issues expose only run metadata rather than workflow logs or secrets. GitHub self-approval restrictions may require direct merge when the reviewer is also the recorded PR author.

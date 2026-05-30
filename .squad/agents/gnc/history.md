@@ -71,3 +71,10 @@ Issue #15 (deploy-failure auto-issue workflow) is now complete. The `.github/wor
 - Enables automatic triage integration for deployment failures
 
 This completes Phase 1 staging deployment automation setup.
+
+**2026-05-30T17:34:45.378+00:00 — PR #17 Reviewed and Merged**
+
+- **PR #17 Status:** Approved and merged (squash) by Kranz (Lead)
+- **Issue #15:** Closed by merge
+- **Issue #19:** Auto-created by new deploy-failure workflow on staging deploy failure; assigned to GNC for investigation
+- **Decision Recorded:** "Kranz PR #17 Review" added to `.squad/decisions.md` documenting pattern acceptance and implications
