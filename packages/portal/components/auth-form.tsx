@@ -12,7 +12,7 @@ export function AuthForm() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const result = await signIn('azure-ad', {
+    const result = await signIn('microsoft-entra-id', {
       redirect: false,
       callbackUrl: '/dashboard',
     });
