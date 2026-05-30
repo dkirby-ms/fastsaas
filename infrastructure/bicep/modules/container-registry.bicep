@@ -2,6 +2,7 @@ param name string
 param location string
 param sku string = 'Premium'
 param adminUserEnabled bool = false
+param publicNetworkAccess string = 'Enabled'
 param tags object = {}
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -13,7 +14,7 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   tags: tags
   properties: {
     adminUserEnabled: adminUserEnabled
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
   }
 }
 

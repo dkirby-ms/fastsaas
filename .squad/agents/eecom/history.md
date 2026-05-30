@@ -52,6 +52,7 @@ _No learnings recorded yet._
 - **2026-05-29T14:30:29.387-05:00:** Auth uses `jose` JWT verification plus tenant-context middleware that reads `tenant_id`, `tid`, or `extension_tenant_id`, and global JSON logging/error handling is wired through `src/middleware/`.
 - **2026-05-29T14:30:29.387-05:00:** OpenAPI bootstrap is published at `/openapi.json` and `/docs`, with integration coverage in `packages/api/src/__tests__/app.integration.test.ts` for 401, 403, 200, and spec validation.
 - **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
+- **2026-05-30T21:21:50.014+00:00:** PostgreSQL Flexible Server public-mode deployments must create explicit firewall rules; this branch now adds Azure-services and dev-wide public rules only when no delegated subnet is configured, leaving private-mode deployments unchanged.
 
 ## Completed Work
 
