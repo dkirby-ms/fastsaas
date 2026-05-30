@@ -98,3 +98,7 @@ This completes Phase 1 staging deployment automation setup.
 **Resolution:** EECOM applied firewall fix (commit 55a6ab4) with `AllowAzureServices` and `AllowAllDev` rules for public mode. PR re-reviewed and approved by Kranz.
 
 **Key learning:** Infrastructure toggles that affect networking (private ↔ public) require bidirectional logic: negative (remove private resources) + positive (enable public access). Partial toggles produce non-functional deployments.
+
+## Learnings
+
+- **2026-05-30T23:42:33.979+00:00:** Created `.github/copilot-setup-steps.yml` and `.github/copilot-instructions.md` to bootstrap GitHub Copilot coding-agent setup and repository guidance for the FastSaaS monorepo.
