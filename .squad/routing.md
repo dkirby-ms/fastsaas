@@ -26,6 +26,7 @@ How to decide who handles what.
 |-------|--------|-----|
 | `squad` | Triage: analyze issue, assign `squad:{member}` label | Lead |
 | `squad:{name}` | Pick up issue and complete the work | Named member |
+| `squad:copilot` | Assign issue to @copilot (async, creates copilot/* branch) | @copilot |
 
 ### How Issue Assignment Works
 

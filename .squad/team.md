@@ -19,6 +19,22 @@
 | GNC | DevOps | .squad/agents/gnc/charter.md | ⚙️ Active |
 | Scribe | Session Logger | .squad/agents/scribe/charter.md | 📋 Active |
 | Ralph | Work Monitor | .squad/agents/ralph/charter.md | 🔄 Active |
+| @copilot | Coding Agent | copilot-instructions.md | 🤖 Active |
+
+<!-- copilot-auto-assign: false -->
+
+### @copilot Capability Profile
+
+| Category | Fit | Notes |
+|----------|-----|-------|
+| Single-file bug fixes | 🟢 | Ideal — scoped, testable |
+| Multi-file refactors | 🟢 | Good with clear instructions |
+| New feature (scoped) | 🟢 | Works well with issue descriptions |
+| Infrastructure (Bicep/IaC) | 🟡 | Can do, but GNC is preferred |
+| Complex architecture | 🔴 | Needs human/Lead judgment |
+| UI/design decisions | 🟡 | Can implement, not design |
+| Database migrations | 🟡 | Simple ones OK, complex → EECOM |
+| Test writing | 🟢 | Good at generating test cases |
 
 ## Project Context
 
