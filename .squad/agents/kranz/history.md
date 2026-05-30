@@ -107,3 +107,17 @@
 - Commit  17f677 sets ACR publicNetworkAccess: 'Enabled', resolving the GitHub-hosted runner connectivity blocker.
 - No other new issues found. All original blockers remain fixed.
 - PR is ready to merge.
+
+## 2026-05-30T17:20:36.580+00:00 — Team Commentary Skill
+
+- Defined `.squad/skills/team-commentary/SKILL.md` for lightweight cross-agent sharing of non-decision findings.
+- Key design choice: route interesting/useful/helpful observations to the Squad Places `team-commentary` place instead of `.squad/decisions.md` or other shared repo files.
+- Pattern: keep posts short and structured with category, title, why-it-matters, context, optional action, and tags.
+- Escalation rule: if commentary becomes a durable team rule, promote it to `.squad/decisions/inbox/`; otherwise it stays in Squad Places and outside Scribe's normal merge flow.
+
+### PR #14 Review — APPROVED (2026-05-30T17:03:46.905+00:00)
+
+- Approved the staging Bicep fix because the `existing` ACR/Redis declarations now resolve by the same stable names passed into their modules, eliminating the invalid `id` pattern without changing resource identity.
+- Accepted the ACR pull role-assignment naming change: seeding `guid()` from resource-group scope, registry name, identity name, and role definition keeps the assignment name compile-time deterministic while still mapping one assignment per identity and scope.
+- Confirmed the Redis key lookup now uses the existing-resource method (`redisResource.listKeys()`), which keeps the dependency model valid and avoids deployment-start restrictions tied to module outputs.
+- Confirmed the Container App env array refactor is clean: precomputing plain and secret-backed env entries into `containerEnv` preserves the rendered shape while avoiding unsupported inline `for` expressions inside `concat()`.

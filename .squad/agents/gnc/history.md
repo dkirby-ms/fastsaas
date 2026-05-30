@@ -79,3 +79,5 @@ This completes Phase 1 staging deployment automation setup.
 - **Issue #15:** Closed by merge
 - **Issue #19:** Auto-created by new deploy-failure workflow on staging deploy failure; assigned to GNC for investigation
 - **Decision Recorded:** "Kranz PR #17 Review" added to `.squad/decisions.md` documenting pattern acceptance and implications
+- **2026-05-30T17:36:37.289+00:00:** Safe Azure resource-name truncation in `infrastructure/bicep/main.bicep` should use `take()` rather than fixed-length `substring()` so bootstrap deployments do not fail when environment-derived names are shorter than the max length; conditional identity/module references in the same file compile cleanly when hoisted into variables with `!` null-forgiving where the enclosing `deployContainerApps` guard guarantees existence.
+- **2026-05-30T17:36:37.289+00:00:** `infrastructure/bicep/modules/container-app-environment.bicep` should prefer `workspace.listKeys()` over the standalone `listKeys(workspace.id, ...)` function to keep the Bicep dependency graph analyzer happy.
