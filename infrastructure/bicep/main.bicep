@@ -27,9 +27,12 @@ param tags object = {}
 
 var baseName = toLower('fastsaas${uniqueString(subscription().subscriptionId, resourceGroup().id, environmentName)}')
 var normalizedEnvironment = toLower(replace(environmentName, '-', ''))
-var registryName = substring('${normalizedEnvironment}${baseName}acr', 0, 50)
-var postgresServerName = substring('${normalizedEnvironment}${baseName}pg', 0, 63)
-var redisName = substring('${normalizedEnvironment}${baseName}redis', 0, 63)
+var registryBaseName = '${normalizedEnvironment}${baseName}acr'
+var registryName = take(registryBaseName, 50)
+var postgresServerBaseName = '${normalizedEnvironment}${baseName}pg'
+var postgresServerName = take(postgresServerBaseName, 63)
+var redisBaseName = '${normalizedEnvironment}${baseName}redis'
+var redisName = take(redisBaseName, 63)
 var managedEnvironmentName = '${environmentName}-cae'
 var logAnalyticsWorkspaceName = '${environmentName}-logs'
 var apiAppName = '${environmentName}-api'
@@ -296,11 +299,17 @@ resource portalRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentitie
   tags: mergedTags
 }
 
+var apiRegistryPrincipalId = deployContainerApps ? apiRegistryIdentity!.properties.principalId : ''
+var portalRegistryPrincipalId = deployContainerApps ? portalRegistryIdentity!.properties.principalId : ''
+var apiBaseUrl = deployContainerApps ? 'https://${apiApp!.outputs.fqdn}' : 'http://api:3000'
+var apiUrl = deployContainerApps ? 'https://${apiApp!.outputs.fqdn}' : ''
+var portalUrl = deployContainerApps ? 'https://${portalApp!.outputs.fqdn}' : ''
+
 resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
   name: guid(resourceGroup().id, registryName, apiIdentityName, acrPullRoleDefinitionId)
   scope: containerRegistryResource
   properties: {
-    principalId: apiRegistryIdentity.properties.principalId
+    principalId: apiRegistryPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinitionId)
   }
@@ -310,7 +319,7 @@ resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   name: guid(resourceGroup().id, registryName, portalIdentityName, acrPullRoleDefinitionId)
   scope: containerRegistryResource
   properties: {
-    principalId: portalRegistryIdentity.properties.principalId
+    principalId: portalRegistryPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinitionId)
   }
@@ -389,7 +398,7 @@ module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
       }
       {
         name: 'API_BASE_URL'
-        value: deployContainerApps ? 'https://${apiApp.outputs.fqdn}' : 'http://api:3000'
+        value: apiBaseUrl
       }
     ]
     tags: mergedTags
@@ -410,5 +419,5 @@ output apiContainerAppName string = apiAppName
 output portalContainerAppName string = portalAppName
 output apiImage string = apiImage
 output portalImage string = portalImage
-output apiUrl string = deployContainerApps ? 'https://${apiApp.outputs.fqdn}' : ''
-output portalUrl string = deployContainerApps ? 'https://${portalApp.outputs.fqdn}' : ''
+output apiUrl string = apiUrl
+output portalUrl string = portalUrl

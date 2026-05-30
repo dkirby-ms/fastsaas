@@ -28,7 +28,7 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: workspace.properties.customerId
-        sharedKey: listKeys(workspace.id, '2023-09-01').primarySharedKey
+        sharedKey: workspace.listKeys().primarySharedKey
       }
     }
     vnetConfiguration: {
