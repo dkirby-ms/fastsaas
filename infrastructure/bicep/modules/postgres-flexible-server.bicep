@@ -8,9 +8,34 @@ param serverSku string = 'Standard_B1ms'
 param serverVersion string = '16'
 param storageSizeGb int = 32
 param backupRetentionDays int = 7
-param delegatedSubnetResourceId string
-param privateDnsZoneId string
+param delegatedSubnetResourceId string = ''
+param privateDnsZoneId string = ''
 param tags object = {}
+
+var serverProperties = union({
+  administratorLogin: administratorLogin
+  administratorLoginPassword: administratorPassword
+  version: serverVersion
+  createMode: 'Create'
+  backup: {
+    backupRetentionDays: backupRetentionDays
+    geoRedundantBackup: 'Disabled'
+  }
+  highAvailability: {
+    mode: 'Disabled'
+  }
+  storage: {
+    storageSizeGB: storageSizeGb
+    autoGrow: 'Enabled'
+    tier: 'P4'
+  }
+}, empty(delegatedSubnetResourceId) || empty(privateDnsZoneId) ? {} : {
+  network: {
+    delegatedSubnetResourceId: delegatedSubnetResourceId
+    privateDnsZoneArmResourceId: privateDnsZoneId
+    publicNetworkAccess: 'Disabled'
+  }
+})
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' = {
   name: serverName
@@ -20,29 +45,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' =
     tier: 'Burstable'
   }
   tags: tags
-  properties: {
-    administratorLogin: administratorLogin
-    administratorLoginPassword: administratorPassword
-    version: serverVersion
-    createMode: 'Create'
-    backup: {
-      backupRetentionDays: backupRetentionDays
-      geoRedundantBackup: 'Disabled'
-    }
-    highAvailability: {
-      mode: 'Disabled'
-    }
-    network: {
-      delegatedSubnetResourceId: delegatedSubnetResourceId
-      privateDnsZoneArmResourceId: privateDnsZoneId
-      publicNetworkAccess: 'Disabled'
-    }
-    storage: {
-      storageSizeGB: storageSizeGb
-      autoGrow: 'Enabled'
-      tier: 'P4'
-    }
-  }
+  properties: serverProperties
 }
 
 resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-12-01-preview' = {

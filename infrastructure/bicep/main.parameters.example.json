@@ -11,6 +11,9 @@
     "deployContainerApps": {
       "value": true
     },
+    "usePrivateEndpoints": {
+      "value": false
+    },
     "apiImageTag": {
       "value": "placeholder"
     },

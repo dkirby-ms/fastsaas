@@ -77,7 +77,7 @@ jobs:
             --name "staging-bootstrap-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false usePrivateEndpoints=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
 
       - name: Read infrastructure outputs
         id: bootstrap
@@ -113,7 +113,7 @@ jobs:
             --name "staging-release-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
 
       - name: Read application endpoints
         id: release

@@ -9,6 +9,9 @@ param environmentName string = 'staging'
 @description('Whether to deploy the container apps or bootstrap only the shared infrastructure.')
 param deployContainerApps bool = true
 
+@description('Whether to deploy private endpoints and private networking resources.')
+param usePrivateEndpoints bool = false
+
 @description('Container image tag for the API image stored in ACR.')
 param apiImageTag string = 'placeholder'
 
@@ -54,7 +57,7 @@ var mergedTags = union(tags, {
   workload: 'fastsaas'
 })
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = if (usePrivateEndpoints) {
   name: virtualNetworkName
   location: location
   tags: mergedTags
@@ -104,17 +107,17 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-03-01' = {
   }
 }
 
-var containerAppsSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, containerAppsSubnetName)
-var postgresSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, postgresSubnetName)
-var privateEndpointsSubnetId = resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, privateEndpointsSubnetName)
+var containerAppsSubnetId = usePrivateEndpoints ? resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, containerAppsSubnetName) : ''
+var postgresSubnetId = usePrivateEndpoints ? resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, postgresSubnetName) : ''
+var privateEndpointsSubnetId = usePrivateEndpoints ? resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetworkName, privateEndpointsSubnetName) : ''
 
-resource postgresPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+resource postgresPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (usePrivateEndpoints) {
   name: postgresPrivateDnsZoneName
   location: 'global'
   tags: mergedTags
 }
 
-resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (usePrivateEndpoints) {
   name: '${environmentName}-postgres-link'
   parent: postgresPrivateDnsZone
   location: 'global'
@@ -126,13 +129,13 @@ resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNe
   }
 }
 
-resource redisPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+resource redisPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (usePrivateEndpoints) {
   name: redisPrivateDnsZoneName
   location: 'global'
   tags: mergedTags
 }
 
-resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (usePrivateEndpoints) {
   name: '${environmentName}-redis-link'
   parent: redisPrivateDnsZone
   location: 'global'
@@ -144,13 +147,13 @@ resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetwo
   }
 }
 
-resource acrPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+resource acrPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (usePrivateEndpoints) {
   name: acrPrivateDnsZoneName
   location: 'global'
   tags: mergedTags
 }
 
-resource acrPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+resource acrPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (usePrivateEndpoints) {
   name: '${environmentName}-acr-link'
   parent: acrPrivateDnsZone
   location: 'global'
@@ -167,6 +170,7 @@ module containerRegistry './modules/container-registry.bicep' = {
   params: {
     name: registryName
     location: location
+    publicNetworkAccess: usePrivateEndpoints ? 'Disabled' : 'Enabled'
     tags: mergedTags
   }
 }
@@ -179,8 +183,8 @@ module postgres './modules/postgres-flexible-server.bicep' = {
     administratorLogin: postgresAdministratorLogin
     administratorPassword: postgresAdminPassword
     databaseName: databaseName
-    delegatedSubnetResourceId: postgresSubnetId
-    privateDnsZoneId: postgresPrivateDnsZone.id
+    delegatedSubnetResourceId: usePrivateEndpoints ? postgresSubnetId : ''
+    privateDnsZoneId: usePrivateEndpoints ? postgresPrivateDnsZone.id : ''
     tags: mergedTags
   }
 }
@@ -190,6 +194,7 @@ module redis './modules/redis-cache.bicep' = {
   params: {
     name: redisName
     location: location
+    publicNetworkAccess: usePrivateEndpoints ? 'Disabled' : 'Enabled'
     tags: mergedTags
   }
 }
@@ -200,7 +205,7 @@ module managedEnvironment './modules/container-app-environment.bicep' = {
     name: managedEnvironmentName
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
     location: location
-    infrastructureSubnetId: containerAppsSubnetId
+    infrastructureSubnetId: usePrivateEndpoints ? containerAppsSubnetId : ''
     tags: mergedTags
   }
 }
@@ -213,7 +218,7 @@ resource redisResource 'Microsoft.Cache/Redis@2024-03-01' existing = {
   name: redisName
 }
 
-resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
+resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (usePrivateEndpoints) {
   name: '${registryName}-pe'
   location: location
   tags: mergedTags
@@ -235,7 +240,7 @@ resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
   }
 }
 
-resource acrPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = {
+resource acrPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = if (usePrivateEndpoints) {
   name: 'default'
   parent: acrPrivateEndpoint
   properties: {
@@ -250,7 +255,7 @@ resource acrPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZo
   }
 }
 
-resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = {
+resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (usePrivateEndpoints) {
   name: '${redisName}-pe'
   location: location
   tags: mergedTags
@@ -272,7 +277,7 @@ resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = 
   }
 }
 
-resource redisPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = {
+resource redisPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = if (usePrivateEndpoints) {
   name: 'default'
   parent: redisPrivateEndpoint
   properties: {

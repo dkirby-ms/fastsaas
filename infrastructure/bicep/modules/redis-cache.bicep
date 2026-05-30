@@ -4,6 +4,7 @@ param skuName string = 'Basic'
 param family string = 'C'
 param capacity int = 0
 param minimumTlsVersion string = '1.2'
+param publicNetworkAccess string = 'Enabled'
 param tags object = {}
 
 resource redis 'Microsoft.Cache/Redis@2024-03-01' = {
@@ -17,7 +18,7 @@ resource redis 'Microsoft.Cache/Redis@2024-03-01' = {
       capacity: capacity
     }
     minimumTlsVersion: minimumTlsVersion
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: publicNetworkAccess
     redisConfiguration: {
       'maxmemory-policy': 'allkeys-lru'
     }
