@@ -13,7 +13,7 @@ param deployContainerApps bool = true
 param usePrivateEndpoints bool = false
 
 @description('Whether to provision Redis cache resources for the deployment.')
-param deployRedis bool = false
+param deployRedis bool = true
 
 @description('Container image tag for the API image stored in ACR.')
 param apiImageTag string = 'placeholder'
