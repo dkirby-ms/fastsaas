@@ -9,3 +9,7 @@
 ## Learnings
 
 _No learnings recorded yet._
+
+## 2026-05-31T19:45Z — Publisher Portal RBAC Review Ready
+
+FIDO completed publisher portal pages with session-based role gating. Pages are protected by customer/publisher role checks. RETRO may review RBAC implementation in `packages/portal/app/(portal)/publisher/*` and `packages/portal/src/components/publisher-nav.tsx` as part of issue #44 (tenant isolation security test suite). PR #59 available for review.

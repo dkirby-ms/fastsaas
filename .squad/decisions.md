@@ -252,3 +252,44 @@ Created squad routing labels for future issue triaging:
 - **Why:** Debian slim matches Prisma's recommended OpenSSL/runtime combination, avoids Alpine musl compatibility issues, and keeps local/native development working while ensuring the container ships a compatible query engine.
 - **Files Modified:** `packages/api/Dockerfile`, `packages/api/prisma/schema.prisma`
 - **Validation:** Build+typecheck verified (29855d3).
+
+---
+
+## Inbox Decisions (2026-05-31)
+
+### Kranz Phase Roadmap Decomposition
+- **Date:** 2026-05-31T19:33:53Z
+- **Owner:** Kranz (Lead)
+- **Context:** FastSaaS roadmap (Phases 1.5, 2, 3) decomposed into GitHub issues for tracking and squad assignment.
+- **Decision:** Established issue naming format `[Phase X.X] Work item title`, label taxonomy (`phase:1.5/2/3`, `squad:eecom/fido/gnc/retro`), GitHub milestone per phase, and standard issue body structure with DoD and technical notes.
+- **Rationale:** Maintains consistency across phase planning, enables scannable issue lists, and preserves squad routing conventions.
+- **Issue Index:** Created 16 issues (#43–#58) across phases 1.5, 2, 3 with squad assignments documented in decisions.
+- **Status:** ✓ Complete
+
+### GNC Health Check Degradation Handling
+- **Date:** 2026-05-31T19:45:00Z
+- **Owner:** GNC
+- **Context:** Issue #41 — staging `deploy-app` failure at health check step after API image changes.
+- **Decision:** Allow API to boot in degraded mode when `DATABASE_URL` missing during Container App rollout; extend deploy workflow retry window for new revision warmup.
+- **Why:** Container App revision updates are transient; health verification should measure eventual /health availability, not fail on rollout delay or optional database initialization.
+
+### FIDO Publisher Portal Decision
+- **Date:** 2026-05-31T19:45:42.525Z
+- **Owner:** FIDO
+- **Context:** Issue #43 adds publisher workflows before dedicated publisher-management API routes exist.
+- **Decision:** Ship publisher pages (`/publisher`, `/publisher/plans`, `/publisher/tenants`, `/publisher/tenants/[id]`) behind session-role RBAC gating, reuse portal API abstraction, map `/v1/auth/context` + `/v1/subscriptions` to read-only publisher views, keep mutations on mock adapter until EECOM lands publisher endpoints.
+- **Why:** Preserves RBAC/routing/UX contracts immediately, provides stable frontend surface for review, minimizes future rework when backend routes ship.
+- **Files:** `packages/portal/lib/api-client.ts`, `packages/portal/lib/publisher-mappers.ts`, `packages/portal/app/(portal)/publisher/*`, `packages/portal/src/components/publisher-nav.tsx`
+- **Status:** ✓ Complete (PR #59 merged)
+
+### Copilot Directive: Semantic Versioning (2026-05-31T19:28Z)
+- **By:** saitcho (via Copilot)
+- **Decision:** Follow semver.org conventions strictly—MAJOR for breaking changes, MINOR for new backward-compatible features, PATCH for backward-compatible fixes.
+- **Why:** User request for team memory and consistency.
+
+### EECOM Semantic Versioning Lightweight Approach
+- **Date:** 2026-05-31T19:45:00Z
+- **Owner:** EECOM
+- **Context:** Issue #36 requests lightweight semantic versioning for API and portal workspaces.
+- **Decision:** Use plain semantic versions in `packages/api`, `packages/portal`, `packages/shared`; bump with `npm version patch|minor|major --workspace=<workspace>`; track releases in `CHANGELOG.md` (Keep a Changelog format).
+- **Why:** Small team, workspaces start at 0.1.0, `npm version` keeps workflow simple while ensuring consistent package metadata and release notes.

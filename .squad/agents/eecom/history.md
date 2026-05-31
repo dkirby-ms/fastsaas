@@ -77,3 +77,12 @@ _No learnings recorded yet._
   - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
   - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.
 - **2026-05-31:** `packages/api`, `packages/portal`, and `packages/shared` are aligned on `0.1.0` semantic versions, and the repo now documents using `npm version` plus the root changelog for future bumps.
+
+## 2026-05-31T19:45Z — Publisher Portal Awaiting API Routes
+
+FIDO completed publisher portal pages (issue #43). Portal is now gating access and reading `/v1/auth/context` + `/v1/subscriptions`. Portal mutations for plan/tenant management are on mock adapter pending EECOM publisher-management API routes:
+- `POST /api/v1/publisher/plans` — Create plan
+- `PUT /api/v1/publisher/plans/{id}` — Update plan
+- `POST /api/v1/publisher/tenants/{id}` — Configure tenant
+
+No blocker; FIDO and EECOM can work in parallel. API routes will replace mock adapter when ready.

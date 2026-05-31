@@ -53,3 +53,12 @@ Assigned to FIDO:
 - **2026-05-31T19:45:42.525+00:00:** Publisher workflows now live under `packages/portal/app/(portal)/publisher/` with role-aware navigation in `packages/portal/components/sidebar-nav.tsx` and shared guards in `packages/portal/lib/route-access.ts`.
 - **2026-05-31T19:45:42.525+00:00:** Portal auth now derives roles from JWT claims in `packages/portal/auth.ts`, so UI RBAC and API error handling can rely on `session.roles` without extra client-side decoding.
 - **2026-05-31T19:45:42.525+00:00:** Publisher data flows through `packages/portal/lib/api-client.ts`, using `/v1/auth/context` and `/v1/subscriptions` for live read models while `packages/portal/lib/mock-api.ts` keeps plan and tenant mutations unblocked until dedicated publisher routes exist.
+
+## 2026-05-31T19:45Z — Publisher Portal #43 Complete
+
+FIDO delivered publisher portal basic workflows (issue #43):
+- Pages: `/publisher`, `/publisher/plans`, `/publisher/tenants`, `/publisher/tenants/[id]`
+- RBAC role-based gating with 403 handling
+- Read-only API integration via `/v1/auth/context` and `/v1/subscriptions`
+- Typecheck and build validated; PR #59 merged
+- Next: Await EECOM publisher-management API routes for mutations
