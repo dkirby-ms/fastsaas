@@ -126,7 +126,7 @@ jobs:
             --name "staging-app-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" azureTenantId="${AZURE_TENANT_ID}" azureClientId="${AZURE_CLIENT_ID}"
 
       - name: Read deployment outputs
         id: deployment

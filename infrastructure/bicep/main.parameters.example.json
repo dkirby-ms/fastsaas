@@ -23,6 +23,12 @@
     "postgresAdministratorLogin": {
       "value": "fastsaasadmin"
     },
+    "azureTenantId": {
+      "value": ""
+    },
+    "azureClientId": {
+      "value": ""
+    },
     "tags": {
       "value": {
         "owner": "gnc",

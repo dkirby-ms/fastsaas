@@ -25,6 +25,12 @@ param postgresAdministratorLogin string = 'fastsaasadmin'
 @description('Administrator password for PostgreSQL Flexible Server.')
 param postgresAdminPassword string
 
+@description('Azure Entra ID tenant ID for API authentication.')
+param azureTenantId string = ''
+
+@description('Azure Entra ID client ID for API authentication.')
+param azureClientId string = ''
+
 @description('Optional tags to apply to all resources.')
 param tags object = {}
 
@@ -338,6 +344,25 @@ var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImage
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
 var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${postgresAdminPassword}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
 var redisUrl = '${redis.outputs.hostname}:${redis.outputs.sslPort},password=${redisPrimaryKey},ssl=True,abortConnect=False'
+var apiEnvVars = [
+  {
+    name: 'API_PORT'
+    value: '3000'
+  }
+  {
+    name: 'NODE_ENV'
+    value: 'production'
+  }
+  {
+    name: 'AZURE_AD_TENANT_ID'
+    value: azureTenantId
+  }
+  {
+    name: 'AZURE_AD_CLIENT_ID'
+    value: azureClientId
+  }
+]
+
 var apiSecretEnvVars = [
   {
     name: 'DATABASE_URL'
@@ -362,7 +387,7 @@ module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
     managedIdentityResourceId: apiRegistryIdentity.id
-    envVars: []
+    envVars: apiEnvVars
     secretEnvVars: apiSecretEnvVars
     tags: mergedTags
   }
