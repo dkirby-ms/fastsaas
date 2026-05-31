@@ -5,12 +5,28 @@ import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
 import type { MeteringService } from '../../metering/service';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 
 export function createMeteringRouter(config: ApiConfig, service: MeteringService) {
   const router = Router();
-  const authorizeWrite = [authenticateRequest(config), injectTenantContext(config), requireScopes([config.metering.writeScope])];
-  const authorizeRead = [authenticateRequest(config), injectTenantContext(config), requireScopes([config.metering.readScope])];
+  const authorizeWrite = [
+    authenticateRequest(config),
+    injectTenantContext(config),
+    requireScopes([config.metering.writeScope]),
+    authorizeRoute({
+      resource: 'metering',
+      action: 'create',
+      resourceId: (req) => (typeof req.body?.eventId === 'string' ? req.body.eventId : undefined),
+      metadata: (req) => ({ subscriptionId: typeof req.body?.subscriptionId === 'string' ? req.body.subscriptionId : undefined })
+    })
+  ];
+  const authorizeRead = [
+    authenticateRequest(config),
+    injectTenantContext(config),
+    requireScopes([config.metering.readScope]),
+    authorizeRoute({ resource: 'metering', action: 'read' })
+  ];
 
   /**
    * @openapi

@@ -10,10 +10,12 @@ import { buildOpenApiSpec } from './openapi';
 import { healthRouter } from './routes/health';
 import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
+import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
 import type { SubscriptionService } from './services/subscription-service';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
+  auditService?: AuditService;
 }
 
 export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
@@ -29,6 +31,10 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   }
 
   app.use(express.json());
+
+  if (dependencies.auditService) {
+    app.use(createAuditLoggingMiddleware(dependencies.auditService));
+  }
 
   app.use(healthRouter);
   app.get('/openapi.json', (_req, res) => {

@@ -77,3 +77,7 @@ _No learnings recorded yet._
   - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
   - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.
 - **2026-05-31:** `packages/api`, `packages/portal`, and `packages/shared` are aligned on `0.1.0` semantic versions, and the repo now documents using `npm version` plus the root changelog for future bumps.
+
+## Learnings
+
+- **2026-05-31T21:35:32.766+00:00:** RBAC hardening is centralized in `packages/api/src/middleware/rbac.ts` via `authorizeRoute`, and audit logging is split between `packages/api/src/services/audit-service.ts`, `packages/api/src/repositories/audit-log-repository.ts`, and the append-only `packages/api/src/db/migrations/20260531T213532_audit_logs.ts` migration plus shared tenant RLS helpers in `packages/api/src/db/rls.ts`.

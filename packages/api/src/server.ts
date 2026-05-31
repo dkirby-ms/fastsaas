@@ -13,10 +13,20 @@ import {
   KyselySubscriptionRepository,
   type SubscriptionRepository
 } from './repositories/subscription-repository';
+import {
+  InMemoryAuditLogRepository,
+  KyselyAuditLogRepository,
+  type AuditLogRepository
+} from './repositories/audit-log-repository';
+import { AuditService } from './services/audit-service';
 import { SubscriptionService } from './services/subscription-service';
 
 function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
+}
+
+function createAuditLogRepository(database?: Kysely<Database>): AuditLogRepository {
+  return database ? new KyselyAuditLogRepository(database) : new InMemoryAuditLogRepository();
 }
 
 function initializeDatabaseDependencies(databaseUrl?: string): {
@@ -48,6 +58,7 @@ const config = createConfig();
 const { database, meteringPool, meteringSqlClient } = initializeDatabaseDependencies(config.databaseUrl);
 const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
 const subscriptionRepository = createSubscriptionRepository(database);
+const auditLogRepository = createAuditLogRepository(database);
 const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
   baseUrl: config.marketplace.baseUrl,
   apiVersion: config.marketplace.apiVersion,
@@ -55,7 +66,8 @@ const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
   logger
 });
 const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
-const app = createApp(config, { ...meteringRuntime, subscriptionService });
+const auditService = new AuditService(auditLogRepository, logger.child({ component: 'audit' }));
+const app = createApp(config, { ...meteringRuntime, subscriptionService, auditService });
 
 async function runMeteringWorker(): Promise<void> {
   try {

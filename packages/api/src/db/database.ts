@@ -91,12 +91,25 @@ export interface MarketplaceWebhookEventsTable {
   processed_at: NullableTimestamp;
 }
 
+export interface AuditLogsTable {
+  id: string;
+  tenant_id: string;
+  actor_id: string;
+  action: 'create' | 'read' | 'update' | 'delete' | 'manage';
+  resource: 'subscriptions' | 'plans' | 'tenants' | 'metering' | 'users';
+  resource_id: string | null;
+  timestamp: GeneratedTimestamp;
+  outcome: 'success' | 'denied' | 'failure';
+  metadata: JsonColumn;
+}
+
 export interface Database {
   usage_events: UsageEventsTable;
   usage_event_dead_letters: UsageEventDeadLettersTable;
   subscriptions: SubscriptionsTable;
   subscription_audit_logs: SubscriptionAuditLogsTable;
   marketplace_webhook_events: MarketplaceWebhookEventsTable;
+  audit_logs: AuditLogsTable;
 }
 
 export function createPool(connectionString: string): Pool {
