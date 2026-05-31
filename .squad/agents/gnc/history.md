@@ -99,3 +99,8 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 - Semantic-release now lives at the repo root with `release.config.js`, using a single repository version stream for the private npm workspaces in `packages/api`, `packages/portal`, and `packages/shared`.
 - GitHub automation for release management is split across `.github/workflows/release.yml` (publish from `main`) and `.github/workflows/commitlint.yml` (lint PR commit history against conventional commits).
 - Root-level release metadata is captured in `CHANGELOG.md`, `package.json`, and `package-lock.json`, which are the assets committed back by `@semantic-release/git` during release preparation.
+
+### 2026-05-31T21:35:32.766+00:00
+- Marketplace webhook authentication is enforced before JSON parsing, using the raw request body plus the timestamp header to compute an HMAC-SHA256 digest, and the replay window defaults to five minutes via `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`.
+- Metering retries only for `429` and `5xx` responses, honors `retry-after` when present, and moves exhausted events into `usage_event_dead_letters`, so operator drills must validate both retry scheduling and dead-letter recovery.
+- A practical runbook pattern for this repo is dual-mode validation: deterministic local drills for auth/retry logic and live staging probes for signed webhook ingress behavior.
