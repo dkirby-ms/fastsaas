@@ -1,6 +1,6 @@
 # FastSaaS — Azure Marketplace SaaS Template
 
-FastSaaS is a production-ready SaaS accelerator for Microsoft Commercial Marketplace. It provides an integrated backend API, customer portal, and Azure infrastructure for deploying a multi-tenant SaaS offering with marketplace subscription lifecycle management, metering-based billing, and secure customer isolation.
+FastSaaS is an experimental SaaS accelerator for Microsoft Commercial Marketplace. It provides an integrated backend API, customer portal, and Azure infrastructure for deploying a multi-tenant SaaS offering with marketplace subscription lifecycle management, metering-based billing, and secure customer isolation.
 
 ## Architecture
 
