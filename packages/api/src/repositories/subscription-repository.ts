@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { PrismaClient, type Prisma, type Subscription as PrismaSubscription, type SubscriptionAuditLog as PrismaSubscriptionAuditLog } from '@prisma/client';
 import type { Subscription, SubscriptionAuditEntry, SubscriptionStatus } from '@fastsaas/shared';
+import type { Kysely, Selectable, Transaction } from 'kysely';
+
+import type { Database } from '../db/database';
 
 export interface CreateSubscriptionInput {
   tenantId: string;
@@ -46,7 +48,9 @@ export interface SubscriptionRepository {
   disconnect?(): Promise<void>;
 }
 
-type SubscriptionWithAudit = PrismaSubscription & { auditLogs: PrismaSubscriptionAuditLog[] };
+type SubscriptionRow = Selectable<Database['subscriptions']>;
+type AuditLogRow = Selectable<Database['subscription_audit_logs']>;
+type DatabaseExecutor = Kysely<Database> | Transaction<Database>;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -206,196 +210,258 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
   }
 }
 
-export class PrismaSubscriptionRepository implements SubscriptionRepository {
-  constructor(private readonly prisma = new PrismaClient()) {}
+export class KyselySubscriptionRepository implements SubscriptionRepository {
+  constructor(private readonly db: Kysely<Database>) {}
 
   async createSubscription(input: CreateSubscriptionInput): Promise<Subscription> {
-    const subscription = await this.prisma.$transaction(async (transaction) => {
-      const created = await transaction.subscription.create({
-        data: {
-          tenantId: input.tenantId,
-          marketplaceSubscriptionId: input.marketplaceSubscriptionId,
-          planId: input.planId,
+    return this.db.transaction().execute(async (trx) => {
+      const createdAt = new Date(input.auditEntry.createdAt);
+      const created = await trx
+        .insertInto('subscriptions')
+        .values({
+          tenant_id: input.tenantId,
+          marketplace_subscription_id: input.marketplaceSubscriptionId,
+          plan_id: input.planId,
           seats: input.seats,
           status: 'PendingActivation',
-          offerId: input.offerId,
-          purchaserTenantId: input.purchaserTenantId,
-          beneficiaryTenantId: input.beneficiaryTenantId,
-          correlationId: input.correlationId,
-          metadata: input.metadata as Prisma.InputJsonValue
-        }
-      });
+          offer_id: input.offerId ?? null,
+          purchaser_tenant_id: input.purchaserTenantId ?? null,
+          beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
+          correlation_id: input.correlationId,
+          metadata: input.metadata,
+          created_at: createdAt,
+          updated_at: createdAt
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-      await transaction.subscriptionAuditLog.create({
-        data: {
+      await trx
+        .insertInto('subscription_audit_logs')
+        .values({
           id: input.auditEntry.id,
-          subscriptionId: created.id,
-          eventType: input.auditEntry.eventType,
+          subscription_id: created.id,
+          event_type: input.auditEntry.eventType,
           source: input.auditEntry.source,
-          fromStatus: input.auditEntry.fromStatus,
-          toStatus: input.auditEntry.toStatus,
-          correlationId: input.auditEntry.correlationId,
-          requestId: input.auditEntry.requestId,
-          details: input.auditEntry.details as Prisma.InputJsonValue,
-          createdAt: new Date(input.auditEntry.createdAt)
-        }
-      });
+          from_status: input.auditEntry.fromStatus,
+          to_status: input.auditEntry.toStatus,
+          correlation_id: input.auditEntry.correlationId,
+          request_id: input.auditEntry.requestId,
+          details: input.auditEntry.details,
+          created_at: createdAt
+        })
+        .execute();
 
-      return transaction.subscription.findUniqueOrThrow({
-        where: { id: created.id },
-        include: {
-          auditLogs: {
-            orderBy: {
-              createdAt: 'asc'
-            }
-          }
-        }
-      });
+      return this.getSubscriptionOrThrow(trx, created.id);
     });
-
-    return mapSubscription(subscription);
   }
 
   async findById(subscriptionId: string): Promise<Subscription | null> {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { id: subscriptionId },
-      include: {
-        auditLogs: {
-          orderBy: {
-            createdAt: 'asc'
-          }
-        }
-      }
-    });
-
-    return subscription ? mapSubscription(subscription) : null;
+    return this.findSubscriptionBy('id', subscriptionId);
   }
 
   async findByMarketplaceSubscriptionId(marketplaceSubscriptionId: string): Promise<Subscription | null> {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { marketplaceSubscriptionId },
-      include: {
-        auditLogs: {
-          orderBy: {
-            createdAt: 'asc'
-          }
-        }
-      }
-    });
-
-    return subscription ? mapSubscription(subscription) : null;
+    return this.findSubscriptionBy('marketplace_subscription_id', marketplaceSubscriptionId);
   }
 
   async listByTenant(tenantId: string): Promise<Subscription[]> {
-    const subscriptions = await this.prisma.subscription.findMany({
-      where: { tenantId },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      include: {
-        auditLogs: {
-          orderBy: {
-            createdAt: 'asc'
-          }
-        }
-      }
-    });
+    const rows = await this.db
+      .selectFrom('subscriptions')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .orderBy('created_at', 'desc')
+      .execute();
 
-    return subscriptions.map((subscription) => mapSubscription(subscription as SubscriptionWithAudit));
+    return this.hydrateSubscriptions(this.db, rows);
   }
 
   async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
-    const event = await this.prisma.marketplaceWebhookEvent.findUnique({
-      where: { idempotencyKey }
-    });
+    const event = await this.db
+      .selectFrom('marketplace_webhook_events')
+      .selectAll()
+      .where('idempotency_key', '=', idempotencyKey)
+      .executeTakeFirst();
 
     if (!event) {
       return null;
     }
 
     return {
-      idempotencyKey: event.idempotencyKey,
-      marketplaceSubscriptionId: event.marketplaceSubscriptionId,
+      idempotencyKey: event.idempotency_key,
+      marketplaceSubscriptionId: event.marketplace_subscription_id,
       action: event.action,
-      correlationId: event.correlationId,
-      requestId: event.requestId,
+      correlationId: event.correlation_id,
+      requestId: event.request_id,
       payload: asRecord(event.payload),
       status: event.status as RecordedWebhookEvent['status'],
-      errorMessage: event.errorMessage ?? undefined,
-      processedAt: event.processedAt?.toISOString()
+      errorMessage: event.error_message ?? undefined,
+      processedAt: event.processed_at?.toISOString()
     };
   }
 
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
-    const subscription = await this.prisma.$transaction(async (transaction) => {
-      await transaction.subscription.update({
-        where: { id: input.subscriptionId },
-        data: {
+    return this.db.transaction().execute(async (trx) => {
+      const updatedAt = new Date(input.auditEntry.createdAt);
+      const updated = await trx
+        .updateTable('subscriptions')
+        .set({
           status: input.toStatus,
-          correlationId: input.correlationId
-        }
-      });
+          correlation_id: input.correlationId,
+          updated_at: updatedAt
+        })
+        .where('id', '=', input.subscriptionId)
+        .returning('id')
+        .executeTakeFirst();
 
-      await transaction.subscriptionAuditLog.create({
-        data: {
+      if (!updated) {
+        throw new Error(`Subscription ${input.subscriptionId} not found`);
+      }
+
+      await trx
+        .insertInto('subscription_audit_logs')
+        .values({
           id: input.auditEntry.id,
-          subscriptionId: input.subscriptionId,
-          eventType: input.auditEntry.eventType,
+          subscription_id: input.subscriptionId,
+          event_type: input.auditEntry.eventType,
           source: input.auditEntry.source,
-          fromStatus: input.auditEntry.fromStatus,
-          toStatus: input.auditEntry.toStatus,
-          correlationId: input.auditEntry.correlationId,
-          requestId: input.auditEntry.requestId,
-          details: input.auditEntry.details as Prisma.InputJsonValue,
-          createdAt: new Date(input.auditEntry.createdAt)
-        }
-      });
+          from_status: input.auditEntry.fromStatus,
+          to_status: input.auditEntry.toStatus,
+          correlation_id: input.auditEntry.correlationId,
+          request_id: input.auditEntry.requestId,
+          details: input.auditEntry.details,
+          created_at: updatedAt
+        })
+        .execute();
 
-      return transaction.subscription.findUniqueOrThrow({
-        where: { id: input.subscriptionId },
-        include: {
-          auditLogs: {
-            orderBy: {
-              createdAt: 'asc'
-            }
-          }
-        }
-      });
+      return this.getSubscriptionOrThrow(trx, input.subscriptionId);
     });
-
-    return mapSubscription(subscription);
   }
 
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {
-    await this.prisma.marketplaceWebhookEvent.upsert({
-      where: {
-        idempotencyKey: event.idempotencyKey
-      },
-      create: {
-        idempotencyKey: event.idempotencyKey,
-        marketplaceSubscriptionId: event.marketplaceSubscriptionId,
+    const processedAt = event.processedAt ? new Date(event.processedAt) : null;
+
+    await this.db
+      .insertInto('marketplace_webhook_events')
+      .values({
+        idempotency_key: event.idempotencyKey,
+        marketplace_subscription_id: event.marketplaceSubscriptionId,
         action: event.action,
-        correlationId: event.correlationId,
-        requestId: event.requestId,
-        payload: event.payload as Prisma.InputJsonValue,
+        correlation_id: event.correlationId,
+        request_id: event.requestId,
+        payload: event.payload,
         status: event.status,
-        errorMessage: event.errorMessage,
-        processedAt: event.processedAt ? new Date(event.processedAt) : undefined
-      },
-      update: {
-        marketplaceSubscriptionId: event.marketplaceSubscriptionId,
-        action: event.action,
-        correlationId: event.correlationId,
-        requestId: event.requestId,
-        payload: event.payload as Prisma.InputJsonValue,
-        status: event.status,
-        errorMessage: event.errorMessage,
-        processedAt: event.processedAt ? new Date(event.processedAt) : null
-      }
-    });
+        error_message: event.errorMessage ?? null,
+        processed_at: processedAt
+      })
+      .onConflict((oc) =>
+        oc.column('idempotency_key').doUpdateSet({
+          marketplace_subscription_id: event.marketplaceSubscriptionId,
+          action: event.action,
+          correlation_id: event.correlationId,
+          request_id: event.requestId,
+          payload: event.payload,
+          status: event.status,
+          error_message: event.errorMessage ?? null,
+          processed_at: processedAt
+        })
+      )
+      .execute();
   }
 
-  async disconnect(): Promise<void> {
-    await this.prisma.$disconnect();
+  private async findSubscriptionBy(
+    column: 'id' | 'marketplace_subscription_id',
+    value: string
+  ): Promise<Subscription | null> {
+    const row = await this.db.selectFrom('subscriptions').selectAll().where(column, '=', value).executeTakeFirst();
+
+    if (!row) {
+      return null;
+    }
+
+    const [subscription] = await this.hydrateSubscriptions(this.db, [row]);
+    return subscription ?? null;
+  }
+
+  private async getSubscriptionOrThrow(executor: DatabaseExecutor, subscriptionId: string): Promise<Subscription> {
+    const row = await executor
+      .selectFrom('subscriptions')
+      .selectAll()
+      .where('id', '=', subscriptionId)
+      .executeTakeFirst();
+
+    if (!row) {
+      throw new Error(`Subscription ${subscriptionId} not found`);
+    }
+
+    const [subscription] = await this.hydrateSubscriptions(executor, [row]);
+
+    if (!subscription) {
+      throw new Error(`Subscription ${subscriptionId} not found`);
+    }
+
+    return subscription;
+  }
+
+  private async hydrateSubscriptions(executor: DatabaseExecutor, rows: readonly SubscriptionRow[]): Promise<Subscription[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const auditLogs = await this.loadAuditLogs(executor, rows.map((row) => row.id));
+
+    return rows.map((row) =>
+      mapSubscription({
+        id: row.id,
+        tenantId: row.tenant_id,
+        marketplaceSubscriptionId: row.marketplace_subscription_id,
+        planId: row.plan_id,
+        seats: row.seats,
+        status: row.status,
+        offerId: row.offer_id,
+        purchaserTenantId: row.purchaser_tenant_id,
+        beneficiaryTenantId: row.beneficiary_tenant_id,
+        correlationId: row.correlation_id,
+        metadata: row.metadata,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        auditLogs: (auditLogs.get(row.id) ?? []).map((entry) => ({
+          id: entry.id,
+          subscriptionId: entry.subscription_id,
+          eventType: entry.event_type,
+          source: entry.source,
+          fromStatus: entry.from_status,
+          toStatus: entry.to_status,
+          correlationId: entry.correlation_id,
+          requestId: entry.request_id,
+          details: entry.details,
+          createdAt: entry.created_at
+        }))
+      })
+    );
+  }
+
+  private async loadAuditLogs(
+    executor: DatabaseExecutor,
+    subscriptionIds: readonly string[]
+  ): Promise<Map<string, AuditLogRow[]>> {
+    const auditLogsBySubscriptionId = new Map<string, AuditLogRow[]>();
+
+    if (subscriptionIds.length === 0) {
+      return auditLogsBySubscriptionId;
+    }
+
+    const auditLogs = await executor
+      .selectFrom('subscription_audit_logs')
+      .selectAll()
+      .where('subscription_id', 'in', subscriptionIds)
+      .orderBy('created_at', 'asc')
+      .execute();
+
+    for (const auditLog of auditLogs) {
+      const subscriptionAuditLogs = auditLogsBySubscriptionId.get(auditLog.subscription_id) ?? [];
+      subscriptionAuditLogs.push(auditLog);
+      auditLogsBySubscriptionId.set(auditLog.subscription_id, subscriptionAuditLogs);
+    }
+
+    return auditLogsBySubscriptionId;
   }
 }

@@ -1,22 +1,29 @@
+import type { Kysely } from 'kysely';
+
 import { createApp } from './app';
 import { createConfig } from './config';
+import { createDatabase, createPool, type Database } from './db/database';
+import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
 import { createMeteringRuntime } from './metering/runtime';
 import {
   InMemorySubscriptionRepository,
-  PrismaSubscriptionRepository,
+  KyselySubscriptionRepository,
   type SubscriptionRepository
 } from './repositories/subscription-repository';
 import { SubscriptionService } from './services/subscription-service';
 
-function createSubscriptionRepository(databaseUrl?: string): SubscriptionRepository {
-  return databaseUrl ? new PrismaSubscriptionRepository() : new InMemorySubscriptionRepository();
+function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
+  return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
 }
 
 const config = createConfig();
-const meteringRuntime = createMeteringRuntime(config);
-const subscriptionRepository = createSubscriptionRepository(config.databaseUrl);
+const database = config.databaseUrl ? createDatabase(config.databaseUrl) : undefined;
+const meteringPool = config.databaseUrl ? createPool(config.databaseUrl) : undefined;
+const meteringSqlClient = meteringPool ? new PgPoolSqlClient(meteringPool) : undefined;
+const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
+const subscriptionRepository = createSubscriptionRepository(database);
 const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
   baseUrl: config.marketplace.baseUrl,
   apiVersion: config.marketplace.apiVersion,
@@ -45,13 +52,27 @@ const server = app.listen(config.port, () => {
   logger.info({ port: config.port }, 'API server listening');
 });
 
+let shuttingDown = false;
+
 const shutdown = (signal: string) => {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
   logger.info({ signal }, 'Shutdown signal received');
-  server.close(() => {
-    subscriptionRepository.disconnect?.().catch((error) => {
-      logger.error({ err: error }, 'Error disconnecting subscription repository');
-      process.exitCode = 1;
-    });
+  server.close(async () => {
+    const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
+      (task): task is Promise<void> => Boolean(task)
+    );
+    const results = await Promise.allSettled(cleanupTasks);
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        logger.error({ err: result.reason }, 'Error shutting down database resources');
+        process.exitCode = 1;
+      }
+    }
   });
 };
 
