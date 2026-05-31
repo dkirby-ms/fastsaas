@@ -153,3 +153,4 @@ Investigated issue #25 deploy failure and determined root causes:
 
 - **2026-05-31T14:00:03.033+00:00:** Azure Container Registry Docker builds should not rely on BuildKit-only Dockerfile syntax such as heredoc `COPY`; keep placeholder image build steps compatible with baseline Dockerfile features that ACR supports.
 - **2026-05-31T14:00:03.033+00:00:** Placeholder services should keep their runtime source files in the repository and use plain `COPY` instructions from the repo-root build context instead of inline `node -e` file generation.
+- **2026-05-31T14:02:05.192+00:00:** Staging deployments are now split into separate infrastructure and application GitHub Actions workflows so manual infra bootstraps, app rollouts, and failure triage can be run independently while reusing the same Bicep entrypoint.

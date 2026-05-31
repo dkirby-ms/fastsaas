@@ -3,7 +3,8 @@ name: Create issue for staging deploy failures
 on:
   workflow_run:
     workflows:
-      - Deploy staging
+      - Deploy staging infrastructure
+      - Deploy staging application
     types:
       - completed
 
@@ -57,7 +58,8 @@ jobs:
             const primaryFailedStep = primaryFailedJob?.steps?.find(step => step.conclusion === 'failure') || null;
             const failedJobName = primaryFailedJob?.name || 'Unknown job';
             const failedStepName = primaryFailedStep?.name || 'Unknown step';
-            const title = `Deploy staging failed (${run.head_branch || 'unknown branch'}): ${failedStepName}`;
+            const workflowName = run.name || 'Staging deployment';
+            const title = `${workflowName} failed (${run.head_branch || 'unknown branch'}): ${failedStepName}`;
 
             const failureKey = [
               run.name || 'deploy-staging',
@@ -68,7 +70,7 @@ jobs:
               .map(value => String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
               .join(':');
 
-            const failureMarker = `<!-- deploy-staging-failure-key:${failureKey} -->`;
+            const failureMarker = `<!-- staging-deploy-failure-key:${failureKey} -->`;
             const failedContexts = failedJobs.length
               ? failedJobs.map(job => {
                   const failedStep = job.steps?.find(step => step.conclusion === 'failure');
@@ -83,10 +85,10 @@ jobs:
 
             const body = [
               failureMarker,
-              '# Deploy staging failure',
+              `# ${workflowName} failure`,
               '',
               '## Summary',
-              `- Workflow run: [${run.name || 'Deploy staging'} #${run.run_number} (attempt ${run.run_attempt})](${runUrl})`,
+              `- Workflow run: [${workflowName} #${run.run_number} (attempt ${run.run_attempt})](${runUrl})`,
               `- Branch: \`${run.head_branch || 'unknown'}\``,
               `- Commit: \`${shortSha}\``,
               `- Triggered by: \`${actor}\``,
@@ -127,7 +129,7 @@ jobs:
                 repo,
                 issue_number: existingIssue.number,
                 body: [
-                  'Another `Deploy staging` failure matched this open issue.',
+                  `Another \`${workflowName}\` failure matched this open issue.`,
                   '',
                   `- Workflow run: ${runUrl}`,
                   `- Timestamp: \`${timestamp}\``

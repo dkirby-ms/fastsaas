@@ -1,0 +1,84 @@
+name: Deploy staging infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      resourceGroup:
+        description: Azure resource group for staging
+        required: false
+        default: rg-fastsaas-staging
+      location:
+        description: Azure region
+        required: false
+        default: eastus2
+      environmentName:
+        description: Logical environment name
+        required: false
+        default: staging
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      acr_name: ${{ steps.infra.outputs.acr_name }}
+      acr_login_server: ${{ steps.infra.outputs.acr_login_server }}
+      container_apps_environment_id: ${{ steps.infra.outputs.container_apps_environment_id }}
+      postgres_server_fqdn: ${{ steps.infra.outputs.postgres_server_fqdn }}
+      redis_host: ${{ steps.infra.outputs.redis_host }}
+    env:
+      RESOURCE_GROUP: ${{ inputs.resourceGroup || 'rg-fastsaas-staging' }}
+      LOCATION: ${{ inputs.location || 'eastus2' }}
+      ENVIRONMENT_NAME: ${{ inputs.environmentName || 'staging' }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.STAGING_POSTGRES_ADMIN_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group
+        run: az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+
+      - name: Bootstrap shared infrastructure
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "staging-infra-${GITHUB_RUN_ID}" \
+            --template-file infrastructure/bicep/main.bicep \
+            --parameters @infrastructure/bicep/main.parameters.example.json \
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false usePrivateEndpoints=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+
+      - name: Read infrastructure outputs
+        id: infra
+        shell: bash
+        run: |
+          ACR_NAME=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-infra-${GITHUB_RUN_ID}" --query properties.outputs.acrName.value -o tsv)
+          ACR_LOGIN_SERVER=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-infra-${GITHUB_RUN_ID}" --query properties.outputs.acrLoginServer.value -o tsv)
+          CONTAINER_APPS_ENVIRONMENT_ID=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-infra-${GITHUB_RUN_ID}" --query properties.outputs.containerAppsEnvironmentId.value -o tsv)
+          POSTGRES_SERVER_FQDN=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-infra-${GITHUB_RUN_ID}" --query properties.outputs.postgresServerFqdn.value -o tsv)
+          REDIS_HOST=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-infra-${GITHUB_RUN_ID}" --query properties.outputs.redisHost.value -o tsv)
+
+          echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+          echo "container_apps_environment_id=$CONTAINER_APPS_ENVIRONMENT_ID" >> "$GITHUB_OUTPUT"
+          echo "postgres_server_fqdn=$POSTGRES_SERVER_FQDN" >> "$GITHUB_OUTPUT"
+          echo "redis_host=$REDIS_HOST" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Staging infrastructure outputs"
+            echo "- ACR name: \`$ACR_NAME\`"
+            echo "- ACR login server: \`$ACR_LOGIN_SERVER\`"
+            echo "- Container Apps environment ID: \`$CONTAINER_APPS_ENVIRONMENT_ID\`"
+            echo "- PostgreSQL server FQDN: \`$POSTGRES_SERVER_FQDN\`"
+            echo "- Redis host: \`$REDIS_HOST\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-name: Deploy staging
+name: Deploy staging application
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  deploy-app:
     runs-on: ubuntu-latest
     environment: staging
     env:
@@ -67,32 +67,45 @@ jobs:
 
           printf 'SKIP_BUILD=%s\n' "$SKIP_BUILD_INPUT" >> "$GITHUB_ENV"
 
-      - name: Ensure resource group
-        run: az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
-
-      - name: Bootstrap shared infrastructure
-        run: |
-          az deployment group create \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "staging-bootstrap-${GITHUB_RUN_ID}" \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false usePrivateEndpoints=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
-
-      - name: Read infrastructure outputs
-        id: bootstrap
+      - name: Resolve staging registry
+        id: registry
         shell: bash
         run: |
-          ACR_NAME=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-bootstrap-${GITHUB_RUN_ID}" --query properties.outputs.acrName.value -o tsv)
-          ACR_LOGIN_SERVER=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-bootstrap-${GITHUB_RUN_ID}" --query properties.outputs.acrLoginServer.value -o tsv)
+          if [ "$(az group exists --name "$RESOURCE_GROUP")" != "true" ]; then
+            echo "Resource group $RESOURCE_GROUP does not exist. Run the infrastructure workflow first." >&2
+            exit 1
+          fi
+
+          ACR_COUNT=$(az acr list --resource-group "$RESOURCE_GROUP" --query 'length(@)' -o tsv)
+          if [ "$ACR_COUNT" -eq 0 ]; then
+            echo "No Azure Container Registry found in $RESOURCE_GROUP. Run the infrastructure workflow first." >&2
+            exit 1
+          fi
+
+          if [ "$ACR_COUNT" -ne 1 ]; then
+            echo "Expected exactly one Azure Container Registry in $RESOURCE_GROUP, found $ACR_COUNT." >&2
+            az acr list --resource-group "$RESOURCE_GROUP" --query '[].name' -o tsv >&2
+            exit 1
+          fi
+
+          ACR_NAME=$(az acr list --resource-group "$RESOURCE_GROUP" --query '[0].name' -o tsv)
+          ACR_LOGIN_SERVER=$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query loginServer -o tsv)
+
           echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
           echo "acr_login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Staging application deployment"
+            echo "- ACR name: \`$ACR_NAME\`"
+            echo "- ACR login server: \`$ACR_LOGIN_SERVER\`"
+            echo "- Image tag: \`${IMAGE_TAG:-$GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build API image in ACR
         if: env.SKIP_BUILD != 'true'
         run: |
           az acr build \
-            --registry "${{ steps.bootstrap.outputs.acr_name }}" \
+            --registry "${{ steps.registry.outputs.acr_name }}" \
             --image "fastsaas-api:${IMAGE_TAG}" \
             --file packages/api/Dockerfile \
             .
@@ -101,7 +114,7 @@ jobs:
         if: env.SKIP_BUILD != 'true'
         run: |
           az acr build \
-            --registry "${{ steps.bootstrap.outputs.acr_name }}" \
+            --registry "${{ steps.registry.outputs.acr_name }}" \
             --image "fastsaas-portal:${IMAGE_TAG}" \
             --file packages/portal/Dockerfile \
             .
@@ -110,7 +123,7 @@ jobs:
         run: |
           az deployment group create \
             --resource-group "$RESOURCE_GROUP" \
-            --name "staging-release-${GITHUB_RUN_ID}" \
+            --name "staging-app-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
             --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
@@ -119,8 +132,8 @@ jobs:
         id: release
         shell: bash
         run: |
-          API_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-release-${GITHUB_RUN_ID}" --query properties.outputs.apiUrl.value -o tsv)
-          PORTAL_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-release-${GITHUB_RUN_ID}" --query properties.outputs.portalUrl.value -o tsv)
+          API_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-app-${GITHUB_RUN_ID}" --query properties.outputs.apiUrl.value -o tsv)
+          PORTAL_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-app-${GITHUB_RUN_ID}" --query properties.outputs.portalUrl.value -o tsv)
           echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
           echo "portal_url=$PORTAL_URL" >> "$GITHUB_OUTPUT"
 
