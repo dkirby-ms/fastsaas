@@ -138,4 +138,31 @@
 - This completes the bidirectional logic for public/private mode toggling: remove private resources + enable public access
 - PR merged (squash)
 
+### PR #28 Review — REJECTED (2026-05-31T01:24:04.280+00:00)
+
+- Rejected PR #28 because the `centralus` move is sound and preserves database/container-app co-location, but `infrastructure/bicep/main.bicep` now defaults `deployRedis` to `false`, which changes the base template behavior for every environment rather than only staging.
+- Temporary Redis disable is acceptable as a staging override while Azure Cache for Redis is retired, but the shared template default must stay aligned with the current architecture until a separate Azure Managed Redis migration lands.
+- GitHub would not allow a formal `--request-changes` review because the authenticated user is the PR author, so I recorded the rejection as a PR comment.
+
 **Pattern for infrastructure toggles:** Networking-mode toggles must implement both negative logic (remove isolation resources) and positive logic (enable access). Incomplete toggles leave the deployment in an inaccessible state. This pattern should be reused for future public/private infrastructure decisions.
+
+### PR #28 Review — REJECTED then APPROVED (2026-05-31T01:24:04.280+00:00)
+
+**Initial Review:**
+- Rejected PR #28 because the `centralus` region change is sound and preserves database/container-app co-location, but `infrastructure/bicep/main.bicep` defaulted `deployRedis` to `false`, which changes baseline template behavior for every environment instead of just staging.
+- Pattern feedback: infrastructure overrides for temporary issues must stay scoped; shared template defaults must not drift.
+
+**Re-Review after GNC applied fix:**
+- GNC restored `deployRedis: true` in shared template and added staging-only parameter override for `deployRedis: false`
+- Approved the revised PR because architecture is preserved, region selection is optimal, and staging-scoped override is clean.
+- **Result:** PR #28 merged (squash)
+
+**Follow-up Actions:**
+- Issues #25, #26, #27 processed by Ralph
+- Plan Azure Managed Redis migration before re-enabling cache in shared environments
+
+### Issue Triage — 2026-05-31
+
+- Approved PR #28 merge by GNC
+- Approved Ralph's issue closures: #25, #26 (resolved), #27 (stale)
+- Confirmed deployment fix unblocks staging bootstrap with optimal region and preserved architecture

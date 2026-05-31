@@ -104,3 +104,31 @@ This completes Phase 1 staging deployment automation setup.
 - **2026-05-30T23:42:33.979+00:00:** Created `.github/copilot-setup-steps.yml` and `.github/copilot-instructions.md` to bootstrap GitHub Copilot coding-agent setup and repository guidance for the FastSaaS monorepo.
 - **2026-05-31T00:58:06.780+00:00:** Issue #25 bootstrap failed because PostgreSQL Flexible Server provisioning is offer-restricted in `westus2` for this subscription, and current validation also showed Azure Cache for Redis creation now fails because the retired service must be replaced with Azure Managed Redis. Resolved by moving staging defaults to `centralus` and disabling Redis provisioning in staging deploy parameters; validation run `26699724702` passed `Bootstrap shared infrastructure` before later failing in an unrelated portal image build step.
 - **2026-05-31T11:25:29Z:** Redis infrastructure now standardizes on Azure Managed Redis by pairing `Microsoft.Cache/redisEnterprise` with a `databases` child resource in `infrastructure/bicep/modules/redis-cache.bicep`, using `MemoryOptimized_M10`, encrypted client access on port `10000`, access-key auth via `listKeys()`, and the private-link combo `redisEnterprise` + `privatelink.redis.azure.net`. The old staging-only `deployRedis=false` workaround was removed from `infrastructure/bicep/main.bicep`, `infrastructure/bicep/main.parameters.example.json`, and `.github/workflows/deploy-staging.yml`; keep `centralus` as the co-located staging region.
+
+## 2026-05-31 — Issue #25 Resolution & PR #28 Merged
+
+**GNC Staging Bootstrap Fix — COMPLETE**
+
+Investigated issue #25 deploy failure and determined root causes:
+- PostgreSQL Flexible Server offer restrictions in `westus2` and `eastus2`
+- Azure Cache for Redis retirement requiring service replacement
+
+**Decision:** Move staging default region to `centralus` and disable Redis provisioning in staging environment pending Azure Managed Redis migration.
+
+**PR #28 Work:**
+- Initial submission: changed region to `centralus` + set `deployRedis=false` in shared template
+- Review feedback from Kranz: template default must stay `deployRedis=true`; only staging should override
+- Applied fix: restored `deployRedis: true` baseline in `infrastructure/bicep/main.bicep`, added staging-only parameter override to set `deployRedis: false`
+- **Result:** PR approved and merged
+
+**Issues Closed:**
+- #25 (staging bootstrap failure) — resolved
+- #26 (related staging issue) — resolved
+- #27 (stale branch) — closed
+
+**Architecture Preserved:**
+- PostgreSQL and Container Apps remain in same `location` value
+- All future environments inherit `deployRedis: true` baseline
+- Staging-only override via deployment parameters
+
+**Follow-up:** Plan Azure Managed Redis migration before re-enabling cache in shared template.

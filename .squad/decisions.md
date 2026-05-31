@@ -134,3 +134,21 @@ Created squad routing labels for future issue triaging:
 - **Context:** Review of PR #17 (`ci: create squad issues for staging deploy failures`) against issue #15 and the existing staging deployment workflow.
 - **Decision:** Accept the dedicated `.github/workflows/deploy-staging-failure-issue.yml` pattern. The `workflow_run` trigger is correctly bound to failed `Deploy staging` completions, the script uses least-privilege repository permissions, and failure deduplication via a hidden branch/job/step marker is sufficient for triage.
 - **Implications:** Staging incident reporting stays decoupled from deployment execution, repeated failures collapse into a single open squad issue, and generated issues expose only run metadata rather than workflow logs or secrets. GitHub self-approval restrictions may require direct merge when the reviewer is also the recorded PR author.
+
+## 2026-05-31
+
+### GNC Staging Bootstrap Fix (#25 → PR #28)
+- **Date:** 2026-05-31T00:58:06.780+00:00
+- **Owner:** GNC
+- **Context:** Issue #25 revealed staging bootstrap fails in `westus2` and `eastus2` due to PostgreSQL offer restrictions and Azure Cache for Redis retirement.
+- **Decision:** Default manual staging deploys to `centralus` region instead of `westus2`, and explicitly pass `deployRedis=false` until stack migration from Azure Cache for Redis to Azure Managed Redis completes.
+- **Why:** Validation on branch `gnc/25-fix-staging-bootstrap` showed `centralus` succeeds past `Bootstrap shared infrastructure` step, while `westus2` and `eastus2` are blocked by PostgreSQL availability and Redis creation fails during bootstrap.
+- **Follow-up:** Plan dedicated infrastructure work to migrate Redis-dependent environments to Azure Managed Redis before re-enabling cache provisioning in the baseline template.
+
+### Kranz PR #28 Review & Approval
+- **Date:** 2026-05-31T01:24:04.280+00:00
+- **Owner:** Kranz (Lead)
+- **Context:** PR #28 unblocks staging bootstrap by relocating staging region to `centralus` and disabling Redis provisioning pending Azure Managed Redis migration.
+- **Decision:** Accept the `centralus` region change because PostgreSQL and Container Apps still share one `location` value, preserving the directive to keep database and compute co-located. Reject initial shared-template default change that set `deployRedis=false` globally; the opt-out must remain staging-scoped only.
+- **Why:** Immediate fix unblocks staging while avoiding silent architecture drift for other environments that still expect Redis in baseline. Dedicated Azure Managed Redis migration work must be planned before re-enabling cache in shared templates.
+- **Resolution:** GNC applied fix in second iteration. PR #28 merged with region change and staging-only Redis disable.
