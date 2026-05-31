@@ -1,0 +1,135 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "9222153331415783161"
+    }
+  },
+  "parameters": {
+    "serverName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "administratorLogin": {
+      "type": "string"
+    },
+    "administratorPassword": {
+      "type": "securestring"
+    },
+    "databaseName": {
+      "type": "string",
+      "defaultValue": "fastsaas"
+    },
+    "serverSku": {
+      "type": "string",
+      "defaultValue": "Standard_B1ms"
+    },
+    "serverVersion": {
+      "type": "string",
+      "defaultValue": "16"
+    },
+    "storageSizeGb": {
+      "type": "int",
+      "defaultValue": 32
+    },
+    "backupRetentionDays": {
+      "type": "int",
+      "defaultValue": 7
+    },
+    "delegatedSubnetResourceId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "privateDnsZoneId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {}
+    }
+  },
+  "variables": {
+    "isPublicMode": "[empty(parameters('delegatedSubnetResourceId'))]",
+    "serverProperties": "[union(createObject('administratorLogin', parameters('administratorLogin'), 'administratorLoginPassword', parameters('administratorPassword'), 'version', parameters('serverVersion'), 'createMode', 'Create', 'backup', createObject('backupRetentionDays', parameters('backupRetentionDays'), 'geoRedundantBackup', 'Disabled'), 'highAvailability', createObject('mode', 'Disabled'), 'storage', createObject('storageSizeGB', parameters('storageSizeGb'), 'autoGrow', 'Enabled', 'tier', 'P4')), if(or(variables('isPublicMode'), empty(parameters('privateDnsZoneId'))), createObject(), createObject('network', createObject('delegatedSubnetResourceId', parameters('delegatedSubnetResourceId'), 'privateDnsZoneArmResourceId', parameters('privateDnsZoneId'), 'publicNetworkAccess', 'Disabled'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[parameters('serverName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('serverSku')]",
+        "tier": "Burstable"
+      },
+      "tags": "[parameters('tags')]",
+      "properties": "[variables('serverProperties')]"
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "condition": "[variables('isPublicMode')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "condition": "[variables('isPublicMode')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllDev')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "255.255.255.255"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "id": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+    },
+    "fqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2023-12-01-preview').fullyQualifiedDomainName]"
+    },
+    "databaseName": {
+      "type": "string",
+      "value": "[parameters('databaseName')]"
+    },
+    "administratorLogin": {
+      "type": "string",
+      "value": "[parameters('administratorLogin')]"
+    },
+    "serverName": {
+      "type": "string",
+      "value": "[parameters('serverName')]"
+    }
+  }
+}

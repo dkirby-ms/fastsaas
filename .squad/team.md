@@ -21,7 +21,7 @@
 | Ralph | Work Monitor | .squad/agents/ralph/charter.md | 🔄 Active |
 | @copilot | Coding Agent | copilot-instructions.md | 🤖 Active |
 
-<!-- copilot-auto-assign: false -->
+<!-- copilot-auto-assign: true -->
 
 ### @copilot Capability Profile
 

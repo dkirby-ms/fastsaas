@@ -6,10 +6,31 @@
 .squad/.scratch/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
+
+# Dependencies
 node_modules/
-.turbo/
-coverage/
+
+# Build artifacts
 packages/*/dist/
 packages/*/.next/
-.env.local
+
+# Turbo
+.turbo/
+
+# Environment variables
 .env
+.env.local
+.env.*.local
+
+# Coverage reports
+coverage/
+
+# Prisma
+prisma/generated/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
