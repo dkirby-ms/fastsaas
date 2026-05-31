@@ -168,3 +168,55 @@ Created squad routing labels for future issue triaging:
 - **Why:** The old Azure Cache for Redis is retired. Moving to Azure Managed Redis restores first-class cache provisioning and keeps Redis deployment consistent across environments.
 - **Outcome:** PR #29 opened; Bicep validated.
 - **Files affected:** `infrastructure/bicep/main.bicep`, `infrastructure/bicep/modules/redis-cache.bicep`, `infrastructure/bicep/main.parameters.example.json`, `.github/workflows/deploy-staging.yml`
+
+### User Directive: Regional Flexibility
+- **Date:** 2026-05-31T11:59:56Z
+- **By:** dkirby-ms (via Copilot)
+- **What:** No regional directive required. The team does not need to enforce a specific Azure region (e.g., centralus). Deployments can use whatever region works best without a mandated co-location constraint.
+- **Why:** User request — removes the previously implied region lock. Regions are now flexible per environment.
+
+### User Directive: Workflow Split
+- **Date:** 2026-05-31T14:02:05Z
+- **By:** saitcho (via Copilot)
+- **What:** Split the deploy workflow into two separate workflows: one for infrastructure (Bicep/Azure resources) and one for application (build images, deploy container apps). Deploy infra should be separate from deploy app.
+- **Why:** User request — cleaner separation of concerns, different failure modes, different cadences.
+
+### User Directive: Default Deploy Region
+- **Date:** 2026-05-31T14:09:38Z
+- **By:** saitcho (via Copilot)
+- **What:** Default deploy region is centralus (not eastus2). eastus2 has subscription restrictions.
+- **Why:** User request — infra already deployed successfully in centralus.
+
+### User Directive: Container App Environment Variables
+- **Date:** 2026-05-31T15:04:02Z
+- **By:** saitcho (via Copilot)
+- **What:** Container app env vars are managed via `az containerapp update --set-env-vars` in a post-deploy workflow step, NOT baked into Bicep parameters. Bicep handles infrastructure only; CLI handles runtime config separately.
+- **Why:** User request — env vars change frequently during development. Decoupling them from Bicep avoids editing both main.bicep and the workflow for every new var.
+
+### GNC Portal Dockerfile Standard
+- **Date:** 2026-05-31T14:00:03Z
+- **Owner:** GNC
+- **Context:** The portal placeholder image failed in Azure Container Registry builds because inline file generation relied on shell-sensitive template literals and a BuildKit-only heredoc `COPY` pattern.
+- **Decision:** Placeholder container images should keep their runtime source files in the repository and use plain `COPY` instructions from the repo-root Docker build context instead of inline `node -e` generation or heredoc-based file creation.
+- **Why:** Azure Container Registry's Docker builder does not support BuildKit heredoc syntax consistently, and inline shell-generated JavaScript is fragile when template literals or quoting are involved. Repository-backed source files produce portable Dockerfiles that work in local Docker and ACR builds.
+- **Files:** `packages/portal/Dockerfile`, `packages/portal/placeholder/package.json`, `packages/portal/placeholder/server.mjs`
+
+### GNC Deployment README Decision
+- **Date:** 2026-05-31T15:16:56.241Z
+- **Author:** GNC (DevOps)
+- **Status:** Complete
+- **Related Issue:** Deployment documentation
+- **Decision:** Created comprehensive deployment README.md at repository root documenting the FastSaaS staging deployment process, including infrastructure bootstrapping, application deployment, and environment variable management.
+- **Rationale:** Engineers deploying FastSaaS need clear, practical guidance on the two-phase deployment strategy (infrastructure → application), bootstrap and deployment procedures via GitHub Actions, environment variable management (Bicep infrastructure-coupled vs post-deploy CLI), required GitHub secrets, and troubleshooting common deployment issues. The README targets engineers with Azure basics and provides command-line examples for both automated workflows and manual operations.
+- **Key Sections:** Project Overview, Architecture, Prerequisites, Local Development (Docker Compose), Deployment (two workflows), Environment Variables, GitHub Secrets Reference, Key Decisions, Troubleshooting.
+- **Reference Files:** `README.md`, `.github/workflows/deploy-infra-staging.yml`, `.github/workflows/deploy-app-staging.yml`, `infrastructure/bicep/main.bicep`, environment config files, `docker-compose.yml`.
+- **Impact:** Reduces engineer onboarding time, single source of truth for deployment procedures, documented architecture decisions inform future maintenance and scaling.
+- **No Follow-up Actions:** Documentation complete and deployable.
+
+### GNC Workflow Split Decision
+- **Date:** 2026-05-31T14:02:05.192Z
+- **Owner:** GNC
+- **Context:** The original staging deployment workflow bundled shared Azure infrastructure provisioning, ACR image builds, and Container Apps release steps into one manual job, making reruns noisy and failure causes harder to isolate.
+- **Decision:** Split staging deployment automation into two manual GitHub Actions workflows: `deploy-infra-staging.yml` for shared Bicep infrastructure bootstrap (`deployContainerApps=false`) and `deploy-app-staging.yml` for ACR builds plus the Container Apps deployment pass (`deployContainerApps=true`) against existing infrastructure.
+- **Why:** Infrastructure changes are infrequent and fail differently from application builds or health checks. Separating the workflows keeps manual operations deliberate, allows faster app-only iterations after infra is provisioned, and lets the failure-issue workflow classify incidents by infra vs app pipeline.
+- **Files:** `.github/workflows/deploy-infra-staging.yml`, `.github/workflows/deploy-app-staging.yml`, `.github/workflows/deploy-staging-failure-issue.yml`
