@@ -18,6 +18,12 @@ param apiImageTag string = 'placeholder'
 @description('Container image tag for the portal image stored in ACR.')
 param portalImageTag string = 'placeholder'
 
+@description('Microsoft Entra tenant ID provided to the API container app for auth validation.')
+param azureAdTenantId string = ''
+
+@description('Microsoft Entra client ID provided to the API container app for auth validation.')
+param azureAdClientId string = ''
+
 @description('Administrator username for PostgreSQL Flexible Server.')
 param postgresAdministratorLogin string = 'fastsaasadmin'
 
@@ -371,6 +377,14 @@ module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
       {
         name: 'NODE_ENV'
         value: 'production'
+      }
+      {
+        name: 'AZURE_AD_TENANT_ID'
+        value: azureAdTenantId
+      }
+      {
+        name: 'AZURE_AD_CLIENT_ID'
+        value: azureAdClientId
       }
     ]
     secretEnvVars: apiSecretEnvVars
