@@ -6,6 +6,7 @@ declare module 'next-auth' {
     accessToken?: string;
     error?: 'RefreshAccessTokenError';
     tenantId?: string;
+    roles?: string[];
     user?: DefaultSession['user'];
   }
 }
@@ -17,6 +18,7 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     scope?: string;
     tenantId?: string;
+    roles?: string[];
     error?: 'RefreshAccessTokenError';
   }
 }

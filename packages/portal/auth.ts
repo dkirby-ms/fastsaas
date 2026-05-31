@@ -1,3 +1,4 @@
+import type { AuthClaims } from '@fastsaas/shared';
 import NextAuth from 'next-auth';
 import type { NextAuthConfig, NextAuthResult } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
@@ -35,6 +36,63 @@ function getAuthEnv(): AuthEnv {
     clientSecret,
     apiScope: process.env.AZURE_AD_API_SCOPE?.trim() || `api://${apiClientId}/.default`,
     secret: requireEnv('NEXTAUTH_SECRET'),
+  };
+}
+
+function parseAccessTokenClaims(accessToken?: string): Partial<AuthClaims> {
+  if (!accessToken) {
+    return {};
+  }
+
+  const [, payload] = accessToken.split('.');
+
+  if (!payload) {
+    return {};
+  }
+
+  try {
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const decoded = Buffer.from(padded, 'base64').toString('utf8');
+    const parsed = JSON.parse(decoded) as unknown;
+
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<AuthClaims>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeRoles(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((role): role is string => typeof role === 'string' && role.length > 0);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[\s,]+/)
+      .map((role) => role.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function mergeRoles(...values: unknown[]): string[] {
+  return [...new Set(values.flatMap((value) => normalizeRoles(value)))];
+}
+
+function applyTokenClaims(token: JWT, accessToken?: string, profile?: Record<string, unknown>): JWT {
+  const claims = parseAccessTokenClaims(accessToken);
+  const roles = mergeRoles(claims.roles, profile?.roles, token.roles);
+  const tenantId = [claims.tenant_id, claims.tid, claims.tenantId, profile?.tid, token.tenantId].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+
+  return {
+    ...token,
+    accessToken,
+    tenantId,
+    roles,
   };
 }
 
@@ -76,14 +134,16 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
       throw new Error(refreshedTokens.error_description ?? refreshedTokens.error ?? 'Failed to refresh access token');
     }
 
-    return {
-      ...token,
-      accessToken: refreshedTokens.access_token,
-      accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
-      refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
-      scope: refreshedTokens.scope ?? token.scope,
-      error: undefined,
-    };
+    return applyTokenClaims(
+      {
+        ...token,
+        accessTokenExpires: Date.now() + refreshedTokens.expires_in * 1000,
+        refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
+        scope: refreshedTokens.scope ?? token.scope,
+        error: undefined,
+      },
+      refreshedTokens.access_token,
+    );
   } catch {
     return {
       ...token,
@@ -118,18 +178,17 @@ function createAuthConfig(): NextAuthConfig {
     callbacks: {
       async jwt({ token, account, profile }) {
         if (account) {
-          return {
-            ...token,
-            accessToken: account.access_token,
-            accessTokenExpires: account.expires_at ? account.expires_at * 1000 : Date.now() + 55 * 60 * 1000,
-            refreshToken: account.refresh_token,
-            scope: account.scope ?? env.apiScope,
-            tenantId:
-              typeof (profile as Record<string, unknown> | undefined)?.tid === 'string'
-                ? ((profile as Record<string, unknown>).tid as string)
-                : token.tenantId,
-            error: undefined,
-          };
+          return applyTokenClaims(
+            {
+              ...token,
+              accessTokenExpires: account.expires_at ? account.expires_at * 1000 : Date.now() + 55 * 60 * 1000,
+              refreshToken: account.refresh_token,
+              scope: account.scope ?? env.apiScope,
+              error: undefined,
+            },
+            account.access_token,
+            profile as Record<string, unknown> | undefined,
+          );
         }
 
         if (typeof token.accessTokenExpires === 'number' && Date.now() < token.accessTokenExpires - 60_000) {
@@ -147,6 +206,7 @@ function createAuthConfig(): NextAuthConfig {
         session.accessToken = typeof token.accessToken === 'string' ? token.accessToken : undefined;
         session.error = typeof token.error === 'string' ? token.error : undefined;
         session.tenantId = typeof token.tenantId === 'string' ? token.tenantId : undefined;
+        session.roles = Array.isArray(token.roles) ? token.roles : [];
 
         return session;
       },

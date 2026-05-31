@@ -47,3 +47,9 @@ Assigned to FIDO:
 ## Cross-Team Updates
 
 - **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. FIDO should review API contracts for portal integration.
+
+## Learnings
+
+- **2026-05-31T19:45:42.525+00:00:** Publisher workflows now live under `packages/portal/app/(portal)/publisher/` with role-aware navigation in `packages/portal/components/sidebar-nav.tsx` and shared guards in `packages/portal/lib/route-access.ts`.
+- **2026-05-31T19:45:42.525+00:00:** Portal auth now derives roles from JWT claims in `packages/portal/auth.ts`, so UI RBAC and API error handling can rely on `session.roles` without extra client-side decoding.
+- **2026-05-31T19:45:42.525+00:00:** Publisher data flows through `packages/portal/lib/api-client.ts`, using `/v1/auth/context` and `/v1/subscriptions` for live read models while `packages/portal/lib/mock-api.ts` keeps plan and tenant mutations unblocked until dedicated publisher routes exist.
