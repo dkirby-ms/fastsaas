@@ -194,7 +194,6 @@ module redis './modules/redis-cache.bicep' = {
   params: {
     name: redisName
     location: location
-    publicNetworkAccess: usePrivateEndpoints ? 'Disabled' : 'Enabled'
     tags: mergedTags
   }
 }
