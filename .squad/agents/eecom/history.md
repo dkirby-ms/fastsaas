@@ -95,3 +95,11 @@ _No learnings recorded yet._
 ## Learnings
 
 - **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.
+
+## Cross-Team Updates — 2026-05-31T21:35:32.766Z
+
+**From Scribe Consolidation (Squad Inbox → Decisions)**
+
+- **RETRO blocking dependency:** RETRO's tenant isolation security test suite (PR #62, 28/33 tests passing) awaits RLS enforcement in production. EECOM's PR #64 merge unblocks unskipping of 5 RLS-dependent tests.
+- **GNC release automation:** Semantic-release baseline (`v0.1.0`) is now established. GNC PR #61 unblocked for merge; subsequent releases will automate version bumps across `packages/api`, `packages/portal`, and root CHANGELOG.md from conventional commits.
+- **Semantic versioning decision recorded:** Manual `npm version` for workspace bumps + Keep a Changelog pattern adopted for the team.

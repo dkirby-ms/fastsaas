@@ -99,3 +99,11 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 - Semantic-release now lives at the repo root with `release.config.js`, using a single repository version stream for the private npm workspaces in `packages/api`, `packages/portal`, and `packages/shared`.
 - GitHub automation for release management is split across `.github/workflows/release.yml` (publish from `main`) and `.github/workflows/commitlint.yml` (lint PR commit history against conventional commits).
 - Root-level release metadata is captured in `CHANGELOG.md`, `package.json`, and `package-lock.json`, which are the assets committed back by `@semantic-release/git` during release preparation.
+
+## Cross-Team Updates — 2026-05-31T21:35:32.766Z
+
+**From Scribe Consolidation (Squad Inbox → Decisions)**
+
+- **PR #61 unblocked:** Semantic-release version baseline (`v0.1.0`) established on merge-base commit. Kranz approval recorded. Ready for merge post-review.
+- **EECOM tenant RLS:** PR #64 merged in (Issue #45), enabling RLS policies across tenant-scoped tables. RETRO's security tests (PR #62) can now unskip 5 RLS-dependent test cases.
+- **Monorepo versioning locked in:** Semantic Versioning decision recorded — manual `npm version` for workspace bumps + Keep a Changelog (root) for team release notes.
