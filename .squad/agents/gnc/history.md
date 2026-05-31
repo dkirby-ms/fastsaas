@@ -93,3 +93,9 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 **Learnings:**
 - Container App `az containerapp update --set-env-vars` rollout timing can exceed a short curl retry budget even when the service eventually becomes healthy.
 - Operational health probes must not depend on optional database initialization if they gate deployment success.
+
+## Learnings
+### 2026-05-31T20:19:20.148+00:00
+- Semantic-release now lives at the repo root with `release.config.js`, using a single repository version stream for the private npm workspaces in `packages/api`, `packages/portal`, and `packages/shared`.
+- GitHub automation for release management is split across `.github/workflows/release.yml` (publish from `main`) and `.github/workflows/commitlint.yml` (lint PR commit history against conventional commits).
+- Root-level release metadata is captured in `CHANGELOG.md`, `package.json`, and `package-lock.json`, which are the assets committed back by `@semantic-release/git` during release preparation.
