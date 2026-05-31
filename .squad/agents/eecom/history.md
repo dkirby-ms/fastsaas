@@ -76,3 +76,4 @@ _No learnings recorded yet._
 - **2026-05-29 Phase 1 Round 2:**
   - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
   - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.
+- **2026-05-31:** `packages/api`, `packages/portal`, and `packages/shared` are aligned on `0.1.0` semantic versions, and the repo now documents using `npm version` plus the root changelog for future bumps.

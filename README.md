@@ -100,6 +100,24 @@ npm run dev --workspace=@fastsaas/portal
 docker-compose up postgres redis
 ```
 
+### Versioning
+
+FastSaaS uses semantic versioning (`MAJOR.MINOR.PATCH`) for the workspace packages in `packages/api`, `packages/portal`, and `packages/shared`.
+
+```bash
+# Bump the API package version
+npm version patch --workspace=@fastsaas/api
+npm version minor --workspace=@fastsaas/api
+npm version major --workspace=@fastsaas/api
+
+# Bump the portal package version
+npm version patch --workspace=@fastsaas/portal
+npm version minor --workspace=@fastsaas/portal
+npm version major --workspace=@fastsaas/portal
+```
+
+Use patch for backward-compatible fixes, minor for backward-compatible features, and major for breaking changes. Use the same `npm version <patch|minor|major> --workspace=@fastsaas/shared` pattern when shared-package changes need a version bump. Record notable changes in the root `CHANGELOG.md` using the Keep a Changelog format whenever you bump a package version.
+
 ## Deployment
 
 ### Deployment Workflows
