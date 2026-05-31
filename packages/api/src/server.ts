@@ -1,4 +1,5 @@
 import type { Kysely } from 'kysely';
+import type { Pool } from 'pg';
 
 import { createApp } from './app';
 import { createConfig } from './config';
@@ -18,10 +19,33 @@ function createSubscriptionRepository(database?: Kysely<Database>): Subscription
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
 }
 
+function initializeDatabaseDependencies(databaseUrl?: string): {
+  database?: Kysely<Database>;
+  meteringPool?: Pool;
+  meteringSqlClient?: PgPoolSqlClient;
+} {
+  if (!databaseUrl) {
+    logger.warn('DATABASE_URL is not configured; starting API in degraded mode');
+    return {};
+  }
+
+  try {
+    const database = createDatabase(databaseUrl);
+    const meteringPool = createPool(databaseUrl);
+
+    return {
+      database,
+      meteringPool,
+      meteringSqlClient: new PgPoolSqlClient(meteringPool)
+    };
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to initialize database clients; starting API in degraded mode');
+    return {};
+  }
+}
+
 const config = createConfig();
-const database = config.databaseUrl ? createDatabase(config.databaseUrl) : undefined;
-const meteringPool = config.databaseUrl ? createPool(config.databaseUrl) : undefined;
-const meteringSqlClient = meteringPool ? new PgPoolSqlClient(meteringPool) : undefined;
+const { database, meteringPool, meteringSqlClient } = initializeDatabaseDependencies(config.databaseUrl);
 const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
 const subscriptionRepository = createSubscriptionRepository(database);
 const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
