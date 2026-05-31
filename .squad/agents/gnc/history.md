@@ -132,3 +132,19 @@ Investigated issue #25 deploy failure and determined root causes:
 - Staging-only override via deployment parameters
 
 **Follow-up:** Plan Azure Managed Redis migration before re-enabling cache in shared template.
+- **2026-05-31T11:25:29Z:** Redis infrastructure now standardizes on Azure Managed Redis by pairing `Microsoft.Cache/redisEnterprise` with a `databases` child resource in `infrastructure/bicep/modules/redis-cache.bicep`, using `MemoryOptimized_M10`, encrypted client access on port `10000`, access-key auth via `listKeys()`, and the private-link combo `redisEnterprise` + `privatelink.redis.azure.net`. The old staging-only `deployRedis=false` workaround was removed from `infrastructure/bicep/main.bicep`, `infrastructure/bicep/main.parameters.example.json`, and `.github/workflows/deploy-staging.yml`; keep `centralus` as the co-located staging region.
+
+## 2026-05-31T11:25:29Z — PR #29 Redis Migration Complete
+
+**Status:** PR opened; validation passed; awaiting Kranz review
+
+**Work:**
+- Migrated Bicep infrastructure from retired Azure Cache for Redis to Azure Managed Redis
+- Updated `infrastructure/bicep/modules/redis-cache.bicep` to use `Microsoft.Cache/redisEnterprise` (API version 2025-04-01)
+- Added `Microsoft.Cache/redisEnterprise/databases` child resource with encrypted client protocol on port 10000
+- Configured `MemoryOptimized_M10` SKU for cost efficiency
+- Private-link: `groupId: redisEnterprise`, DNS zone `privatelink.redis.azure.net`
+- Removed `deployRedis=false` workaround from `main.bicep`, example parameters, and staging workflow deploys
+- Bicep validation passed (`az bicep build`); npm typecheck passes
+
+**Next:** Kranz review of PR #29

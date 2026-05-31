@@ -152,3 +152,19 @@ Created squad routing labels for future issue triaging:
 - **Decision:** Accept the `centralus` region change because PostgreSQL and Container Apps still share one `location` value, preserving the directive to keep database and compute co-located. Reject initial shared-template default change that set `deployRedis=false` globally; the opt-out must remain staging-scoped only.
 - **Why:** Immediate fix unblocks staging while avoiding silent architecture drift for other environments that still expect Redis in baseline. Dedicated Azure Managed Redis migration work must be planned before re-enabling cache in shared templates.
 - **Resolution:** GNC applied fix in second iteration. PR #28 merged with region change and staging-only Redis disable.
+### GNC Deploy Bootstrap Fix
+- **Date:** 2026-05-31T00:58:06Z
+- **Owner:** GNC
+- **Context:** Issue #25 showed the staging bootstrap path is sensitive to Azure offer restrictions and service retirements.
+- **Decision:** Default manual staging deploys to `centralus` instead of `westus2`, and explicitly pass `deployRedis=false` until the stack is migrated from retired Azure Cache for Redis to Azure Managed Redis.
+- **Why:** Validation on branch `gnc/25-fix-staging-bootstrap` showed `centralus` succeeds past `Bootstrap shared infrastructure`, while `westus2` and `eastus2` are blocked by PostgreSQL offer restrictions and Redis creation fails during bootstrap if left enabled.
+- **Status:** Superseded by Redis migration decision (see below).
+
+### Azure Managed Redis Migration (PR #29)
+- **Date:** 2026-05-31T11:25:29Z
+- **Owner:** GNC
+- **Context:** Azure Cache for Redis is retired. Staging had a temporary `deployRedis=false` workaround because the legacy service no longer provisions.
+- **Decision:** Standardize FastSaaS Bicep on Azure Managed Redis using `Microsoft.Cache/redisEnterprise` with `Microsoft.Cache/redisEnterprise/databases` child resource. Use Memory Optimized entry SKU (`MemoryOptimized_M10`), encrypted client access on port `10000`, access-key authentication, and private-link settings with `groupId: redisEnterprise` and DNS zone `privatelink.redis.azure.net`. Remove the `deployRedis` workaround logic; keep `centralus` for staging co-location.
+- **Why:** The old Azure Cache for Redis is retired. Moving to Azure Managed Redis restores first-class cache provisioning and keeps Redis deployment consistent across environments.
+- **Outcome:** PR #29 opened; Bicep validated.
+- **Files affected:** `infrastructure/bicep/main.bicep`, `infrastructure/bicep/modules/redis-cache.bicep`, `infrastructure/bicep/main.parameters.example.json`, `.github/workflows/deploy-staging.yml`

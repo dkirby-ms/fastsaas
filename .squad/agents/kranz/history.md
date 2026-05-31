@@ -166,3 +166,22 @@
 - Approved PR #28 merge by GNC
 - Approved Ralph's issue closures: #25, #26 (resolved), #27 (stale)
 - Confirmed deployment fix unblocks staging bootstrap with optimal region and preserved architecture
+
+### PR #29 Review — APPROVED (2026-05-31T11:25:29Z)
+
+- Approved the Azure Managed Redis migration PR cleanly — all five criteria satisfied
+- Resource type and API version correct (Microsoft.Cache/redisEnterprise@2025-04-01); SKU properly specified (MemoryOptimized_M10 Memory Optimized tier)
+- deployRedis workaround fully removed from main.bicep parameter set, example parameters, and both staging workflow deploys (bootstrap + release)
+- Private DNS zone renamed correctly to privatelink.redis.azure.net; private endpoint groupId updated to redisEnterprise
+- Database child resource properly configured with encrypted client protocol on port 10000; redisDatabaseResource.listKeys().primaryKey correctly wired to REDIS_URL
+- Bicep validates cleanly (az bicep build), npm typecheck passes; no regressions to other resources
+- Decision/skill docs captured reusable pattern for future deployments; GNC ready for merge
+
+## Session Summary — 2026-05-31T11:25:29Z
+
+**GNC Work:** Azure Managed Redis migration (PR #29) — status SUCCESS
+- Completed migration from retired Azure Cache for Redis to `Microsoft.Cache/redisEnterprise`
+- Removed `deployRedis` workaround fully
+- All validations passed; ready for merge
+
+**Kranz Role:** Scribe recording, PR #29 review pending
