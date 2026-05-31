@@ -12,9 +12,6 @@ param deployContainerApps bool = true
 @description('Whether to deploy private endpoints and private networking resources.')
 param usePrivateEndpoints bool = false
 
-@description('Whether to provision Redis cache resources for the deployment.')
-param deployRedis bool = true
-
 @description('Container image tag for the API image stored in ACR.')
 param apiImageTag string = 'placeholder'
 
@@ -51,7 +48,7 @@ var containerAppsSubnetName = 'container-apps'
 var postgresSubnetName = 'postgres'
 var privateEndpointsSubnetName = 'private-endpoints'
 var postgresPrivateDnsZoneName = 'privatelink.postgres.database.azure.com'
-var redisPrivateDnsZoneName = 'privatelink.redis.cache.windows.net'
+var redisPrivateDnsZoneName = 'privatelink.redis.azure.net'
 var acrPrivateDnsZoneName = 'privatelink.azurecr.io'
 var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var mergedTags = union(tags, {
@@ -132,13 +129,13 @@ resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNe
   }
 }
 
-resource redisPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (usePrivateEndpoints && deployRedis) {
+resource redisPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (usePrivateEndpoints) {
   name: redisPrivateDnsZoneName
   location: 'global'
   tags: mergedTags
 }
 
-resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (usePrivateEndpoints && deployRedis) {
+resource redisPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (usePrivateEndpoints) {
   name: '${environmentName}-redis-link'
   parent: redisPrivateDnsZone
   location: 'global'
@@ -192,7 +189,7 @@ module postgres './modules/postgres-flexible-server.bicep' = {
   }
 }
 
-module redis './modules/redis-cache.bicep' = if (deployRedis) {
+module redis './modules/redis-cache.bicep' = {
   name: 'redis'
   params: {
     name: redisName
@@ -217,8 +214,13 @@ resource containerRegistryResource 'Microsoft.ContainerRegistry/registries@2023-
   name: registryName
 }
 
-resource redisResource 'Microsoft.Cache/Redis@2024-03-01' existing = if (deployRedis) {
+resource redisResource 'Microsoft.Cache/redisEnterprise@2025-04-01' existing = {
   name: redisName
+}
+
+resource redisDatabaseResource 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' existing = {
+  parent: redisResource
+  name: 'default'
 }
 
 resource acrPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (usePrivateEndpoints) {
@@ -258,7 +260,7 @@ resource acrPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZo
   }
 }
 
-resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (usePrivateEndpoints && deployRedis) {
+resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = if (usePrivateEndpoints) {
   name: '${redisName}-pe'
   location: location
   tags: mergedTags
@@ -268,11 +270,11 @@ resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = 
     }
     privateLinkServiceConnections: [
       {
-        name: 'redisCache'
+        name: 'redisEnterprise'
         properties: {
-          privateLinkServiceId: redis!.outputs.id
+          privateLinkServiceId: redis.outputs.id
           groupIds: [
-            'redisCache'
+            'redisEnterprise'
           ]
         }
       }
@@ -280,7 +282,7 @@ resource redisPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-03-01' = 
   }
 }
 
-resource redisPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = if (usePrivateEndpoints && deployRedis) {
+resource redisPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-03-01' = if (usePrivateEndpoints) {
   name: 'default'
   parent: redisPrivateEndpoint
   properties: {
@@ -333,24 +335,23 @@ resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
-var redisPrimaryKey = deployRedis ? redisResource!.listKeys().primaryKey : ''
+var redisPrimaryKey = redisDatabaseResource.listKeys().primaryKey
 var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImageTag}'
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
 var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${postgresAdminPassword}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
-var redisUrl = deployRedis ? '${redis!.outputs.hostname}:${redis!.outputs.sslPort},password=${redisPrimaryKey},ssl=True,abortConnect=False' : ''
-var apiSecretEnvVars = concat([
+var redisUrl = '${redis.outputs.hostname}:${redis.outputs.sslPort},password=${redisPrimaryKey},ssl=True,abortConnect=False'
+var apiSecretEnvVars = [
   {
     name: 'DATABASE_URL'
     secretName: 'database-url'
     value: databaseUrl
   }
-], deployRedis ? [
   {
     name: 'REDIS_URL'
     secretName: 'redis-url'
     value: redisUrl
   }
-] : [])
+]
 
 module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
   name: 'apiApp'
@@ -423,8 +424,8 @@ output containerAppsDefaultDomain string = managedEnvironment.outputs.defaultDom
 output postgresServerFqdn string = postgres.outputs.fqdn
 output postgresServerName string = postgres.outputs.serverName
 output postgresDatabaseName string = postgres.outputs.databaseName
-output redisHost string = deployRedis ? redis!.outputs.hostname : ''
-output redisSslPort int = deployRedis ? redis!.outputs.sslPort : 0
+output redisHost string = redis.outputs.hostname
+output redisSslPort int = redis.outputs.sslPort
 output apiContainerAppName string = apiAppName
 output portalContainerAppName string = portalAppName
 output apiImage string = apiImage

@@ -1,31 +1,43 @@
 param name string
 param location string
-param skuName string = 'Basic'
-param family string = 'C'
-param capacity int = 0
+param skuName string = 'MemoryOptimized_M10'
+param highAvailability string = 'Disabled'
 param minimumTlsVersion string = '1.2'
 param publicNetworkAccess string = 'Enabled'
+param databaseName string = 'default'
+param databasePort int = 10000
 param tags object = {}
 
-resource redis 'Microsoft.Cache/Redis@2024-03-01' = {
+resource redis 'Microsoft.Cache/redisEnterprise@2025-04-01' = {
   name: name
   location: location
   tags: tags
-  properties: {
-    sku: {
-      name: skuName
-      family: family
-      capacity: capacity
-    }
+  properties: any({
+    highAvailability: highAvailability
     minimumTlsVersion: minimumTlsVersion
     publicNetworkAccess: publicNetworkAccess
-    redisConfiguration: {
-      'maxmemory-policy': 'allkeys-lru'
-    }
+  })
+  sku: {
+    name: skuName
+  }
+}
+
+resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' = {
+  parent: redis
+  name: databaseName
+  properties: {
+    accessKeysAuthentication: 'Enabled'
+    clientProtocol: 'Encrypted'
+    clusteringPolicy: 'OSSCluster'
+    evictionPolicy: 'AllKeysLRU'
+    modules: []
+    port: databasePort
   }
 }
 
 output id string = redis.id
 output name string = redis.name
 output hostname string = redis.properties.hostName
-output sslPort int = redis.properties.sslPort
+output sslPort int = databasePort
+output databaseId string = redisDatabase.id
+output databaseName string = redisDatabase.name

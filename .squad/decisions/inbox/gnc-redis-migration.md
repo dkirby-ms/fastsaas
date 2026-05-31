@@ -1,0 +1,6 @@
+### 2026-05-31T11:25:29Z: Azure Managed Redis migration
+**Owner:** GNC
+**Context:** Staging had a temporary `deployRedis=false` workaround because Azure Cache for Redis provisioning was failing after the legacy service retirement.
+**Decision:** Standardize FastSaaS Bicep on Azure Managed Redis using `Microsoft.Cache/redisEnterprise` with a `Microsoft.Cache/redisEnterprise/databases` child resource. Use the Memory Optimized entry SKU (`MemoryOptimized_M10`), encrypted client access on port `10000`, access-key authentication, and private-link settings `groupId: redisEnterprise` with DNS zone `privatelink.redis.azure.net`. Remove the `deployRedis` workaround logic from shared infrastructure and the staging workflow; keep `centralus` unchanged for staging co-location.
+**Why:** The old Azure Cache for Redis resource type is retired for this workload. Moving to Azure Managed Redis restores first-class cache provisioning without the staging-specific bypass and keeps Redis deployment behavior consistent across environments.
+**Files:** `infrastructure/bicep/main.bicep`, `infrastructure/bicep/modules/redis-cache.bicep`, `infrastructure/bicep/main.parameters.example.json`, `.github/workflows/deploy-staging.yml`
