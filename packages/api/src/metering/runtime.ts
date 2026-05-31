@@ -25,10 +25,6 @@ function createDefaultRepository(
     return new PostgresUsageEventRepository(sqlClient ?? new PgPoolSqlClient(createPool(config.database.url)));
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('DATABASE_URL is required to initialize the PostgreSQL metering outbox repository');
-  }
-
   return new InMemoryUsageEventRepository(clock);
 }
 

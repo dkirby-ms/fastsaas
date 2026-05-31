@@ -227,7 +227,32 @@ jobs:
 
       - name: Verify health checks
         shell: bash
-        timeout-minutes: 5
+        timeout-minutes: 10
+        env:
+          API_URL: ${{ steps.deployment.outputs.api_url }}
+          PORTAL_URL: ${{ steps.deployment.outputs.portal_url }}
         run: |
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 --retry-max-time 120 "${{ steps.deployment.outputs.api_url }}/health"
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 --retry-max-time 120 "${{ steps.deployment.outputs.portal_url }}/health"
+          check_health() {
+            local name="$1"
+            local base_url="$2"
+            local attempt=1
+            local max_attempts=32
+
+            while [ "$attempt" -le "$max_attempts" ]; do
+              if curl --fail --show-error --silent "$base_url/health" >/dev/null; then
+                echo "$name health check passed"
+                return 0
+              fi
+
+              echo "$name health check attempt $attempt/$max_attempts failed; retrying in 15 seconds"
+              sleep 15
+              attempt=$((attempt + 1))
+            done
+
+            echo "$name health check failed after $max_attempts attempts" >&2
+            curl --include --silent --show-error "$base_url/health" || true
+            return 1
+          }
+
+          check_health "API" "$API_URL"
+          check_health "Portal" "$PORTAL_URL"

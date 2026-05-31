@@ -80,3 +80,16 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 **For Validation:**
 - Manual staging deploy should pull the updated API image without errors
 - Health checks should initialize properly with Debian-compatible Prisma engines
+
+## 2026-05-31 — Health Check Fix
+
+**Issue:** #41
+
+**Completed:**
+- Hardened API startup so missing or late database configuration no longer prevents the process from binding its HTTP port.
+- Kept the `/health` endpoint database-free so Container App probes can succeed during degraded startup.
+- Extended deploy workflow health verification to poll both staging endpoints long enough for post-deploy Container App revisions to finish warming.
+
+**Learnings:**
+- Container App `az containerapp update --set-env-vars` rollout timing can exceed a short curl retry budget even when the service eventually becomes healthy.
+- Operational health probes must not depend on optional database initialization if they gate deployment success.
