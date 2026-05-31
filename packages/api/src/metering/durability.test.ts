@@ -71,7 +71,16 @@ class FakePostgresClient implements PostgresUsageEventSqlClient {
       return 1;
     }
 
-    if (normalized.startsWith('CREATE TABLE') || normalized.startsWith('CREATE INDEX') || normalized.startsWith('ALTER TABLE') || normalized.startsWith('DROP INDEX')) {
+    if (
+      normalized.startsWith("SELECT set_config('app.current_tenant'") ||
+      normalized.startsWith("SELECT set_config('app.bypass_rls'") ||
+      normalized.startsWith('CREATE TABLE') ||
+      normalized.startsWith('CREATE INDEX') ||
+      normalized.startsWith('ALTER TABLE') ||
+      normalized.startsWith('DROP INDEX') ||
+      normalized.startsWith('DROP POLICY') ||
+      normalized.startsWith('CREATE POLICY')
+    ) {
       return 0;
     }
 

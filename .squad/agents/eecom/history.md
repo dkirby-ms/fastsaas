@@ -46,8 +46,22 @@ _No learnings recorded yet._
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** API foundation complete. JWT auth and tenant middleware ready for multi-tenant SaaS operations. Portal scaffold (FIDO) ready to integrate live endpoints.
+## PR #61 — Semantic-Release Version Baseline Fix (2026-05-31T20:29:23.499+00:00)
+
+**Status:** Complete (tag v0.1.0 created and pushed)
+
+**Context:** Kranz rejected PR #61 (semantic-release config by GNC) because semantic-release defaults to v1.0.0 on first run if no git tag exists. The repo is pre-1.0 (package.json v0.1.0), so the initial release would cut the wrong version.
+
+**Fix applied:**
+- Created git tag `v0.1.0` on the merge-base commit (`d450a34`) — the point before semantic-release config was added
+- Pushed tag to remote (`git push origin v0.1.0`)
+- This establishes v0.1.0 as the version baseline semantic-release will recognize
+
+**Outcome:** Semantic-release config now correctly defaults to computing next version from 0.1.0 baseline. GNC can re-merge after Kranz's re-review.
+
 ## Learnings
 
+- **2026-05-31T20:29:23.499+00:00:** Semantic-release requires an existing git tag to establish the version baseline; without it, it defaults to 1.0.0 on first run. Tag the merge-base with the intended baseline version before merging release config changes.
 - **2026-05-29T14:30:29.387-05:00:** API foundation now lives in `packages/api/` with Express + TypeScript, `packages/shared/src/index.ts` carries shared auth/response types, and the protected bootstrap route is `GET /v1/auth/context`.
 - **2026-05-29T14:30:29.387-05:00:** Auth uses `jose` JWT verification plus tenant-context middleware that reads `tenant_id`, `tid`, or `extension_tenant_id`, and global JSON logging/error handling is wired through `src/middleware/`.
 - **2026-05-29T14:30:29.387-05:00:** OpenAPI bootstrap is published at `/openapi.json` and `/docs`, with integration coverage in `packages/api/src/__tests__/app.integration.test.ts` for 401, 403, 200, and spec validation.
@@ -77,3 +91,7 @@ _No learnings recorded yet._
   - **Issue #2 (Subscription Lifecycle):** PR #10 — State machine, webhooks, fulfillment client, audit logging, 7 integration tests. Ready for review.
   - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.
 - **2026-05-31:** `packages/api`, `packages/portal`, and `packages/shared` are aligned on `0.1.0` semantic versions, and the repo now documents using `npm version` plus the root changelog for future bumps.
+
+## Learnings
+
+- **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.

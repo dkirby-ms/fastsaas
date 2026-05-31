@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { createApp } from './app';
 import { createConfig } from './config';
 import { createDatabase, createPool, type Database } from './db/database';
+import { runWithSystemExecutionContext } from './db/execution-context';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
@@ -59,7 +60,7 @@ const app = createApp(config, { ...meteringRuntime, subscriptionService });
 
 async function runMeteringWorker(): Promise<void> {
   try {
-    const result = await meteringRuntime.worker.runNextBatch();
+    const result = await runWithSystemExecutionContext(() => meteringRuntime.worker.runNextBatch());
     if (result.attempted > 0) {
       logger.info(result, 'Completed metering outbox batch');
     }
