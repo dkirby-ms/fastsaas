@@ -1,7 +1,6 @@
 param name string
 param location string
 param skuName string = 'MemoryOptimized_M10'
-param skuCapacity int = 1
 param minimumTlsVersion string = '1.2'
 param highAvailability string = 'Disabled'
 param databaseName string = 'default'
@@ -14,7 +13,6 @@ resource redis 'Microsoft.Cache/redisEnterprise@2025-04-01' = {
   tags: tags
   sku: {
     name: skuName
-    capacity: skuCapacity
   }
   properties: {
     minimumTlsVersion: minimumTlsVersion
