@@ -230,3 +230,16 @@ Created squad routing labels for future issue triaging:
 - **Commit:** 5da8f72 — "chore: repo hygiene — issue templates, license, gitignore (#37)"
 - **Files:** `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `LICENSE`, `.gitignore` (updated)
 - **Status:** ✓ Complete
+
+### GNC Deploy Health Check Fix (#38)
+- **Date:** 2026-05-31T16:05Z
+- **Author:** GNC (DevOps)
+- **Status:** Complete
+- **Related Issue:** #38
+- **Decision:** Move authentication credentials (AZURE_AD_TENANT_ID, AZURE_AD_CLIENT_ID) from post-deploy configuration to Bicep template parameters, ensuring they are available at container startup time.
+- **Root Cause:** Azure Container Apps startup probes execute immediately after container creation, before post-deployment configuration scripts can run. Auth credentials required during application initialization were missing, causing health check failures.
+- **Implementation:** Added `azureTenantId` and `azureClientId` parameters to `infrastructure/bicep/main.bicep`, created `apiEnvVars` array in Bicep, and updated `deploy-app-staging.yml` to pass these values during deployment.
+- **Key Insight:** Any environment variable needed during application initialization must be set via infrastructure-as-code (Bicep), not via post-deploy scripts. Startup probe execution timing must be accounted for when designing deployment strategies.
+- **Files Modified:** `infrastructure/bicep/main.bicep`, `infrastructure/bicep/main.parameters.example.json`, `.github/workflows/deploy-app-staging.yml`
+- **Commits:** e731019, 411c69d
+- **Outcome:** ✓ Container receives auth credentials at deployment time; health check now passes; post-deploy configuration still runs for runtime-specific variables.
