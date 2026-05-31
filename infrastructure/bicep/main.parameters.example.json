@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "location": {
-      "value": "westus2"
+      "value": "centralus"
     },
     "environmentName": {
       "value": "staging"
@@ -12,6 +12,9 @@
       "value": true
     },
     "usePrivateEndpoints": {
+      "value": false
+    },
+    "deployRedis": {
       "value": false
     },
     "apiImageTag": {

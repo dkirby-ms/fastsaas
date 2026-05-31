@@ -10,7 +10,7 @@ on:
       location:
         description: Azure region
         required: false
-        default: westus2
+        default: centralus
       environmentName:
         description: Logical environment name
         required: false
@@ -35,7 +35,7 @@ jobs:
     environment: staging
     env:
       RESOURCE_GROUP: ${{ inputs.resourceGroup || 'rg-fastsaas-staging' }}
-      LOCATION: ${{ inputs.location || 'westus2' }}
+      LOCATION: ${{ inputs.location || 'centralus' }}
       ENVIRONMENT_NAME: ${{ inputs.environmentName || 'staging' }}
       POSTGRES_ADMIN_PASSWORD: ${{ secrets.STAGING_POSTGRES_ADMIN_PASSWORD }}
     steps:
@@ -77,7 +77,7 @@ jobs:
             --name "staging-bootstrap-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false usePrivateEndpoints=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=false usePrivateEndpoints=false deployRedis=false postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
 
       - name: Read infrastructure outputs
         id: bootstrap
@@ -113,7 +113,7 @@ jobs:
             --name "staging-release-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false deployRedis=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
 
       - name: Read application endpoints
         id: release
