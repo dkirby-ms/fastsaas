@@ -220,3 +220,13 @@ Created squad routing labels for future issue triaging:
 - **Decision:** Split staging deployment automation into two manual GitHub Actions workflows: `deploy-infra-staging.yml` for shared Bicep infrastructure bootstrap (`deployContainerApps=false`) and `deploy-app-staging.yml` for ACR builds plus the Container Apps deployment pass (`deployContainerApps=true`) against existing infrastructure.
 - **Why:** Infrastructure changes are infrequent and fail differently from application builds or health checks. Separating the workflows keeps manual operations deliberate, allows faster app-only iterations after infra is provisioned, and lets the failure-issue workflow classify incidents by infra vs app pipeline.
 - **Files:** `.github/workflows/deploy-infra-staging.yml`, `.github/workflows/deploy-app-staging.yml`, `.github/workflows/deploy-staging-failure-issue.yml`
+
+### GNC Repo Hygiene (#37)
+- **Date:** 2026-05-31T15:24:19.224Z
+- **Owner:** GNC
+- **Context:** Issue #37 completed repo hygiene work establishing foundation practices.
+- **Decision:** Implemented GitHub issue templates (YAML format for bug reports and feature requests with squad routing), MIT License at repository root, and enhanced .gitignore coverage for environment overrides, Prisma artifacts, and OS/IDE files.
+- **Why:** Standardizes issue triage, clarifies licensing for commercial/open-source stakeholders, and reduces accidental commits of transient files.
+- **Commit:** 5da8f72 — "chore: repo hygiene — issue templates, license, gitignore (#37)"
+- **Files:** `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `LICENSE`, `.gitignore` (updated)
+- **Status:** ✓ Complete

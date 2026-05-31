@@ -1,4 +1,4 @@
-# GNC — History
+# GNC — History (Summarized 2026-05-31)
 
 ## Project Context
 - **Project:** FastSaaS — Next-gen Microsoft Commercial Marketplace SaaS accelerator
@@ -6,152 +6,52 @@
 - **Infra:** Azure Container Apps, Bicep/Terraform, Docker, GitHub Actions
 - **User:** dkirby-ms
 
-## Active Assignments (Phase 1)
+## Phase 1 Assignment
+- **Issue #5:** Containerized staging deployment
+  - Completed Docker, Dockerfiles, Bicep infrastructure-as-code, GitHub Actions workflows, deployment runbook
+  - Two-phase deployment strategy (shared resources first, then app deployment)
+  - Ready for cross-team staging integration
 
-**2026-05-29 — Kranz Triage Decision**
+## Delivery Summary (2026-05-29 to 2026-05-31)
 
-Assigned to GNC:
-- **#5 [NO BLOCK]:** Containerized staging deployment
-  - Owner: GNC
-  - Dependencies: #1, #2, #3 (stable backend)
-  - Sequence: Can scaffold Docker/Bicep early, full deployment integration after backend components are ready
-  - Note: No critical blocker; infrastructure can be prepared in parallel but full validation happens in integration phase
+**Infrastructure & Deployment:**
+- Complete Bicep modules with two-phase strategy (`deployContainerApps` flag)
+- GitHub Actions fail-issue workflow (`.github/workflows/deploy-staging-failure-issue.yml`)
+- Bicep patterns: `existing` resources, container-app env arrays, naming, private endpoints
+- Deployment automation: infrastructure bootstrap, ACR builds, Container Apps release
+- Comprehensive deployment README with troubleshooting, secrets, architecture decisions
 
-**Coordination:** Coordinate with EECOM on API/subscription/metering stability before deploying staging. Portal (#4 FIDO) will be integrated into staging environment.
+**Environment & Auth:**
+- Staging region: `centralus` (PostgreSQL/Azure Cache offer restrictions in other regions)
+- Portal auth mirrors Entra contract (NextAuth Azure AD, Bearer token forwarding)
+- API auth: RS256/JWKS validation, tenant context from tid/oid, dev-only bypass via AUTH_BYPASS_ENABLED
+- Request ID sanitization for safe logging
 
-## Learnings
+**Recent Infrastructure Fixes:**
+- **Issue #25 (Resolved):** PostgreSQL/Redis provisioning failures in westus2/eastus2 → moved to centralus, disabled Redis provisioning pending migration
+- **PR #28 (Merged):** Staging-scoped Redis disable, preserved deployRedis=true baseline for other environments
+- **PR #29 (In Review):** Migrated from retired Azure Cache for Redis to Azure Managed Redis using Microsoft.Cache/redisEnterprise with MemoryOptimized_M10 SKU, port 10000 encryption, private-link support
 
-_No learnings recorded yet._
-## Orchestration — 2026-05-29T19:30:29Z
+**Standardization:**
+- Placeholder services use repository-backed Dockerfiles (not BuildKit-only heredocs or inline shell generation)
+- Dockerfile portability for Azure Container Registry compatibility
 
-**#5 Containerized Staging Deployment — COMPLETE**
-- Docker Compose, Dockerfiles, Bicep infrastructure-as-code modules
-- GitHub Actions deploy workflow, deployment runbook
-- Two-phase Bicep strategy: deploy shared resources first (`deployContainerApps=false`), build/push images to ACR, redeploy with `deployContainerApps=true`
-- Ensures Container Apps always reference valid image tags; enables rollback by redeploying older tags
+## Current Status (2026-05-31T15:24Z)
 
-**Cross-team info:**
-- EECOM API foundation (PR #7) ready for staging integration
-- FIDO portal MVP (PR #8) ready for staging integration
-- Both services containerized and staging infrastructure supports deployment of both
-- Decision: Two-phase Bicep avoids failed Container Apps revisions and enables safe rollback
+**Completed Background Tasks:**
+1. **copilot-setup-steps.yml** — Cloud agent configuration created and pushed to main
+2. **Issue #37 Repo Hygiene** — GitHub templates (YAML bug/feature), MIT License, enhanced .gitignore (commit 5da8f72)
 
-## Learnings
+**Awaiting Review:**
+- PR #29 (Azure Managed Redis migration)
 
-- **2026-05-29T19:30:29Z:** Staging infrastructure complete. Two-phase Bicep deployment strategy ensures Container Apps reliability and rollback safety. API (EECOM) and portal (FIDO) ready for staging integration.
-- **2026-05-29T21:10:05Z:** Portal auth now mirrors the Entra-backed API contract: `packages/portal/lib/auth.ts` uses NextAuth Azure AD with a required `NEXTAUTH_SECRET`, `packages/portal/lib/api-client.ts` forwards the session access token as `Authorization: Bearer`, and portal env config must include both the portal app credentials and API audience (`AZURE_AD_API_CLIENT_ID` / optional `AZURE_AD_API_SCOPE`).
-## Learnings
+**Next Phase:**
+- Await EECOM API/subscription/metering stabilization
+- Full Azure Managed Redis rollout across environments
 
-- **2026-05-29T15:29:10.202-05:00 — Entra ID auth hardening:** Replaced HMAC bearer-token validation with Entra-compatible RS256/JWKS validation using `createRemoteJWKSet`, tenant context now prefers `tid`/`oid`, and dev-only bypass is gated by `AUTH_BYPASS_ENABLED` instead of a fallback secret.
-- **2026-05-29T15:29:10.202-05:00 — Validation pattern:** Integration coverage can use a local JWKS endpoint plus `jose`-signed RS256 test tokens to exercise real asymmetric verification paths, including missing-tenant-claim failures.
-- **2026-05-29T15:29:10.202-05:00 — Config approach:** API auth now depends on `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, optional issuer/audience/JWKS overrides, and sanitized `x-request-id` reflection to keep log/response metadata safe.
-- **2026-05-29:** Metering durability must use a PostgreSQL-backed outbox with expiring claim leases; in-memory storage is only acceptable for non-production or injected test harnesses.
-- **2026-05-29:** Azure Marketplace metering submissions must map internal events to `{ resourceId, quantity, dimension, effectiveStartTime, planId }`, and the event contract now requires `planId` at ingest time.
-
-## Cross-Team Updates
-
-- **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. GNC should begin validating deployment integration requirements.
-
-## Learnings
-
-- **2026-05-30T17:03:46.905+00:00:** Bicep `existing` resources in `infrastructure/bicep/main.bicep` must use `name`, not `id`, and deployment-start expressions such as role assignment GUID seeds or Redis key lookups should reference naming variables or existing-resource methods instead of module outputs.
-- **2026-05-30T17:03:46.905+00:00:** Container App `env` arrays in `infrastructure/bicep/modules/container-app.bicep` compile reliably when `concat()` with for-expressions is precomputed in a variable and then assigned inside the resource body.
-- **2026-05-30T17:20:36.580+00:00:** Staging deployment failure intake now lives in `.github/workflows/deploy-staging-failure-issue.yml` as a separate `workflow_run` handler that inspects failed jobs/steps and opens or updates a `squad` issue instead of embedding issue creation in `deploy-staging.yml`.
-- **2026-05-30T17:20:36.580+00:00:** Repeated GitHub Actions failure issues can be deduplicated by storing a hidden failure key in the issue body derived from workflow name, branch, job, and step, then updating the open issue when the same signature fails again.
-- **2026-05-30T20:34:31.344+00:00:** Staging deployment defaults should prefer `westus2` in `.github/workflows/deploy-staging.yml` and `infrastructure/bicep/main.parameters.example.json` because PostgreSQL Flexible Server provisioning is offer-restricted in `eastus`; treat workflow-dispatch location defaults as an operational escape hatch that must stay aligned with example Bicep parameters.
-
-## Current Status
-
-**2026-05-30T17:20:36.580+00:00 — Issue #15 Complete (PR #17)**
-
-Issue #15 (deploy-failure auto-issue workflow) is now complete. The `.github/workflows/deploy-staging-failure-issue.yml` workflow:
-- Listens for failed `Deploy staging` run events
-- Queries Actions API for failing job/step names
-- Creates or updates a `squad`-labeled GitHub issue keyed by branch:job:step
-- Keeps incident reporting decoupled from deployment pipeline
-- Enables automatic triage integration for deployment failures
-
-This completes Phase 1 staging deployment automation setup.
-
-**2026-05-30T17:34:45.378+00:00 — PR #17 Reviewed and Merged**
-
-- **PR #17 Status:** Approved and merged (squash) by Kranz (Lead)
-- **Issue #15:** Closed by merge
-- **Issue #19:** Auto-created by new deploy-failure workflow on staging deploy failure; assigned to GNC for investigation
-- **Decision Recorded:** "Kranz PR #17 Review" added to `.squad/decisions.md` documenting pattern acceptance and implications
-- **2026-05-30T17:36:37.289+00:00:** Safe Azure resource-name truncation in `infrastructure/bicep/main.bicep` should use `take()` rather than fixed-length `substring()` so bootstrap deployments do not fail when environment-derived names are shorter than the max length; conditional identity/module references in the same file compile cleanly when hoisted into variables with `!` null-forgiving where the enclosing `deployContainerApps` guard guarantees existence.
-- **2026-05-30T17:36:37.289+00:00:** `infrastructure/bicep/modules/container-app-environment.bicep` should prefer `workspace.listKeys()` over the standalone `listKeys(workspace.id, ...)` function to keep the Bicep dependency graph analyzer happy.
-- **2026-05-30T20:49:33.796+00:00:** Public endpoints now default in Bicep infrastructure via `usePrivateEndpoints` parameter (default: false). PR #24 makes all VNet/DNS/PE resources optional behind the flag, allowing dev/staging to use public endpoints while production can opt-in to private endpoints. Infrastructure validation passed.
-
-## PR #24 — Public Endpoints PR (2026-05-30T21:21:50.014+00:00)
-
-**Status:** Merged (squash)
-
-**Work completed:**
-- Opened PR #24: `feat(infra): make private endpoints optional, default to public`
-- Added `usePrivateEndpoints` parameter to Bicep infrastructure
-- Set default to `false` (public endpoints as default for dev/staging)
-- Conditionally gates all VNet/private-DNS/private-endpoint resources
-
-**Initial review rejection:** Kranz identified missing PostgreSQL firewall configuration for public mode. Public-mode infrastructure must not only remove private networking but also explicitly enable public access.
-
-**Resolution:** EECOM applied firewall fix (commit 55a6ab4) with `AllowAzureServices` and `AllowAllDev` rules for public mode. PR re-reviewed and approved by Kranz.
-
-**Key learning:** Infrastructure toggles that affect networking (private ↔ public) require bidirectional logic: negative (remove private resources) + positive (enable public access). Partial toggles produce non-functional deployments.
-
-## Learnings
-
-- **2026-05-30T23:42:33.979+00:00:** Created `.github/copilot-setup-steps.yml` and `.github/copilot-instructions.md` to bootstrap GitHub Copilot coding-agent setup and repository guidance for the FastSaaS monorepo.
-- **2026-05-31T00:58:06.780+00:00:** Issue #25 bootstrap failed because PostgreSQL Flexible Server provisioning is offer-restricted in `westus2` for this subscription, and current validation also showed Azure Cache for Redis creation now fails because the retired service must be replaced with Azure Managed Redis. Resolved by moving staging defaults to `centralus` and disabling Redis provisioning in staging deploy parameters; validation run `26699724702` passed `Bootstrap shared infrastructure` before later failing in an unrelated portal image build step.
-- **2026-05-31T11:25:29Z:** Redis infrastructure now standardizes on Azure Managed Redis by pairing `Microsoft.Cache/redisEnterprise` with a `databases` child resource in `infrastructure/bicep/modules/redis-cache.bicep`, using `MemoryOptimized_M10`, encrypted client access on port `10000`, access-key auth via `listKeys()`, and the private-link combo `redisEnterprise` + `privatelink.redis.azure.net`. The old staging-only `deployRedis=false` workaround was removed from `infrastructure/bicep/main.bicep`, `infrastructure/bicep/main.parameters.example.json`, and `.github/workflows/deploy-staging.yml`; keep `centralus` as the co-located staging region.
-
-## 2026-05-31 — Issue #25 Resolution & PR #28 Merged
-
-**GNC Staging Bootstrap Fix — COMPLETE**
-
-Investigated issue #25 deploy failure and determined root causes:
-- PostgreSQL Flexible Server offer restrictions in `westus2` and `eastus2`
-- Azure Cache for Redis retirement requiring service replacement
-
-**Decision:** Move staging default region to `centralus` and disable Redis provisioning in staging environment pending Azure Managed Redis migration.
-
-**PR #28 Work:**
-- Initial submission: changed region to `centralus` + set `deployRedis=false` in shared template
-- Review feedback from Kranz: template default must stay `deployRedis=true`; only staging should override
-- Applied fix: restored `deployRedis: true` baseline in `infrastructure/bicep/main.bicep`, added staging-only parameter override to set `deployRedis: false`
-- **Result:** PR approved and merged
-
-**Issues Closed:**
-- #25 (staging bootstrap failure) — resolved
-- #26 (related staging issue) — resolved
-- #27 (stale branch) — closed
-
-**Architecture Preserved:**
-- PostgreSQL and Container Apps remain in same `location` value
-- All future environments inherit `deployRedis: true` baseline
-- Staging-only override via deployment parameters
-
-**Follow-up:** Plan Azure Managed Redis migration before re-enabling cache in shared template.
-- **2026-05-31T11:25:29Z:** Redis infrastructure now standardizes on Azure Managed Redis by pairing `Microsoft.Cache/redisEnterprise` with a `databases` child resource in `infrastructure/bicep/modules/redis-cache.bicep`, using `MemoryOptimized_M10`, encrypted client access on port `10000`, access-key auth via `listKeys()`, and the private-link combo `redisEnterprise` + `privatelink.redis.azure.net`. The old staging-only `deployRedis=false` workaround was removed from `infrastructure/bicep/main.bicep`, `infrastructure/bicep/main.parameters.example.json`, and `.github/workflows/deploy-staging.yml`; keep `centralus` as the co-located staging region.
-
-## 2026-05-31T11:25:29Z — PR #29 Redis Migration Complete
-
-**Status:** PR opened; validation passed; awaiting Kranz review
-
-**Work:**
-- Migrated Bicep infrastructure from retired Azure Cache for Redis to Azure Managed Redis
-- Updated `infrastructure/bicep/modules/redis-cache.bicep` to use `Microsoft.Cache/redisEnterprise` (API version 2025-04-01)
-- Added `Microsoft.Cache/redisEnterprise/databases` child resource with encrypted client protocol on port 10000
-- Configured `MemoryOptimized_M10` SKU for cost efficiency
-- Private-link: `groupId: redisEnterprise`, DNS zone `privatelink.redis.azure.net`
-- Removed `deployRedis=false` workaround from `main.bicep`, example parameters, and staging workflow deploys
-- Bicep validation passed (`az bicep build`); npm typecheck passes
-
-**Next:** Kranz review of PR #29
-
-## Learnings
-
-- **2026-05-31T14:00:03.033+00:00:** Azure Container Registry Docker builds should not rely on BuildKit-only Dockerfile syntax such as heredoc `COPY`; keep placeholder image build steps compatible with baseline Dockerfile features that ACR supports.
-- **2026-05-31T14:00:03.033+00:00:** Placeholder services should keep their runtime source files in the repository and use plain `COPY` instructions from the repo-root build context instead of inline `node -e` file generation.
-- **2026-05-31T14:02:05.192+00:00:** Staging deployments are now split into separate infrastructure and application GitHub Actions workflows so manual infra bootstraps, app rollouts, and failure triage can be run independently while reusing the same Bicep entrypoint.
-- **2026-05-31T15:16:56.241+00:00:** Created comprehensive deployment README.md at repo root covering project overview, architecture, prerequisites, local development, two-phase deployment workflows (infrastructure + application), environment variable management (Bicep infrastructure-coupled vs post-deploy CLI), GitHub secrets requirements, and key architecture decisions (centralus region, Azure Managed Redis, two-phase Bicep strategy, public endpoints default). Reference files: `.github/workflows/deploy-infra-staging.yml`, `.github/workflows/deploy-app-staging.yml`, `infrastructure/env/staging-api.env`, `infrastructure/env/staging-portal.env`, `infrastructure/bicep/main.bicep`, `packages/api/package.json`, `packages/portal/package.json`, `docker-compose.yml`.
+## Key Learnings
+- Infrastructure toggles (private ↔ public endpoints) require bidirectional logic: remove private + enable public access
+- Bicep: use `name` not `id` for `existing` resources; precompute container-app env arrays in variables
+- Staging deployment automation split into separate infra/app workflows for independent operations
+- Azure Container Registry requires portable Dockerfile syntax (no BuildKit heredocs)
+- Entra-compatible RS256/JWKS validation with sanitized request-ID reflection
