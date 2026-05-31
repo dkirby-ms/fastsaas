@@ -64,3 +64,19 @@
 - Azure Container Registry requires portable Dockerfile syntax (no BuildKit heredocs)
 - Entra-compatible RS256/JWKS validation with sanitized request-ID reflection
 - **Container startup timing:** Environment variables required during startup (e.g., auth credentials) must be set via Bicep deployment, not via post-deploy az containerapp update. The startup probe runs before post-deploy configuration steps.
+
+## 2026-05-31T18:54 — CROSS-AGENT NOTIFICATION: API Docker Image Update
+
+**From:** EECOM  
+**Impact:** Container image change affects staging deployment
+
+EECOM fixed Prisma OpenSSL compatibility by switching API container base from `node:22-alpine` to `node:22-slim` (commit 29855d3). Staging deploy pipeline will now pull images built from Debian-slim base instead of Alpine.
+
+**Deploy Pipeline Impact:**
+- ACR builds using `az acr build` will resolve `node:22-slim` from Docker Hub
+- Staged image tags remain version-consistent
+- No workflow changes required; full compatibility with `deploy-app-staging.yml`
+
+**For Validation:**
+- Manual staging deploy should pull the updated API image without errors
+- Health checks should initialize properly with Debian-compatible Prisma engines
