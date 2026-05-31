@@ -49,9 +49,18 @@
 - Await EECOM API/subscription/metering stabilization
 - Full Azure Managed Redis rollout across environments
 
+## Current Status (2026-05-31T16:05Z)
+
+**Completed:**
+- **Issue #38 Resolved** — Staging deploy health check failure fixed (commit e731019)
+  - Root cause: API container startup probe failed due to missing AZURE_AD_TENANT_ID and AZURE_AD_CLIENT_ID
+  - Solution: Moved env vars from post-deploy az containerapp update to Bicep template parameters
+  - Result: Container now has required credentials available during initial startup
+
 ## Key Learnings
 - Infrastructure toggles (private ↔ public endpoints) require bidirectional logic: remove private + enable public access
 - Bicep: use `name` not `id` for `existing` resources; precompute container-app env arrays in variables
 - Staging deployment automation split into separate infra/app workflows for independent operations
 - Azure Container Registry requires portable Dockerfile syntax (no BuildKit heredocs)
 - Entra-compatible RS256/JWKS validation with sanitized request-ID reflection
+- **Container startup timing:** Environment variables required during startup (e.g., auth credentials) must be set via Bicep deployment, not via post-deploy az containerapp update. The startup probe runs before post-deploy configuration steps.
