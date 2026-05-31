@@ -102,3 +102,4 @@ This completes Phase 1 staging deployment automation setup.
 ## Learnings
 
 - **2026-05-30T23:42:33.979+00:00:** Created `.github/copilot-setup-steps.yml` and `.github/copilot-instructions.md` to bootstrap GitHub Copilot coding-agent setup and repository guidance for the FastSaaS monorepo.
+- **2026-05-31T00:58:06.780+00:00:** Issue #25 bootstrap failed because PostgreSQL Flexible Server provisioning is offer-restricted in `westus2` for this subscription, and current validation also showed Azure Cache for Redis creation now fails because the retired service must be replaced with Azure Managed Redis. Resolved by moving staging defaults to `centralus` and disabling Redis provisioning in staging deploy parameters; validation run `26699724702` passed `Bootstrap shared infrastructure` before later failing in an unrelated portal image build step.
