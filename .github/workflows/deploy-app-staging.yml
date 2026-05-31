@@ -227,6 +227,7 @@ jobs:
 
       - name: Verify health checks
         shell: bash
+        timeout-minutes: 5
         run: |
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.deployment.outputs.api_url }}/health"
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.deployment.outputs.portal_url }}/health"
+          curl --fail --show-error --silent --retry 20 --retry-delay 15 --retry-max-time 120 "${{ steps.deployment.outputs.api_url }}/health"
+          curl --fail --show-error --silent --retry 20 --retry-delay 15 --retry-max-time 120 "${{ steps.deployment.outputs.portal_url }}/health"
