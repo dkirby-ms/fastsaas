@@ -18,12 +18,6 @@ param apiImageTag string = 'placeholder'
 @description('Container image tag for the portal image stored in ACR.')
 param portalImageTag string = 'placeholder'
 
-@description('Microsoft Entra tenant ID provided to the API container app for auth validation.')
-param azureAdTenantId string = ''
-
-@description('Microsoft Entra client ID provided to the API container app for auth validation.')
-param azureAdClientId string = ''
-
 @description('Administrator username for PostgreSQL Flexible Server.')
 param postgresAdministratorLogin string = 'fastsaasadmin'
 
@@ -316,7 +310,6 @@ resource portalRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentitie
 
 var apiRegistryPrincipalId = deployContainerApps ? apiRegistryIdentity!.properties.principalId : ''
 var portalRegistryPrincipalId = deployContainerApps ? portalRegistryIdentity!.properties.principalId : ''
-var apiBaseUrl = deployContainerApps ? 'https://${apiApp!.outputs.fqdn}' : 'http://api:3000'
 var apiUrl = deployContainerApps ? 'https://${apiApp!.outputs.fqdn}' : ''
 var portalUrl = deployContainerApps ? 'https://${portalApp!.outputs.fqdn}' : ''
 
@@ -369,24 +362,7 @@ module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
     managedIdentityResourceId: apiRegistryIdentity.id
-    envVars: [
-      {
-        name: 'API_PORT'
-        value: '3000'
-      }
-      {
-        name: 'NODE_ENV'
-        value: 'production'
-      }
-      {
-        name: 'AZURE_AD_TENANT_ID'
-        value: azureAdTenantId
-      }
-      {
-        name: 'AZURE_AD_CLIENT_ID'
-        value: azureAdClientId
-      }
-    ]
+    envVars: []
     secretEnvVars: apiSecretEnvVars
     tags: mergedTags
   }
@@ -403,28 +379,7 @@ module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
     managedIdentityResourceId: portalRegistryIdentity.id
-    envVars: [
-      {
-        name: 'APP_NAME'
-        value: 'portal'
-      }
-      {
-        name: 'PORT'
-        value: '3001'
-      }
-      {
-        name: 'HEALTH_PATH'
-        value: '/health'
-      }
-      {
-        name: 'NODE_ENV'
-        value: 'production'
-      }
-      {
-        name: 'API_BASE_URL'
-        value: apiBaseUrl
-      }
-    ]
+    envVars: []
     tags: mergedTags
   }
 }

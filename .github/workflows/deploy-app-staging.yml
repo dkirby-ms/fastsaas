@@ -126,19 +126,107 @@ jobs:
             --name "staging-app-${GITHUB_RUN_ID}" \
             --template-file infrastructure/bicep/main.bicep \
             --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" azureAdTenantId="${{ secrets.AZURE_TENANT_ID }}" azureAdClientId="${{ secrets.AZURE_CLIENT_ID }}"
+            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
 
-      - name: Read application endpoints
-        id: release
+      - name: Read deployment outputs
+        id: deployment
         shell: bash
+        env:
+          DEPLOYMENT_NAME: staging-app-${{ github.run_id }}
         run: |
-          API_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-app-${GITHUB_RUN_ID}" --query properties.outputs.apiUrl.value -o tsv)
-          PORTAL_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "staging-app-${GITHUB_RUN_ID}" --query properties.outputs.portalUrl.value -o tsv)
+          API_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.apiUrl.value -o tsv)
+          PORTAL_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.portalUrl.value -o tsv)
+          API_APP_NAME=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.apiContainerAppName.value -o tsv)
+          PORTAL_APP_NAME=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.portalContainerAppName.value -o tsv)
+
           echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
           echo "portal_url=$PORTAL_URL" >> "$GITHUB_OUTPUT"
+          echo "api_app_name=$API_APP_NAME" >> "$GITHUB_OUTPUT"
+          echo "portal_app_name=$PORTAL_APP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Configure API environment
+        shell: bash
+        env:
+          CONTAINER_APP_NAME: ${{ steps.deployment.outputs.api_app_name }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: |
+          mapfile -t env_vars < <(python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          pattern = re.compile(r'\{\{([A-Z0-9_]+)\}\}')
+
+          for raw_line in Path('infrastructure/env/staging-api.env').read_text().splitlines():
+              line = raw_line.strip()
+              if not line or line.startswith('#'):
+                  continue
+              if '=' not in line:
+                  raise SystemExit(f'Invalid env entry: {raw_line}')
+
+              key, value = line.split('=', 1)
+
+              def replace(match: re.Match[str]) -> str:
+                  name = match.group(1)
+                  resolved = os.environ.get(name)
+                  if resolved is None:
+                      raise SystemExit(f'Missing value for placeholder {name}')
+                  return resolved
+
+              value = pattern.sub(replace, value)
+              print(f'{key}={value}')
+          PY
+          )
+
+          az containerapp update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars "${env_vars[@]}" \
+            --output none
+
+      - name: Configure portal environment
+        shell: bash
+        env:
+          CONTAINER_APP_NAME: ${{ steps.deployment.outputs.portal_app_name }}
+          API_BASE_URL: ${{ steps.deployment.outputs.api_url }}
+        run: |
+          mapfile -t env_vars < <(python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          pattern = re.compile(r'\{\{([A-Z0-9_]+)\}\}')
+
+          for raw_line in Path('infrastructure/env/staging-portal.env').read_text().splitlines():
+              line = raw_line.strip()
+              if not line or line.startswith('#'):
+                  continue
+              if '=' not in line:
+                  raise SystemExit(f'Invalid env entry: {raw_line}')
+
+              key, value = line.split('=', 1)
+
+              def replace(match: re.Match[str]) -> str:
+                  name = match.group(1)
+                  resolved = os.environ.get(name)
+                  if resolved is None:
+                      raise SystemExit(f'Missing value for placeholder {name}')
+                  return resolved
+
+              value = pattern.sub(replace, value)
+              print(f'{key}={value}')
+          PY
+          )
+
+          az containerapp update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$CONTAINER_APP_NAME" \
+            --set-env-vars "${env_vars[@]}" \
+            --output none
 
       - name: Verify health checks
         shell: bash
         run: |
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.release.outputs.api_url }}/health"
-          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.release.outputs.portal_url }}/health"
+          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.deployment.outputs.api_url }}/health"
+          curl --fail --show-error --silent --retry 20 --retry-delay 15 "${{ steps.deployment.outputs.portal_url }}/health"
