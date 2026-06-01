@@ -5,6 +5,7 @@ import { createApp } from './app';
 import { createConfig } from './config';
 import { createDatabase, createPool, type Database } from './db/database';
 import { runWithSystemExecutionContext } from './db/execution-context';
+import { runDatabaseMigrations } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
@@ -45,61 +46,86 @@ function initializeDatabaseDependencies(databaseUrl?: string): {
   }
 }
 
-const config = createConfig();
-const { database, meteringPool, meteringSqlClient } = initializeDatabaseDependencies(config.databaseUrl);
-const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
-const subscriptionRepository = createSubscriptionRepository(database);
-const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
-  baseUrl: config.marketplace.baseUrl,
-  apiVersion: config.marketplace.apiVersion,
-  authToken: config.marketplace.authToken,
-  logger
-});
-const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
-const app = createApp(config, { ...meteringRuntime, subscriptionService });
+async function main(): Promise<void> {
+  const config = createConfig();
+  const { database, meteringPool, meteringSqlClient } = initializeDatabaseDependencies(config.databaseUrl);
 
-async function runMeteringWorker(): Promise<void> {
   try {
-    const result = await runWithSystemExecutionContext(() => meteringRuntime.worker.runNextBatch());
-    if (result.attempted > 0) {
-      logger.info(result, 'Completed metering outbox batch');
-    }
-  } catch (error) {
-    logger.error({ err: error }, 'Metering worker run failed');
-  }
-}
+    if (database) {
+      const migrationResults = await runDatabaseMigrations(database);
+      const executedMigrations = migrationResults
+        .filter((result) => result.status === 'Success')
+        .map((result) => result.migrationName);
 
-setInterval(() => {
-  void runMeteringWorker();
-}, config.metering.workerIntervalMs).unref();
-
-const server = app.listen(config.port, () => {
-  logger.info({ port: config.port }, 'API server listening');
-});
-
-let shuttingDown = false;
-
-const shutdown = (signal: string) => {
-  if (shuttingDown) {
-    return;
-  }
-
-  shuttingDown = true;
-  logger.info({ signal }, 'Shutdown signal received');
-  server.close(async () => {
-    const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
-      (task): task is Promise<void> => Boolean(task)
-    );
-    const results = await Promise.allSettled(cleanupTasks);
-
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        logger.error({ err: result.reason }, 'Error shutting down database resources');
-        process.exitCode = 1;
+      if (executedMigrations.length > 0) {
+        logger.info({ migrations: executedMigrations }, 'Applied database migrations');
       }
     }
-  });
-};
+  } catch (error) {
+    await Promise.allSettled([database?.destroy(), meteringPool?.end()].filter((task): task is Promise<void> => Boolean(task)));
+    logger.fatal({ err: error }, 'Failed to apply database migrations');
+    throw error;
+  }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+  const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
+  const subscriptionRepository = createSubscriptionRepository(database);
+  const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
+    baseUrl: config.marketplace.baseUrl,
+    apiVersion: config.marketplace.apiVersion,
+    authToken: config.marketplace.authToken,
+    logger
+  });
+  const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
+  const app = createApp(config, { ...meteringRuntime, subscriptionService });
+
+  async function runMeteringWorker(): Promise<void> {
+    try {
+      const result = await runWithSystemExecutionContext(() => meteringRuntime.worker.runNextBatch());
+      if (result.attempted > 0) {
+        logger.info(result, 'Completed metering outbox batch');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Metering worker run failed');
+    }
+  }
+
+  setInterval(() => {
+    void runMeteringWorker();
+  }, config.metering.workerIntervalMs).unref();
+
+  const server = app.listen(config.port, () => {
+    logger.info({ port: config.port }, 'API server listening');
+  });
+
+  let shuttingDown = false;
+
+  const shutdown = (signal: string) => {
+    if (shuttingDown) {
+      return;
+    }
+
+    shuttingDown = true;
+    logger.info({ signal }, 'Shutdown signal received');
+    server.close(async () => {
+      const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
+        (task): task is Promise<void> => Boolean(task)
+      );
+      const results = await Promise.allSettled(cleanupTasks);
+
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          logger.error({ err: result.reason }, 'Error shutting down database resources');
+          process.exitCode = 1;
+        }
+      }
+    });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+void main().catch((error) => {
+  logger.fatal({ err: error }, 'API server failed to start');
+  process.exitCode = 1;
+});

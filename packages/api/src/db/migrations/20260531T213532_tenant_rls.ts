@@ -6,6 +6,11 @@ import {
   buildEnableTenantRlsStatements
 } from '../rls';
 
+async function tableExists(db: Kysely<unknown>, tableName: string): Promise<boolean> {
+  const result = await sql<{ exists: boolean }>`SELECT to_regclass(${tableName}) IS NOT NULL AS exists`.execute(db);
+  return result.rows[0]?.exists ?? false;
+}
+
 export async function up(db: Kysely<unknown>): Promise<void> {
   await sql.raw('ALTER TABLE subscription_audit_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT').execute(db);
   await sql.raw(`
@@ -33,6 +38,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   ).execute(db);
 
   for (const policy of TENANT_SCOPED_TABLE_POLICIES) {
+    if (!(await tableExists(db, policy.tableName))) {
+      continue;
+    }
+
     for (const statement of buildEnableTenantRlsStatements(policy.tableName, policy.tenantColumn)) {
       await sql.raw(statement).execute(db);
     }
@@ -41,6 +50,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
 export async function down(db: Kysely<unknown>): Promise<void> {
   for (const policy of [...TENANT_SCOPED_TABLE_POLICIES].reverse()) {
+    if (!(await tableExists(db, policy.tableName))) {
+      continue;
+    }
+
     for (const statement of buildDisableTenantRlsStatements(policy.tableName)) {
       await sql.raw(statement).execute(db);
     }
