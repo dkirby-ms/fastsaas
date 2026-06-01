@@ -1,3 +1,9 @@
+## [0.4.0](https://github.com/dkirby-ms/fastsaas/compare/v0.3.0...v0.4.0) (2026-06-01)
+
+### Features
+
+* **portal:** Replace placeholder with real Next.js Dockerfile ([#66](https://github.com/dkirby-ms/fastsaas/issues/66)) ([efa0a8f](https://github.com/dkirby-ms/fastsaas/commit/efa0a8f0dfed3f9019ced095550dc84283384860))
+
 ## [0.3.0](https://github.com/dkirby-ms/fastsaas/compare/v0.2.0...v0.3.0) (2026-06-01)
 
 ### Features
