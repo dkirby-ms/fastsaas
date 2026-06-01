@@ -7,11 +7,20 @@ export function getSingleSearchParam(value: string | string[] | undefined): stri
 }
 
 export function sanitizeCallbackUrl(value: string | undefined, fallback = '/dashboard'): string {
-  if (!value?.startsWith('/')) {
+  if (!value?.startsWith('/') || value.startsWith('//')) {
     return fallback;
   }
 
-  return value;
+  try {
+    const parsed = new URL(value, 'https://fastsaas.local');
+    if (parsed.origin !== 'https://fastsaas.local') {
+      return fallback;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 
 export function buildLandingPath(token: string, subscriptionId?: string): string {

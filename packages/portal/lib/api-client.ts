@@ -32,6 +32,10 @@ function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 }
 
+function encodePathSegment(value: string) {
+  return encodeURIComponent(value);
+}
+
 async function getPortalSession() {
   const session = await getSession();
 
@@ -289,23 +293,25 @@ export const portalApi = {
   },
   getSubscription: async (subscriptionId: string) => {
     await assertAreaAccess('customer');
+    const encodedSubscriptionId = encodePathSegment(subscriptionId);
 
     if (shouldUseMockApi()) {
-      return mockRequest<Subscription>(`/v1/subscriptions/${subscriptionId}`);
+      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
     }
 
-    return requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`);
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
   },
   activateSubscription: async (subscriptionId: string) => {
     await assertAreaAccess('customer');
+    const encodedSubscriptionId = encodePathSegment(subscriptionId);
 
     if (shouldUseMockApi()) {
-      return mockRequest<Subscription>(`/v1/subscriptions/${subscriptionId}/activate`, {
+      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
         method: 'POST',
       });
     }
 
-    return requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}/activate`, {
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
       method: 'POST',
     });
   },
