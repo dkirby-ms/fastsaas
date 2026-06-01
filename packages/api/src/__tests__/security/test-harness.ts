@@ -119,11 +119,11 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const config = createConfig({
     API_PORT: '3001',
     NODE_ENV: 'test',
-    AZURE_AD_TENANT_ID: 'tenant-security-home',
-    AZURE_AD_CLIENT_ID: 'fastsaas-security-tests-client',
-    AZURE_AD_AUDIENCE: 'api://fastsaas-security-tests',
-    AZURE_AD_ISSUER: 'https://login.microsoftonline.com/tenant-security-home/v2.0',
-    AZURE_AD_JWKS_URI: `http://127.0.0.1:${port}/discovery/v2.0/keys`,
+    ENTRA_TENANT_ID: 'tenant-security-home',
+    ENTRA_CLIENT_ID: 'fastsaas-security-tests-client',
+    ENTRA_AUDIENCE: 'api://fastsaas-security-tests',
+    ENTRA_ISSUER: 'https://login.microsoftonline.com/tenant-security-home/v2.0',
+    ENTRA_JWKS_URI: `http://127.0.0.1:${port}/discovery/v2.0/keys`,
     JWT_REQUIRED_SCOPE: 'api:read',
     METERING_READ_SCOPE: 'metering:read',
     METERING_WRITE_SCOPE: 'metering:write'

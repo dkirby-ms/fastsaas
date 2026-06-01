@@ -25,10 +25,10 @@ ENV APP_NAME=${APP_NAME}
 ENV HEALTH_PATH=${HEALTH_PATH}
 
 RUN NEXTAUTH_SECRET=build-only-secret \
-    AZURE_AD_TENANT_ID=build-tenant \
-    AZURE_AD_CLIENT_ID=build-client \
-    AZURE_AD_CLIENT_SECRET=build-secret \
-    AZURE_AD_API_CLIENT_ID=build-api-client \
+    ENTRA_TENANT_ID=build-tenant \
+    ENTRA_CLIENT_ID=build-client \
+    ENTRA_CLIENT_SECRET=build-secret \
+    ENTRA_API_CLIENT_ID=build-api-client \
     npm run build --workspace=@fastsaas/portal
 
 FROM node:22-alpine AS runner

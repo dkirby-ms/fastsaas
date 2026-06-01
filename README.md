@@ -199,8 +199,8 @@ App-specific variables are loaded from env files and applied to Container Apps *
 ```
 API_PORT=3000
 NODE_ENV=production
-AZURE_AD_TENANT_ID={{AZURE_TENANT_ID}}
-AZURE_AD_CLIENT_ID={{AZURE_CLIENT_ID}}
+ENTRA_TENANT_ID={{AZURE_TENANT_ID}}
+ENTRA_CLIENT_ID={{AZURE_CLIENT_ID}}
 ```
 
 **Portal Environment** (`infrastructure/env/staging-portal.env`):

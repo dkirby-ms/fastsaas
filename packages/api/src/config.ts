@@ -59,15 +59,15 @@ function parseAudiences(rawAudience: string | undefined, clientId: string): stri
 export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const nodeEnv = env.NODE_ENV ?? 'development';
   const bypassEnabled = env.AUTH_BYPASS_ENABLED === 'true';
-  const azureTenantId = env.AZURE_AD_TENANT_ID?.trim();
-  const azureClientId = env.AZURE_AD_CLIENT_ID?.trim();
+  const azureTenantId = env.ENTRA_TENANT_ID?.trim();
+  const azureClientId = env.ENTRA_CLIENT_ID?.trim();
 
   if (bypassEnabled && nodeEnv === 'production') {
     throw new Error('AUTH_BYPASS_ENABLED cannot be enabled in production');
   }
 
   if (!bypassEnabled && (!azureTenantId || !azureClientId)) {
-    throw new Error('AZURE_AD_TENANT_ID and AZURE_AD_CLIENT_ID are required when auth bypass is disabled');
+    throw new Error('ENTRA_TENANT_ID and ENTRA_CLIENT_ID are required when auth bypass is disabled');
   }
 
   const resolvedTenantId = azureTenantId ?? 'common';
@@ -78,9 +78,9 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     apiVersion: env.API_VERSION ?? 'v1',
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
     auth: {
-      issuer: normalizeUrl(env.AZURE_AD_ISSUER ?? `https://login.microsoftonline.com/${resolvedTenantId}/v2.0`),
-      audience: parseAudiences(env.AZURE_AD_AUDIENCE, resolvedClientId),
-      jwksUri: env.AZURE_AD_JWKS_URI ?? `https://login.microsoftonline.com/${resolvedTenantId}/discovery/v2.0/keys`,
+      issuer: normalizeUrl(env.ENTRA_ISSUER ?? `https://login.microsoftonline.com/${resolvedTenantId}/v2.0`),
+      audience: parseAudiences(env.ENTRA_AUDIENCE, resolvedClientId),
+      jwksUri: env.ENTRA_JWKS_URI ?? `https://login.microsoftonline.com/${resolvedTenantId}/discovery/v2.0/keys`,
       azureTenantId: resolvedTenantId,
       azureClientId: resolvedClientId,
       requiredScope: env.JWT_REQUIRED_SCOPE ?? 'api:read',
