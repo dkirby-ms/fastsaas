@@ -43,6 +43,7 @@ Assigned to FIDO:
 - **2026-05-29T19:30:29Z:** Portal MVP complete. Mock adapter enables stable feature development without backend pressure. EECOM API foundation ready for integration.
 - **2026-05-29T16:53:13.479-05:00:** Portal modernization moved auth to `packages/portal/auth.ts` with Auth.js v5-style exports (`auth`, `handlers`, `signIn`, `signOut`) and Microsoft Entra ID refresh-token rotation preserved.
 - **2026-05-29T16:53:13.479-05:00:** Portal validation now succeeds on Next 15/React 19 with `npm run typecheck --workspace=@fastsaas/portal` using Next compile mode and `npm run build --workspace=@fastsaas/portal` for full production verification.
+- **2026-06-01T13:26:36.306+00:00:** Replaced the portal placeholder container with a multi-stage Next.js standalone Docker build, added a startup-safe `/api/health` route, and configured `next.config.mjs` for monorepo-safe standalone tracing so Docker serves the real portal app.
 
 ## Cross-Team Updates
 
