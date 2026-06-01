@@ -10,6 +10,7 @@ import {
   type MarketplaceFulfillmentClient
 } from '../lib/marketplace-fulfillment';
 import type { RecordedWebhookEvent, SubscriptionRepository } from '../repositories/subscription-repository';
+import type { TenantMemberService } from './tenant-member-service';
 
 interface ActorContext {
   requestId: string;
@@ -22,6 +23,7 @@ interface ActorContext {
 interface SubscribeInput extends ActorContext {
   tenantId: string;
   userId: string;
+  userEmail?: string;
   marketplaceToken: string;
   metadata?: Record<string, unknown>;
 }
@@ -82,10 +84,8 @@ function getTargetStatus(action: MarketplaceLifecycleAction): SubscriptionStatus
       return 'Unsubscribed';
     case 'Reinstate':
       return 'Active';
-    default: {
-      const unsupportedAction: never = action;
-      return unsupportedAction;
-    }
+    default:
+      throw AppError.badRequest('Marketplace webhook action is not supported', { action });
   }
 }
 
@@ -143,7 +143,8 @@ export class SubscriptionService {
   constructor(
     private readonly repository: SubscriptionRepository,
     private readonly fulfillmentClient: MarketplaceFulfillmentClient,
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    private readonly tenantMemberService?: TenantMemberService
   ) {}
 
   async listSubscriptions(tenantId: string): Promise<Subscription[]> {
@@ -217,6 +218,12 @@ export class SubscriptionService {
         ...normalizeDetails(input.metadata)
       },
       auditEntry
+    });
+
+    await this.tenantMemberService?.bootstrapOwnerIfNeeded({
+      tenantId: subscription.tenantId,
+      userId: input.userId,
+      email: input.userEmail
     });
 
     this.logger.info(

@@ -35,11 +35,13 @@ export function buildOpenApiSpec(config: ApiConfig) {
     apis: [
       join(sourceRoot, 'routes', 'health.ts'),
       join(sourceRoot, 'routes', 'v1', 'auth.ts'),
+      join(sourceRoot, 'routes', 'v1', 'members.ts'),
       join(sourceRoot, 'routes', 'v1', 'subscriptions.ts'),
       join(sourceRoot, 'routes', 'v1', 'publisher.ts'),
       join(sourceRoot, 'routes', 'webhooks', 'marketplace.ts'),
       join(runtimeRoot, 'routes', 'health.js'),
       join(runtimeRoot, 'routes', 'v1', 'auth.js'),
+      join(runtimeRoot, 'routes', 'v1', 'members.js'),
       join(runtimeRoot, 'routes', 'v1', 'subscriptions.js'),
       join(runtimeRoot, 'routes', 'v1', 'publisher.js'),
       join(runtimeRoot, 'routes', 'webhooks', 'marketplace.js')

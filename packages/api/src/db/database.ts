@@ -1,4 +1,6 @@
 import type { PublisherPlanStatus, SubscriptionStatus, UsageEventRecord } from '@fastsaas/shared';
+
+import type { RbacRole } from '../middleware/rbac';
 import { Kysely, PostgresDialect, type ColumnType } from 'kysely';
 import { Pool } from 'pg';
 
@@ -106,6 +108,16 @@ export interface PublisherPlansTable {
   updated_at: GeneratedTimestamp;
 }
 
+export interface TenantMembersTable {
+  id: GeneratedUuid;
+  tenant_id: string;
+  user_id: string;
+  email: string | null;
+  role: RbacRole;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 export interface AuditLogsTable {
   id: string;
   tenant_id: string;
@@ -125,6 +137,7 @@ export interface Database {
   subscription_audit_logs: SubscriptionAuditLogsTable;
   marketplace_webhook_events: MarketplaceWebhookEventsTable;
   publisher_plans: PublisherPlansTable;
+  tenant_members: TenantMembersTable;
   audit_logs: AuditLogsTable;
 }
 

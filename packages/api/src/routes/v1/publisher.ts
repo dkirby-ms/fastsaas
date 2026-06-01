@@ -18,6 +18,7 @@ import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 
 function parsePlanBody(body: unknown): CreatePublisherPlanInput {
@@ -139,9 +140,9 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   throw AppError.badRequest('Publisher tenant action is not supported');
 }
 
-export function createPublisherRouter(config: ApiConfig, publisherService: PublisherService) {
+export function createPublisherRouter(config: ApiConfig, publisherService: PublisherService, tenantMemberService?: TenantMemberService) {
   const router = Router();
-  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
+  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
 
   /**
    * @swagger

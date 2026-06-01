@@ -291,46 +291,50 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   }
 
   async createManagedSubscription(input: CreateManagedSubscriptionInput): Promise<Subscription> {
-    return withDatabaseRlsContext(this.db, async (trx) => {
-      const createdAt = new Date(input.auditEntry.createdAt);
-      const created = await trx
-        .insertInto('subscriptions')
-        .values({
-          tenant_id: input.tenantId,
-          marketplace_subscription_id: input.marketplaceSubscriptionId,
-          plan_id: input.planId,
-          seats: input.seats,
-          status: input.status,
-          offer_id: input.offerId ?? null,
-          purchaser_tenant_id: input.purchaserTenantId ?? null,
-          beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
-          correlation_id: input.correlationId,
-          metadata: input.metadata,
-          created_at: createdAt,
-          updated_at: createdAt
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const createdAt = new Date(input.auditEntry.createdAt);
+        const created = await trx
+          .insertInto('subscriptions')
+          .values({
+            tenant_id: input.tenantId,
+            marketplace_subscription_id: input.marketplaceSubscriptionId,
+            plan_id: input.planId,
+            seats: input.seats,
+            status: input.status,
+            offer_id: input.offerId ?? null,
+            purchaser_tenant_id: input.purchaserTenantId ?? null,
+            beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
+            correlation_id: input.correlationId,
+            metadata: input.metadata,
+            created_at: createdAt,
+            updated_at: createdAt
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
 
-      await trx
-        .insertInto('subscription_audit_logs')
-        .values({
-          id: input.auditEntry.id,
-          subscription_id: created.id,
-          tenant_id: input.tenantId,
-          event_type: input.auditEntry.eventType,
-          source: input.auditEntry.source,
-          from_status: input.auditEntry.fromStatus,
-          to_status: input.auditEntry.toStatus,
-          correlation_id: input.auditEntry.correlationId,
-          request_id: input.auditEntry.requestId,
-          details: input.auditEntry.details,
-          created_at: createdAt
-        })
-        .execute();
+        await trx
+          .insertInto('subscription_audit_logs')
+          .values({
+            id: input.auditEntry.id,
+            subscription_id: created.id,
+            tenant_id: input.tenantId,
+            event_type: input.auditEntry.eventType,
+            source: input.auditEntry.source,
+            from_status: input.auditEntry.fromStatus,
+            to_status: input.auditEntry.toStatus,
+            correlation_id: input.auditEntry.correlationId,
+            request_id: input.auditEntry.requestId,
+            details: input.auditEntry.details,
+            created_at: createdAt
+          })
+          .execute();
 
-      return this.getSubscriptionOrThrow(trx, created.id);
-    });
+        return this.getSubscriptionOrThrow(trx, created.id);
+      },
+      { tenantId: input.tenantId }
+    );
   }
 
   async updateManagedSubscription(input: UpdateManagedSubscriptionInput): Promise<Subscription> {
@@ -447,42 +451,46 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   }
 
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
-    return withDatabaseRlsContext(this.db, async (trx) => {
-      const updatedAt = new Date(input.auditEntry.createdAt);
-      const updated = await trx
-        .updateTable('subscriptions')
-        .set({
-          status: input.toStatus,
-          correlation_id: input.correlationId,
-          updated_at: updatedAt
-        })
-        .where('id', '=', input.subscriptionId)
-        .returning('id')
-        .executeTakeFirst();
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const updatedAt = new Date(input.auditEntry.createdAt);
+        const updated = await trx
+          .updateTable('subscriptions')
+          .set({
+            status: input.toStatus,
+            correlation_id: input.correlationId,
+            updated_at: updatedAt
+          })
+          .where('id', '=', input.subscriptionId)
+          .returning('id')
+          .executeTakeFirst();
 
-      if (!updated) {
-        throw new Error(`Subscription ${input.subscriptionId} not found`);
-      }
+        if (!updated) {
+          throw new Error(`Subscription ${input.subscriptionId} not found`);
+        }
 
-      await trx
-        .insertInto('subscription_audit_logs')
-        .values({
-          id: input.auditEntry.id,
-          subscription_id: input.subscriptionId,
-          tenant_id: input.tenantId,
-          event_type: input.auditEntry.eventType,
-          source: input.auditEntry.source,
-          from_status: input.auditEntry.fromStatus,
-          to_status: input.auditEntry.toStatus,
-          correlation_id: input.auditEntry.correlationId,
-          request_id: input.auditEntry.requestId,
-          details: input.auditEntry.details,
-          created_at: updatedAt
-        })
-        .execute();
+        await trx
+          .insertInto('subscription_audit_logs')
+          .values({
+            id: input.auditEntry.id,
+            subscription_id: input.subscriptionId,
+            tenant_id: input.tenantId,
+            event_type: input.auditEntry.eventType,
+            source: input.auditEntry.source,
+            from_status: input.auditEntry.fromStatus,
+            to_status: input.auditEntry.toStatus,
+            correlation_id: input.auditEntry.correlationId,
+            request_id: input.auditEntry.requestId,
+            details: input.auditEntry.details,
+            created_at: updatedAt
+          })
+          .execute();
 
-      return this.getSubscriptionOrThrow(trx, input.subscriptionId);
-    });
+        return this.getSubscriptionOrThrow(trx, input.subscriptionId);
+      },
+      { tenantId: input.tenantId }
+    );
   }
 
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {

@@ -6,7 +6,11 @@ declare global {
   namespace Express {
     interface Request {
       auth?: AuthClaims;
-      context?: RequestContext;
+      context?: RequestContext & {
+        jwtRoles?: string[];
+        roleSource?: 'jwt' | 'tenant_membership' | 'none';
+        memberId?: string;
+      };
       correlationId?: string;
       audit?: RequestAuditContext;
     }

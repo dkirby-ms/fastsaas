@@ -14,8 +14,10 @@ import { SystemClock } from '../../metering/clock';
 import { InMemoryUsageEventRepository } from '../../metering/repository';
 import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-plan-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
+import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member-repository';
 import { PublisherService } from '../../services/publisher-service';
 import { SubscriptionService } from '../../services/subscription-service';
+import { TenantMemberService } from '../../services/tenant-member-service';
 
 export interface TokenOptions {
   scopes?: string[];
@@ -38,6 +40,7 @@ export interface SecurityHarness {
   config: ApiConfig;
   meteringRepository: InMemoryUsageEventRepository;
   subscriptionRepository: InMemorySubscriptionRepository;
+  tenantMemberRepository: InMemoryTenantMemberRepository;
   createToken(options?: TokenOptions): Promise<string>;
   createSubscriptionFixture(options?: {
     tenantId?: string;
@@ -144,12 +147,15 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
 
   const meteringRepository = new InMemoryUsageEventRepository(new SystemClock());
   const subscriptionRepository = new InMemorySubscriptionRepository();
+  const tenantMemberRepository = new InMemoryTenantMemberRepository();
   const publisherPlanRepository = new InMemoryPublisherPlanRepository();
   const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
+  const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members-test' }));
   const subscriptionService = new SubscriptionService(
     subscriptionRepository,
     createFulfillmentClient(fulfillmentOverrides),
-    logger
+    logger,
+    tenantMemberService
   );
   const publisherService = new PublisherService(
     subscriptionRepository,
@@ -159,7 +165,8 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const app = createApp(config, {
     repository: meteringRepository,
     subscriptionService,
-    publisherService
+    publisherService,
+    tenantMemberService
   });
 
   async function createToken(options: TokenOptions = {}): Promise<string> {
@@ -270,6 +277,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     config,
     meteringRepository,
     subscriptionRepository,
+    tenantMemberRepository,
     createToken,
     createSubscriptionFixture,
     ingestUsageEventFixture,

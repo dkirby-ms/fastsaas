@@ -129,4 +129,38 @@ describe('privilege escalation security catalog', () => {
     expect(ownerResponse.status).toBe(200);
     expect(ownerResponse.body.data.status).toBe('PendingActivation');
   });
+
+  it('does not let a tenant admin invite a new owner', async () => {
+    const tenantId = 'tenant-escalation-admin-owner-invite';
+    await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'escalation-admin-owner-invite' });
+
+    const ownerToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const adminInviteResponse = await request(harness.app)
+      .post('/v1/members/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: 'tenant-admin-1', email: 'tenant-admin-1@example.com', role: 'Admin' });
+
+    expect(adminInviteResponse.status).toBe(201);
+
+    const adminToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      userId: 'tenant-admin-1',
+      subject: 'subject-tenant-admin-1',
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const escalationResponse = await request(harness.app)
+      .post('/v1/members/invite')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userId: 'tenant-owner-2', email: 'tenant-owner-2@example.com', role: 'Owner' });
+
+    expect(escalationResponse.status).toBe(403);
+    expect(escalationResponse.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(escalationResponse.body.error.details.requestedRole).toBe('Owner');
+    expect(escalationResponse.body.error.details.allowedInviteRoles).toEqual(['Admin', 'Member']);
+  });
 });

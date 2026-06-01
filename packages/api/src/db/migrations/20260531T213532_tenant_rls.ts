@@ -23,7 +23,7 @@ function buildTenantIsolationPredicate(tenantColumn: string): string {
   return `(${bypassSetting} OR ${tenantColumn} = ${tenantSetting})`;
 }
 
-function buildEnableTenantRlsStatements(tableName: string, tenantColumn = 'tenant_id'): string[] {
+export function buildEnableTenantRlsStatements(tableName: string, tenantColumn = 'tenant_id'): string[] {
   const predicate = buildTenantIsolationPredicate(tenantColumn);
   const policyName = `${tableName}_tenant_isolation`;
 
@@ -35,7 +35,7 @@ function buildEnableTenantRlsStatements(tableName: string, tenantColumn = 'tenan
   ];
 }
 
-function buildDisableTenantRlsStatements(tableName: string): string[] {
+export function buildDisableTenantRlsStatements(tableName: string): string[] {
   const policyName = `${tableName}_tenant_isolation`;
 
   return [`DROP POLICY IF EXISTS ${policyName} ON ${tableName}`, `ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY`];

@@ -6,8 +6,9 @@ import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, getRoles, requireScopes } from '../../middleware/auth';
-import { authorizeRoute } from '../../middleware/rbac';
+import { authorizeRoute, isRequestRoleAllowed } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { SubscriptionService } from '../../services/subscription-service';
 
 function parseCreateSubscriptionBody(body: unknown): CreateSubscriptionRequest {
@@ -43,7 +44,8 @@ function buildActorContext(req: ApiRequest) {
     userId: req.context.userId,
     requestId: req.context.requestId,
     correlationId: req.correlationId ?? req.context.requestId,
-    source: 'api' as const
+    source: 'api' as const,
+    userEmail: typeof req.auth?.email === 'string' ? req.auth.email : undefined
   };
 }
 
@@ -67,22 +69,22 @@ function setLifecycleAuditContext(req: ApiRequest, subscriptionId: string): void
 
 function assertLifecycleAccess(req: ApiRequest): void {
   const tokenRoles = req.context?.roles ?? getRoles(req.auth);
-  const normalizedTokenRoles = tokenRoles.map((role) => role.trim().toLowerCase());
 
-  if (normalizedTokenRoles.includes('admin') || normalizedTokenRoles.includes('owner')) {
+  if (isRequestRoleAllowed(req, ['Admin', 'Owner'], ['Admin', 'Owner'])) {
     return;
   }
 
   throw AppError.forbidden('The access token does not grant the required role', {
     requiredRoles: ['Admin', 'Owner'],
-    tokenRoles
+    tokenRoles,
+    roleSource: req.context?.roleSource ?? 'none'
   });
 }
 
-export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
+export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService, tenantMemberService?: TenantMemberService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
+  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
 
   /**
    * @swagger

@@ -5,8 +5,10 @@ import type { MeteringService } from '../../metering/service';
 import type { AuditService } from '../../services/audit-service';
 import type { PublisherService } from '../../services/publisher-service';
 import type { SubscriptionService } from '../../services/subscription-service';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 import { createAuditLogsRouter } from './audit-logs';
 import { createAuthRouter } from './auth';
+import { createMembersRouter } from './members';
 import { createMeteringRouter } from './metering';
 import { createPublisherRouter } from './publisher';
 import { createSubscriptionsRouter } from './subscriptions';
@@ -16,23 +18,28 @@ export function createV1Router(
   meteringService: MeteringService,
   subscriptionService?: SubscriptionService,
   auditService?: AuditService,
-  publisherService?: PublisherService
+  publisherService?: PublisherService,
+  tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
 
-  router.use('/auth', createAuthRouter(config));
-  router.use('/metering', createMeteringRouter(config, meteringService));
+  router.use('/auth', createAuthRouter(config, tenantMemberService));
+  router.use('/metering', createMeteringRouter(config, meteringService, tenantMemberService));
 
   if (subscriptionService) {
-    router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService));
+    router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService, tenantMemberService));
+  }
+
+  if (tenantMemberService) {
+    router.use('/members', createMembersRouter(config, tenantMemberService));
   }
 
   if (auditService) {
-    router.use('/audit-logs', createAuditLogsRouter(config, auditService));
+    router.use('/audit-logs', createAuditLogsRouter(config, auditService, tenantMemberService));
   }
 
   if (publisherService) {
-    router.use('/publisher', createPublisherRouter(config, publisherService));
+    router.use('/publisher', createPublisherRouter(config, publisherService, tenantMemberService));
   }
 
   return router;
