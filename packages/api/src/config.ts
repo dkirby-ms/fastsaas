@@ -60,6 +60,42 @@ function isMultiTenantAuthority(tenantId: string): boolean {
   return tenantId === 'common' || tenantId === 'organizations';
 }
 
+function isLocalEnvironment(nodeEnv: string): boolean {
+  return nodeEnv === 'development' || nodeEnv === 'test';
+}
+
+function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
+  authToken: string;
+  webhookSecret: string;
+} {
+  const authToken = env.MARKETPLACE_AUTH_TOKEN?.trim();
+  const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
+
+  if (isLocalEnvironment(nodeEnv)) {
+    return {
+      authToken: authToken || 'local-marketplace-token',
+      webhookSecret: webhookSecret || 'local-marketplace-webhook-secret'
+    };
+  }
+
+  const missingSecrets = [
+    !authToken ? 'MARKETPLACE_AUTH_TOKEN' : undefined,
+    !webhookSecret ? 'MARKETPLACE_WEBHOOK_SECRET' : undefined
+  ].filter((value): value is string => Boolean(value));
+
+  if (missingSecrets.length > 0) {
+    throw new Error(
+      `Missing required marketplace secrets for NODE_ENV=${nodeEnv}: ${missingSecrets.join(', ')}. ` +
+        'Fallback values are only allowed in development and test environments.'
+    );
+  }
+
+  return {
+    authToken: authToken as string,
+    webhookSecret: webhookSecret as string
+  };
+}
+
 export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const nodeEnv = env.NODE_ENV ?? 'development';
   const bypassEnabled = env.AUTH_BYPASS_ENABLED === 'true';
@@ -77,6 +113,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const resolvedTenantId = azureTenantId ?? 'common';
   const resolvedClientId = azureClientId ?? 'local-dev-client';
   const multiTenantAuthority = isMultiTenantAuthority(resolvedTenantId);
+  const marketplaceSecrets = resolveMarketplaceSecrets(env, nodeEnv);
 
   return {
     port: Number(env.API_PORT ?? 3000),
@@ -105,8 +142,8 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     marketplace: {
       baseUrl: normalizeUrl(env.MARKETPLACE_BASE_URL ?? 'https://marketplaceapi.microsoft.com'),
       apiVersion: env.MARKETPLACE_API_VERSION ?? '2018-08-31',
-      authToken: env.MARKETPLACE_AUTH_TOKEN ?? 'local-marketplace-token',
-      webhookSecret: env.MARKETPLACE_WEBHOOK_SECRET ?? 'local-marketplace-webhook-secret',
+      authToken: marketplaceSecrets.authToken,
+      webhookSecret: marketplaceSecrets.webhookSecret,
       webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },
     database: {
