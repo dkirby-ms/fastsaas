@@ -47,3 +47,37 @@ Assigned to FIDO:
 ## Cross-Team Updates
 
 - **2026-05-29:** EECOM has completed Issue #2 (Subscription Lifecycle, PR #10) and Issue #3 (Metering Ingestion, PR #9). Both PRs are ready for review. FIDO should review API contracts for portal integration.
+
+## 2026-06-01 Phase 1.5 — Publisher Portal & Merge Conflict Resolution
+
+### Session Summary
+FIDO reassigned to resolve PR #64 merge conflicts and fresh-DB migration failures. Portal work on Issue #43 awaits EECOM backend routes + type exports.
+
+### Reassignment: PR #64 Tenant RLS Enforcement (Issue #45)
+- **Blocker 1: Merge Conflicts (6 files)**
+  - packages/api/src/db/execution-context.ts
+  - packages/api/src/db/migrate.ts
+  - packages/api/src/db/migrator.ts
+  - packages/api/src/db/rls.ts
+  - packages/api/src/routes/v1/subscriptions.ts
+  - packages/api/src/server.ts
+  - Action: Rebase/merge onto origin/main
+
+- **Blocker 2: Fresh-DB Migration Failures**
+  - Issue: Unguarded ALTER TABLE statements assume pre-existing subscription_audit_logs + marketplace_webhook_events
+  - PostgreSQL error: `relation "subscription_audit_logs" does not exist` on fresh DB
+  - Fix: Wrap ALTER TABLE blocks in `tableExists()` guards OR create tables in migration (similar to `METERING_SCHEMA_STATEMENTS`)
+
+- **Validation Requirement:** Confirm `npm run migrate` succeeds end-to-end against empty PostgreSQL database
+
+### Related: PR #59 Publisher Portal (Issue #43)
+- **Status:** On hold pending EECOM backend routes
+- **Current State:** Portal routing, RBAC, and 403 handling complete and validated
+  - Server-side route gating in `packages/portal/app/(portal)/publisher/layout.tsx` ✓
+  - Session-role parsing in `packages/portal/lib/roles.ts` ✓
+  - Graceful 403 rendering ✓
+  - Portal build/typecheck pass ✓
+- **Awaits:** EECOM PR #59 v2 revision with @fastsaas/shared type exports
+
+### Decisions
+- Kranz: Merge conflicts and fresh-DB migration guards are FIDO-scoped engineering fixes; no architectural changes

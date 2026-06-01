@@ -111,3 +111,28 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 - Marketplace webhook authentication is enforced before JSON parsing, using the raw request body plus the timestamp header to compute an HMAC-SHA256 digest, and the replay window defaults to five minutes via `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`.
 - Metering retries only for `429` and `5xx` responses, honors `retry-after` when present, and moves exhausted events into `usage_event_dead_letters`, so operator drills must validate both retry scheduling and dead-letter recovery.
 - A practical runbook pattern for this repo is dual-mode validation: deterministic local drills for auth/retry logic and live staging probes for signed webhook ingress behavior.
+
+## 2026-06-01 — Infrastructure & Release Automation Standby
+
+### Session Summary
+GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. No direct GNC work this session; infrastructure baseline stable. PR #61 (semantic-release) approved and merged; v0.1.0 tag established on merge-base commit.
+
+### Release Automation (Indirect)
+- **PR #61 Status:** ✓ APPROVED → MERGED (2026-05-31T20:43:26.273+00:00)
+  - Baseline tag v0.1.0 created on merge-base commit d450a34
+  - semantic-release now recognizes 0.1.0 as starting version
+  - Future releases will calculate from 0.1.0 using conventional commits
+- **Pattern for Future Releases:**
+  1. Finalize release.config.js and set package.json versions
+  2. Create baseline tag on last commit before release config changes
+  3. Merge release config changes after tag is pushed
+
+### Infrastructure Observations
+- **Staging Bootstrap:** PR #28 merged; centralus default + staging-only deployRedis=false (temporary workaround)
+- **Azure Managed Redis Migration:** PR #29 in flight; standardizes on Microsoft.Cache/redisEnterprise (Azure Cache for Redis retired)
+- **Deployment Documentation:** PR #30 complete — comprehensive deployment README with architecture, prerequisites, env variable management, secrets reference, troubleshooting
+
+### Cross-Team Coordination
+- Webhook/metering runbook (PR #63) ready for GNC validation and drill scheduling in live staging
+- Tenant RLS enforcement (PR #64) reassigned to FIDO for merge-conflict resolution
+- Infrastructure baseline stable; app layer now driving Phase 1.5 schedule

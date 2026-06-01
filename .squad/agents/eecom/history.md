@@ -108,3 +108,41 @@ Assigned to EECOM:
 - **Semantic versioning decision recorded:** Manual `npm version` for workspace bumps + Keep a Changelog pattern adopted for the team.
 - **2026-05-31T21:35:32.766+00:00:** RBAC hardening is centralized in `packages/api/src/middleware/rbac.ts` via `authorizeRoute`, and audit logging is split between `packages/api/src/services/audit-service.ts`, `packages/api/src/repositories/audit-log-repository.ts`, and the append-only `packages/api/src/db/migrations/20260531T213532_audit_logs.ts` migration plus shared tenant RLS helpers in `packages/api/src/db/rls.ts`.
 - **2026-06-01T00:04:54.260+00:00:** PR #65 follow-up aligns RBAC exactly to the design doc role model (`Admin`, `Owner`, `Member`, `Viewer`), runs API migrations through `packages/api/src/db/migrator.ts` during startup/`npm run migrate`, and verifies audit append-only plus tenant RLS against a real PostgreSQL role instead of in-memory fixtures.
+
+## 2026-06-01 PR Review Cycle — Phase 1.5 Backend Integration
+
+### Session Summary
+Team reworked Phase 1.5 tenant-isolation PRs for publication-path compliance and backend route integration. Two revisions submitted:
+- PR #62 (security suite): 1 rejection → approved → merged
+- PR #59 (publisher admin): 2 rejections pending (v2 blocked on @fastsaas/shared types)
+
+### PR #62 — Tenant Isolation Security Test Suite (Issue #44)
+- **v1 Rejection:** Non-RLS RBAC tests still skipped; branch not merge-clean
+- **v1 Fix:** Enforce Admin/Owner checks post-tenant-confirmation; unskip Member/Viewer lifecycle tests
+- **Outcome:** ✓ APPROVED → MERGED
+  - Passes: typecheck, build, `npm run test -- --run src/__tests__/security`
+  - Coverage: tenant isolation, JWT tampering, scope enforcement, Admin/Owner-only lifecycle boundaries
+
+### PR #59 — Publisher Admin API Routes (Issue #43)
+- **v1 Rejection:** Missing backend routes; portal wired to mocks only
+- **v2 Submission:** Live Kysely-backed /v1/publisher/* routes (dashboard, plans, subscriptions, tenants) with Admin/Owner RBAC
+- **v2 Rejection:** `npm run typecheck --workspace=@fastsaas/api` fails with 29 errors
+  - Missing exports from @fastsaas/shared:
+    - PublisherDashboardData, PublisherPlan, PublisherPlanStatus, PublisherTenantDetail, PublisherTenant, etc.
+  - Real Kysely queries + RLS context propagation ✓
+  - RBAC matrix correct ✓
+  - Conventional commit ✓
+  - Router registration ✓
+- **Next:** Export missing Publisher types; revalidate typecheck
+
+### PR #64 — Tenant RLS Enforcement & Migrations (Issue #45)
+- **v2 Rejection:** Fresh-DB migration still fails (assumes pre-existing subscription tables)
+- **v2 Outcome:** Reassigned to FIDO for merge-conflict + fresh-DB fixes
+- **EECOM Decision:** Run Kysely migrations at startup; fail if DATABASE_URL set but migration cannot apply
+  - Ensures RLS is not a manual post-deploy step
+  - Docker-backed PostgreSQL integration test uses real app role (non-superuser) to verify `app.current_tenant` blocks cross-tenant reads
+
+### Decisions Recorded
+- EECOM PR #62 fix: enforce Admin/Owner checks post-tenant-confirmation
+- EECOM PR #64 fix: run migrations at startup; fail on unmet prerequisites
+- Publisher type exports blocking PR #59 v2 approval
