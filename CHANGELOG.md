@@ -1,3 +1,9 @@
+## [0.6.0](https://github.com/dkirby-ms/fastsaas/compare/v0.5.0...v0.6.0) (2026-06-01)
+
+### Features
+
+* add secret provisioning helper scripts for Windows and Unix ([91faf33](https://github.com/dkirby-ms/fastsaas/commit/91faf33368f9f2bdfb7a3029052f0a3d77a91493))
+
 ## [0.5.0](https://github.com/dkirby-ms/fastsaas/compare/v0.4.3...v0.5.0) (2026-06-01)
 
 ### Features
