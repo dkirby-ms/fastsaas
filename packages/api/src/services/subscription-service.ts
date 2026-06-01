@@ -718,18 +718,29 @@ export class SubscriptionService {
     try {
       return await operation();
     } catch (error) {
-      const details = {
+      const logContext = {
         action,
         requestId: context.requestId,
         correlationId: context.correlationId,
         subscriptionId: subscription?.id,
-        marketplaceSubscriptionId: subscription?.marketplaceSubscriptionId,
-        statusCode: error instanceof MarketplaceFulfillmentError ? error.statusCode : undefined,
-        responseBody: error instanceof MarketplaceFulfillmentError ? error.responseBody : undefined
+        marketplaceSubscriptionId: subscription?.marketplaceSubscriptionId
       };
 
-      this.logger.error({ ...details, err: error }, 'Marketplace fulfillment request failed');
-      throw new AppError(502, 'FULFILLMENT_REQUEST_FAILED', `Marketplace fulfillment ${action} request failed`, details);
+      if (error instanceof MarketplaceFulfillmentError) {
+        this.logger.warn(
+          {
+            ...logContext,
+            statusCode: error.statusCode,
+            responseBody: error.responseBody,
+            err: error
+          },
+          'Marketplace fulfillment request failed'
+        );
+      } else {
+        this.logger.error({ ...logContext, err: error }, 'Marketplace fulfillment request failed');
+      }
+
+      throw new AppError(502, 'FULFILLMENT_REQUEST_FAILED', `Marketplace fulfillment ${action} request failed`);
     }
   }
 }
