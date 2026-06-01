@@ -217,8 +217,6 @@ export interface Subscription {
 
 export interface CreateSubscriptionRequest {
   marketplaceToken: string;
-  planId?: string;
-  seats?: number;
   metadata?: Record<string, unknown>;
 }
 

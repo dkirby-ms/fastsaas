@@ -24,14 +24,17 @@ type AuthEnv = {
 };
 
 function getAuthEnv(): AuthEnv {
-  const tenantId = requireEnv('ENTRA_TENANT_ID');
+  // Multi-tenant: uses 'organizations' authority so customers from any
+  // Azure AD tenant can authenticate. ENTRA_TENANT_ID is optional and
+  // only used for publisher-specific operations if set.
+  const tenantId = process.env.ENTRA_TENANT_ID?.trim() || 'organizations';
   const clientId = requireEnv('ENTRA_CLIENT_ID');
   const clientSecret = requireEnv('ENTRA_CLIENT_SECRET');
   const apiClientId = requireEnv('ENTRA_API_CLIENT_ID');
 
   return {
     tenantId,
-    issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
+    issuer: 'https://login.microsoftonline.com/organizations/v2.0',
     clientId,
     clientSecret,
     apiScope: process.env.ENTRA_API_SCOPE?.trim() || `api://${apiClientId}/.default`,
@@ -107,7 +110,7 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
   const env = getAuthEnv();
 
   try {
-    const response = await fetch(`https://login.microsoftonline.com/${env.tenantId}/oauth2/v2.0/token`, {
+    const response = await fetch('https://login.microsoftonline.com/organizations/oauth2/v2.0/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
