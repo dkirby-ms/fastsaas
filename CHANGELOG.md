@@ -1,3 +1,9 @@
+## [0.8.0](https://github.com/dkirby-ms/fastsaas/compare/v0.7.0...v0.8.0) (2026-06-01)
+
+### Features
+
+* implement customer RBAC with tenant membership ([#76](https://github.com/dkirby-ms/fastsaas/issues/76)) ([#86](https://github.com/dkirby-ms/fastsaas/issues/86)) ([370dde3](https://github.com/dkirby-ms/fastsaas/commit/370dde30d5cf78db485c601e82a0a17c3c384430))
+
 ## [0.7.0](https://github.com/dkirby-ms/fastsaas/compare/v0.6.0...v0.7.0) (2026-06-01)
 
 ### Features
