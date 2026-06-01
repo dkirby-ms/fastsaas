@@ -56,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 - Documented that releases are now automated from `main` with `semantic-release` and conventional commits.
+- Documented the `POST /v1/subscriptions` migration: clients must stop sending `planId` and `seats`; FastSaaS now derives both values from Marketplace resolve. See `docs/migrations/multi-tenant-auth.md`.
 
 ## [0.1.0] - 2026-05-31
 
