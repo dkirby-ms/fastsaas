@@ -68,11 +68,65 @@ describe('privilege escalation security catalog', () => {
     expect(response.body.error.details.missingScopes).toEqual([harness.config.auth.requiredScope]);
   });
 
-  it.skip('TODO: member users must be denied subscription lifecycle actions once RBAC middleware lands', async () => {
-    expect(true).toBe(true);
+  it('does not let a member user trigger subscription lifecycle actions reserved for Admin and Owner', async () => {
+    const tenantId = 'tenant-escalation-member-lifecycle';
+    const subscription = await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'escalation-member-lifecycle' });
+    const memberToken = await harness.createToken({
+      tenantId,
+      roles: ['Member'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+
+    const response = await request(harness.app)
+      .post(`/v1/subscriptions/${subscription.id}/activate`)
+      .set('Authorization', `Bearer ${memberToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(response.body.error.details.requiredRoles).toEqual(['Admin', 'Owner']);
+    expect(response.body.error.details.tokenRoles).toEqual(['Member']);
+
+    const ownerToken = await harness.createToken({
+      tenantId,
+      roles: ['Owner'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const ownerResponse = await request(harness.app)
+      .get(`/v1/subscriptions/${subscription.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(ownerResponse.status).toBe(200);
+    expect(ownerResponse.body.data.status).toBe('PendingActivation');
   });
 
-  it.skip('TODO: viewer users must be denied publisher-only actions once the publisher surface ships', async () => {
-    expect(true).toBe(true);
+  it('does not let a viewer user trigger subscription lifecycle actions reserved for Admin and Owner', async () => {
+    const tenantId = 'tenant-escalation-viewer-lifecycle';
+    const subscription = await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'escalation-viewer-lifecycle' });
+    const viewerToken = await harness.createToken({
+      tenantId,
+      roles: ['Viewer'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+
+    const response = await request(harness.app)
+      .delete(`/v1/subscriptions/${subscription.id}`)
+      .set('Authorization', `Bearer ${viewerToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(response.body.error.details.requiredRoles).toEqual(['Admin', 'Owner']);
+    expect(response.body.error.details.tokenRoles).toEqual(['Viewer']);
+
+    const ownerToken = await harness.createToken({
+      tenantId,
+      roles: ['Owner'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const ownerResponse = await request(harness.app)
+      .get(`/v1/subscriptions/${subscription.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(ownerResponse.status).toBe(200);
+    expect(ownerResponse.body.data.status).toBe('PendingActivation');
   });
 });

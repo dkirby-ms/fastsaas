@@ -16,8 +16,8 @@ This catalog documents the repeatable tenant-isolation and authorization scenari
 | `privilege-escalation.test.ts` | Forged elevated role without `metering:write` scope posts usage | High | `403` | Pass when scope enforcement blocks the write even with `Admin` role claims |
 | `privilege-escalation.test.ts` | Forged elevated role without `metering:read` scope reads dashboard | High | `403` | Pass when scope enforcement blocks the read even with `Owner` role claims |
 | `privilege-escalation.test.ts` | Forged elevated role without baseline subscription scope lists subscriptions | High | `403` | Pass when `api:read` remains mandatory regardless of role claim tampering |
-| `privilege-escalation.test.ts` | Member attempts tenant-management lifecycle action | High | Blocked by RBAC middleware | Pending/skip until advanced RBAC from Phase 1.5 is implemented |
-| `privilege-escalation.test.ts` | Viewer attempts publisher-only action | High | Blocked by RBAC middleware | Pending/skip until publisher surface and RBAC controls are implemented |
+| `privilege-escalation.test.ts` | Member attempts subscription lifecycle action reserved for Admin / Owner | High | `403` and victim subscription unchanged | Pass when lifecycle RBAC denies the request and the subscription stays in its prior state |
+| `privilege-escalation.test.ts` | Viewer attempts subscription lifecycle action reserved for Admin / Owner | High | `403` and victim subscription unchanged | Pass when lifecycle RBAC denies the request and the subscription stays in its prior state |
 | `jwt-tampering.test.ts` | Token claim forges a different tenant id | Critical | `403` | Pass when issuer/tenant mismatch is rejected |
 | `jwt-tampering.test.ts` | Expired bearer token | High | `401` | Pass when expired tokens are rejected as invalid or expired |
 | `jwt-tampering.test.ts` | Token omits tenant claims | Critical | `403` | Pass when tenant context is mandatory |
@@ -25,7 +25,7 @@ This catalog documents the repeatable tenant-isolation and authorization scenari
 | `jwt-tampering.test.ts` | JWT payload altered without resigning | Critical | `401` | Pass when signature validation catches the tampering |
 | `rbac-boundaries.test.ts` | Read matrix for `auth/context`, `subscriptions`, and `metering/dashboard` across Admin / Owner / Member / Viewer | High | Allowed with correct route scope | Pass when each role succeeds only when the route-specific scope is present |
 | `rbac-boundaries.test.ts` | Matrix requests missing route-specific scopes | High | `403` with missing scope details | Pass when every denial reports the expected missing scope |
-| `rbac-boundaries.test.ts` | Admin / Owner-only lifecycle matrix | High | Blocked for Member / Viewer | Pending/skip until RBAC middleware lands |
+| `rbac-boundaries.test.ts` | Admin / Owner-only lifecycle matrix across activate / suspend / unsubscribe | High | Allowed for Admin / Owner, blocked for Member / Viewer | Pass when Admin and Owner can complete lifecycle actions while Member and Viewer receive `403` without mutating the subscription |
 | `rbac-boundaries.test.ts` | Audit-log and billing export checks with database RLS enabled | High | Tenant-scoped results only | Pending/skip until #45 deploys the required tables and policies |
 
 ## Execution Notes
