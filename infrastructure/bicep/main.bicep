@@ -25,11 +25,6 @@ param postgresAdministratorLogin string = 'fastsaasadmin'
 @description('Administrator password for PostgreSQL Flexible Server.')
 param postgresAdminPassword string
 
-@description('Azure Entra ID tenant ID for API authentication.')
-param azureTenantId string = ''
-
-@description('Azure Entra ID client ID for API authentication.')
-param azureClientId string = ''
 
 @description('Optional tags to apply to all resources.')
 param tags object = {}
@@ -352,14 +347,6 @@ var apiEnvVars = [
   {
     name: 'NODE_ENV'
     value: 'production'
-  }
-  {
-    name: 'ENTRA_TENANT_ID'
-    value: azureTenantId
-  }
-  {
-    name: 'ENTRA_CLIENT_ID'
-    value: azureClientId
   }
 ]
 

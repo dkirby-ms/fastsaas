@@ -24,7 +24,7 @@ import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 export { ApiError } from '@/lib/errors';
 
 function shouldUseMockApi() {
-  return process.env.NEXT_PUBLIC_USE_MOCK_API !== 'false' || !process.env.NEXT_PUBLIC_API_BASE_URL;
+  return process.env.USE_MOCK_API !== 'false' || !process.env.API_BASE_URL;
 }
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -115,14 +115,14 @@ async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: Requ
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const baseUrl = process.env.API_BASE_URL;
 
   if (!baseUrl) {
     throw new ApiError(
       'The FastSaaS API base URL is not configured.',
       500,
       'API_BASE_URL_MISSING',
-      'Set NEXT_PUBLIC_API_BASE_URL to call the live customer portal API.',
+      'Set API_BASE_URL to call the live customer portal API.',
     );
   }
 
@@ -145,14 +145,14 @@ async function requestApiResponseWithBase<T>(baseUrl: string, path: string, init
 }
 
 async function requestApiResponse<T>(path: string, init?: RequestInit): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const baseUrl = process.env.API_BASE_URL;
 
   if (!baseUrl) {
     throw new ApiError(
       'The FastSaaS API base URL is not configured.',
       500,
       'API_BASE_URL_MISSING',
-      'Set NEXT_PUBLIC_API_BASE_URL to call the live customer portal API.',
+      'Set API_BASE_URL to call the live customer portal API.',
     );
   }
 
