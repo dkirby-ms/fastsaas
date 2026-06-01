@@ -191,13 +191,16 @@ export interface Subscription {
 }
 export interface CreateSubscriptionRequest {
     marketplaceToken: string;
-    planId?: string;
-    seats?: number;
     metadata?: Record<string, unknown>;
 }
+export type MarketplaceWebhookAction = 'Suspend' | 'Unsubscribe' | 'Reinstate' | 'ChangePlan' | 'ChangeQuantity' | 'Transfer';
 export interface MarketplaceWebhookPayload {
-    action: 'Suspend' | 'Unsubscribe' | 'Reinstate';
+    action: MarketplaceWebhookAction;
     marketplaceSubscriptionId: string;
+    operationId?: string;
+    planId?: string;
+    quantity?: number;
+    beneficiaryTenantId?: string;
     requestId?: string;
     correlationId?: string;
     details?: Record<string, unknown>;

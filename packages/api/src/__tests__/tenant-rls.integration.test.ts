@@ -145,6 +145,12 @@ function createNoopFulfillmentClient(): MarketplaceFulfillmentClient {
     },
     async reinstateSubscription() {
       throw new Error('reinstateSubscription should not be called in tenant RLS tests');
+    },
+    async getOperation() {
+      throw new Error('getOperation should not be called in tenant RLS tests');
+    },
+    async updateOperationStatus() {
+      throw new Error('updateOperationStatus should not be called in tenant RLS tests');
     }
   };
 }

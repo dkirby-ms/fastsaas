@@ -35,6 +35,7 @@ export interface CreateManagedSubscriptionInput {
 
 export interface UpdateManagedSubscriptionInput {
   subscriptionId: string;
+  tenantId?: string;
   planId: string;
   seats: number;
   status: SubscriptionStatus;
@@ -212,6 +213,7 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       : [...existing.auditLog];
     const updated: Subscription = {
       ...clone(existing),
+      tenantId: input.tenantId ?? existing.tenantId,
       planId: input.planId,
       seats: input.seats,
       status: input.status,
@@ -348,6 +350,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
       await trx
         .updateTable('subscriptions')
         .set({
+          tenant_id: input.tenantId ?? existing.tenant_id,
           plan_id: input.planId,
           seats: input.seats,
           status: input.status,
@@ -367,7 +370,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
           .values({
             id: input.auditEntry.id,
             subscription_id: input.subscriptionId,
-            tenant_id: existing.tenant_id,
+            tenant_id: input.tenantId ?? existing.tenant_id,
             event_type: input.auditEntry.eventType,
             source: input.auditEntry.source,
             from_status: input.auditEntry.fromStatus,

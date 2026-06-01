@@ -67,4 +67,56 @@ describe('MarketplaceFulfillmentHttpClient', () => {
       expect.objectContaining({ method: 'POST', body: undefined })
     );
   });
+
+  it('gets and updates marketplace operations', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'op-123',
+            subscriptionId: 'sub-123',
+            action: 'ChangePlan',
+            status: 'InProgress',
+            planId: 'scale'
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    const client = new MarketplaceFulfillmentHttpClient({
+      baseUrl: 'https://marketplaceapi.microsoft.com',
+      apiVersion: '2018-08-31',
+      authToken: 'test-token',
+      logger
+    });
+
+    const operation = await client.getOperation('sub-123', 'op-123', 'req-5', 'corr-5');
+    await client.updateOperationStatus('sub-123', 'op-123', 'Success', 'req-6', 'corr-6');
+
+    expect(operation).toMatchObject({
+      id: 'op-123',
+      subscriptionId: 'sub-123',
+      action: 'ChangePlan',
+      status: 'InProgress',
+      planId: 'scale'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        href: 'https://marketplaceapi.microsoft.com/api/saas/subscriptions/sub-123/operations/op-123?api-version=2018-08-31'
+      }),
+      expect.objectContaining({ method: 'GET', body: undefined })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        href: 'https://marketplaceapi.microsoft.com/api/saas/subscriptions/sub-123/operations/op-123?api-version=2018-08-31'
+      }),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'Success' })
+      })
+    );
+  });
 });

@@ -11,6 +11,7 @@ import type { SubscriptionService } from '../../services/subscription-service';
 
 const EVENT_ID_HEADERS = ['x-ms-marketplace-event-id', 'x-ms-event-id', 'x-ms-requestid', 'x-request-id'];
 const TIMESTAMP_HEADERS = ['x-ms-marketplace-timestamp', 'x-ms-signature-timestamp', 'x-marketplace-timestamp'];
+const SUPPORTED_ACTIONS = ['Suspend', 'Unsubscribe', 'Reinstate', 'ChangePlan', 'ChangeQuantity', 'Transfer'] as const;
 
 function readHeader(req: ApiRequest, names: string[]): string | undefined {
   for (const name of names) {
@@ -23,6 +24,38 @@ function readHeader(req: ApiRequest, names: string[]): string | undefined {
   return undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readString(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw AppError.badRequest(`${fieldName} must be a non-empty string`);
+  }
+
+  return value;
+}
+
+function readOptionalString(value: unknown, fieldName: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  return readString(value, fieldName);
+}
+
+function readOptionalNumber(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw AppError.badRequest(`${fieldName} must be a number when provided`);
+  }
+
+  return value;
+}
+
 function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
   let parsed: unknown;
 
@@ -32,34 +65,41 @@ function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
     throw AppError.badRequest('Webhook body must be valid JSON');
   }
 
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     throw AppError.badRequest('Webhook body must be a JSON object');
   }
 
-  const candidate = parsed as Record<string, unknown>;
-  if (!['Suspend', 'Unsubscribe', 'Reinstate'].includes(String(candidate.action))) {
-    throw AppError.badRequest('Webhook action must be Suspend, Unsubscribe, or Reinstate');
+  const candidate = parsed;
+  const action = readString(candidate.action, 'action') as MarketplaceWebhookPayload['action'];
+  if (!SUPPORTED_ACTIONS.includes(action)) {
+    throw AppError.badRequest(`Webhook action must be ${SUPPORTED_ACTIONS.join(', ')}`);
   }
 
-  if (typeof candidate.marketplaceSubscriptionId !== 'string' || candidate.marketplaceSubscriptionId.length === 0) {
-    throw AppError.badRequest('marketplaceSubscriptionId is required');
-  }
-
-  if (candidate.details !== undefined && (!candidate.details || typeof candidate.details !== 'object' || Array.isArray(candidate.details))) {
+  const subscription = isRecord(candidate.subscription) ? candidate.subscription : undefined;
+  const beneficiary = subscription && isRecord(subscription.beneficiary) ? subscription.beneficiary : undefined;
+  const details = candidate.details === undefined ? undefined : isRecord(candidate.details) ? candidate.details : null;
+  if (details === null) {
     throw AppError.badRequest('details must be an object when provided');
   }
 
   return {
-    action: candidate.action as MarketplaceWebhookPayload['action'],
-    marketplaceSubscriptionId: candidate.marketplaceSubscriptionId,
-    requestId: typeof candidate.requestId === 'string' ? candidate.requestId : undefined,
-    correlationId: typeof candidate.correlationId === 'string' ? candidate.correlationId : undefined,
-    details: candidate.details as Record<string, unknown> | undefined
+    action,
+    marketplaceSubscriptionId: readString(candidate.marketplaceSubscriptionId ?? candidate.subscriptionId, 'marketplaceSubscriptionId'),
+    operationId: readOptionalString(candidate.operationId ?? candidate.id, 'operationId'),
+    planId: readOptionalString(candidate.planId, 'planId'),
+    quantity: readOptionalNumber(candidate.quantity, 'quantity'),
+    beneficiaryTenantId: readOptionalString(
+      candidate.beneficiaryTenantId ?? candidate.tenantId ?? beneficiary?.tenantId,
+      'beneficiaryTenantId'
+    ),
+    requestId: readOptionalString(candidate.requestId ?? candidate.activityId, 'requestId'),
+    correlationId: readOptionalString(candidate.correlationId ?? candidate.activityId, 'correlationId'),
+    details: details ?? undefined
   };
 }
 
 function buildIdempotencyKey(req: ApiRequest, body: MarketplaceWebhookPayload): string {
-  const eventId = body.requestId ?? readHeader(req, EVENT_ID_HEADERS);
+  const eventId = body.operationId ?? body.requestId ?? readHeader(req, EVENT_ID_HEADERS);
   if (eventId) {
     return `marketplace:${eventId}`;
   }
@@ -104,12 +144,26 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *         application/json:
    *           schema:
    *             type: object
-   *             required: [action, marketplaceSubscriptionId]
+   *             required: [action]
    *             properties:
    *               action:
    *                 type: string
-   *                 enum: [Suspend, Unsubscribe, Reinstate]
+   *                 enum: [Suspend, Unsubscribe, Reinstate, ChangePlan, ChangeQuantity, Transfer]
    *               marketplaceSubscriptionId:
+   *                 type: string
+   *               subscriptionId:
+   *                 type: string
+   *                 description: Azure Marketplace SaaS subscription identifier. Accepted as an alias of marketplaceSubscriptionId.
+   *               operationId:
+   *                 type: string
+   *               id:
+   *                 type: string
+   *                 description: Marketplace operation identifier. Accepted as an alias of operationId.
+   *               planId:
+   *                 type: string
+   *               quantity:
+   *                 type: number
+   *               beneficiaryTenantId:
    *                 type: string
    *               requestId:
    *                 type: string
@@ -130,7 +184,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *       404:
    *         description: Marketplace subscription not found
    *       409:
-   *         description: Subscription cannot transition to the requested status
+   *         description: Subscription cannot apply the requested marketplace change
    */
   router.post(
     '/marketplace',

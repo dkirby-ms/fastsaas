@@ -160,3 +160,5 @@ Team reworked Phase 1.5 tenant-isolation PRs for publication-path compliance and
 ## Learnings
 
 - **2026-06-01T14:29:34.125+00:00:** OpenAPI route discovery for `packages/api/` is driven entirely by per-handler `@swagger`/`@openapi` JSDoc blocks in the files listed by `src/openapi.ts`; unannotated routes like `subscriptions.ts`, `publisher.ts`, and `webhooks/marketplace.ts` do not appear under `/docs` even when the handlers are mounted.
+- **2026-06-01T20:50:04.569+00:00:** Marketplace change webhooks should deserialize both the existing simplified shape and Partner Center's native `subscriptionId`/`id` fields, then validate the referenced operation via Fulfillment Operations before persisting plan, quantity, or tenant ownership changes.
+- **2026-06-01T21:20:13.494+00:00:** The shared Marketplace webhook contract in `packages/shared/src/index.ts` and `packages/shared/dist/index.d.ts` must carry `ChangePlan`/`ChangeQuantity`/`Transfer` plus `operationId`, `planId`, `quantity`, and `beneficiaryTenantId`; `packages/api/src/routes/webhooks/marketplace.ts` should derive idempotency keys from `operationId` before `requestId` so Marketplace retries stay stable.
