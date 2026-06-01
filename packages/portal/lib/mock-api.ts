@@ -11,6 +11,7 @@ import type {
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
   SettingsData,
+  Subscription,
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
@@ -25,6 +26,7 @@ interface MockPortalState {
   dashboard: DashboardData;
   plans: PlansResponse;
   settings: SettingsData;
+  subscriptions: Subscription[];
   publisher: PublisherMockState;
 }
 
@@ -98,6 +100,7 @@ const defaultState = (): MockPortalState => ({
     ],
   },
   settings: { displayName: 'Alex Customer', email: 'alex.customer@fastsaas.dev', company: 'Northwind Traders', timezone: 'America/Chicago', notificationsEnabled: true },
+  subscriptions: [],
   publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants() },
 });
 
@@ -141,6 +144,7 @@ function hydrateState(saved: string | null): MockPortalState {
       dashboard: parsed.dashboard ?? base.dashboard,
       plans: parsed.plans ?? base.plans,
       settings: parsed.settings ?? base.settings,
+      subscriptions: parsed.subscriptions ?? base.subscriptions,
       publisher: {
         plans: parsed.publisher?.plans ?? base.publisher.plans,
         tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
@@ -201,6 +205,80 @@ function isTenantAction(path: string, action: string) {
   return path.endsWith(`/${action}`);
 }
 
+function resolveMockPlanId(marketplaceToken: string, state: MockPortalState): string {
+  const normalizedToken = marketplaceToken.toLowerCase();
+
+  if (normalizedToken.includes('starter')) {
+    return 'starter';
+  }
+
+  if (normalizedToken.includes('scale')) {
+    return 'scale';
+  }
+
+  return state.plans.currentPlanId;
+}
+
+function buildMockSubscription(state: MockPortalState, marketplaceToken: string): Subscription {
+  if (marketplaceToken.toLowerCase().includes('invalid')) {
+    throw new ApiError('The Marketplace token is invalid or expired.', 400, 'MARKETPLACE_TOKEN_INVALID');
+  }
+
+  const existingSubscription = state.subscriptions.find(
+    (subscription) => subscription.metadata.marketplaceToken === marketplaceToken,
+  );
+
+  if (existingSubscription) {
+    throw new ApiError(
+      'A subscription already exists for the marketplace purchase',
+      409,
+      'CONFLICT',
+      'This Marketplace purchase was already resolved. Continue with the existing subscription.',
+      { subscriptionId: existingSubscription.id },
+    );
+  }
+
+  const now = new Date().toISOString();
+  const uniqueId = Date.now().toString(36);
+  const planId = resolveMockPlanId(marketplaceToken, state);
+  const selectedPlan = state.plans.availablePlans.find((plan) => plan.id === planId);
+  const seats = marketplaceToken.includes('10') ? 10 : marketplaceToken.includes('50') ? 50 : state.dashboard.usage.seatsPurchased;
+
+  return {
+    id: `sub-${uniqueId}`,
+    tenantId: state.dashboard.subscription.tenantId,
+    marketplaceSubscriptionId: `mp-${uniqueId}`,
+    planId,
+    seats,
+    status: 'PendingActivation',
+    offerId: `offer-${planId}`,
+    purchaserTenantId: `purchaser-${uniqueId}`,
+    beneficiaryTenantId: state.dashboard.subscription.tenantId,
+    correlationId: `mock-correlation-${uniqueId}`,
+    metadata: {
+      marketplaceToken,
+      planName: selectedPlan?.name ?? planId,
+      company: state.settings.company,
+    },
+    createdAt: now,
+    updatedAt: now,
+    auditLog: [
+      {
+        id: `audit-${uniqueId}`,
+        subscriptionId: `sub-${uniqueId}`,
+        eventType: 'Subscribe',
+        source: 'mock',
+        fromStatus: null,
+        toStatus: 'PendingActivation',
+        correlationId: `mock-correlation-${uniqueId}`,
+        requestId: `mock-request-${uniqueId}`,
+        details: { marketplaceToken, planId, seats },
+        createdAt: now,
+      },
+    ],
+  };
+}
+
 export async function mockRequest<T>(path: string, init?: RequestInit): Promise<T> {
   await wait();
   const method = init?.method ?? 'GET';
@@ -256,6 +334,80 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     state.dashboard.actions = defaultActions(state.dashboard.subscription.state);
     writeState(state);
     return state.dashboard as T;
+  }
+
+  if (path === '/v1/subscriptions' && method === 'POST') {
+    const body = JSON.parse((init?.body as string | undefined) ?? '{}') as { marketplaceToken?: string };
+
+    if (!body.marketplaceToken?.trim()) {
+      throw new ApiError('marketplaceToken is required', 400, 'BAD_REQUEST', 'The Marketplace redirect is missing its token.');
+    }
+
+    const subscription = buildMockSubscription(state, body.marketplaceToken.trim());
+    state.subscriptions = [subscription, ...state.subscriptions];
+    writeState(state);
+    return subscription as T;
+  }
+
+  if (path.startsWith('/v1/subscriptions/') && method === 'GET') {
+    const subscriptionId = path.split('/')[3];
+    const subscription = state.subscriptions.find((entry) => entry.id === subscriptionId);
+
+    if (!subscription) {
+      throw new ApiError('The requested subscription could not be found.', 404, 'NOT_FOUND');
+    }
+
+    return subscription as T;
+  }
+
+  if (path.startsWith('/v1/subscriptions/') && method === 'POST' && isTenantAction(path, 'activate')) {
+    const subscriptionId = path.split('/')[3];
+    const subscriptionIndex = state.subscriptions.findIndex((entry) => entry.id === subscriptionId);
+
+    if (subscriptionIndex === -1) {
+      throw new ApiError('The requested subscription could not be found.', 404, 'NOT_FOUND');
+    }
+
+    const current = state.subscriptions[subscriptionIndex];
+    if (current.status === 'Active') {
+      throw new ApiError('Subscription is already active.', 409, 'CONFLICT', 'This subscription has already been activated.');
+    }
+
+    if (current.status !== 'PendingActivation') {
+      throw new ApiError('Subscription cannot be activated from its current status.', 409, 'CONFLICT');
+    }
+
+    const now = new Date().toISOString();
+    const next = {
+      ...current,
+      status: 'Active' as const,
+      updatedAt: now,
+      auditLog: [
+        {
+          id: `audit-${Date.now().toString(36)}`,
+          subscriptionId: current.id,
+          eventType: 'Activate',
+          source: 'mock',
+          fromStatus: current.status,
+          toStatus: 'Active' as const,
+          correlationId: current.correlationId,
+          requestId: `mock-request-${Date.now().toString(36)}`,
+          details: {},
+          createdAt: now,
+        },
+        ...current.auditLog,
+      ],
+    };
+
+    state.subscriptions[subscriptionIndex] = next;
+    state.dashboard.subscription.tenantId = next.tenantId;
+    state.dashboard.subscription.planId = next.planId;
+    state.dashboard.subscription.planName = typeof next.metadata.planName === 'string' ? next.metadata.planName : next.planId;
+    state.dashboard.subscription.state = 'active';
+    state.dashboard.usage.seatsPurchased = next.seats;
+    state.dashboard.actions = defaultActions('active');
+    writeState(state);
+    return next as T;
   }
 
   if (path === '/publisher/dashboard' && method === 'GET') {

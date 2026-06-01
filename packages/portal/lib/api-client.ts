@@ -10,6 +10,7 @@ import type {
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
   SettingsData,
+  Subscription,
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
@@ -99,7 +100,7 @@ async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: Requ
   const body = (await response.json().catch(() => null)) as {
     message?: string;
     code?: string;
-    error?: { code?: string; message?: string };
+    error?: { code?: string; message?: string; details?: Record<string, unknown> };
   } | null;
 
   if (!response.ok) {
@@ -108,6 +109,7 @@ async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: Requ
       response.status,
       body?.error?.code ?? body?.code,
       body?.error?.message ?? body?.message ?? 'Something went wrong while contacting the FastSaaS API.',
+      body?.error?.details,
     );
   }
 
@@ -270,4 +272,41 @@ export const portalApi = {
         method: 'POST',
       },
     ),
+  createMarketplaceSubscription: async (marketplaceToken: string) => {
+    await assertAreaAccess('customer');
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>('/v1/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({ marketplaceToken }),
+      });
+    }
+
+    return requestApiResponse<Subscription>('/v1/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({ marketplaceToken }),
+    });
+  },
+  getSubscription: async (subscriptionId: string) => {
+    await assertAreaAccess('customer');
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>(`/v1/subscriptions/${subscriptionId}`);
+    }
+
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`);
+  },
+  activateSubscription: async (subscriptionId: string) => {
+    await assertAreaAccess('customer');
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>(`/v1/subscriptions/${subscriptionId}/activate`, {
+        method: 'POST',
+      });
+    }
+
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}/activate`, {
+      method: 'POST',
+    });
+  },
 };
