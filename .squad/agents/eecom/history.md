@@ -81,3 +81,4 @@ _No learnings recorded yet._
 ## Learnings
 
 - **2026-05-31T21:35:32.766+00:00:** RBAC hardening is centralized in `packages/api/src/middleware/rbac.ts` via `authorizeRoute`, and audit logging is split between `packages/api/src/services/audit-service.ts`, `packages/api/src/repositories/audit-log-repository.ts`, and the append-only `packages/api/src/db/migrations/20260531T213532_audit_logs.ts` migration plus shared tenant RLS helpers in `packages/api/src/db/rls.ts`.
+- **2026-06-01T00:04:54.260+00:00:** PR #65 follow-up aligns RBAC exactly to the design doc role model (`Admin`, `Owner`, `Member`, `Viewer`), runs API migrations through `packages/api/src/db/migrator.ts` during startup/`npm run migrate`, and verifies audit append-only plus tenant RLS against a real PostgreSQL role instead of in-memory fixtures.

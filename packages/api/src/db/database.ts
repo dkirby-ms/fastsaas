@@ -95,8 +95,8 @@ export interface AuditLogsTable {
   id: string;
   tenant_id: string;
   actor_id: string;
-  action: 'read' | 'manage' | 'export';
-  resource: 'auth' | 'subscriptions' | 'billing' | 'users' | 'metering' | 'audit_logs' | 'webhooks';
+  action: 'view' | 'manage' | 'export';
+  resource: 'subscriptions' | 'billing' | 'users' | 'metering' | 'audit_logs' | 'webhooks';
   resource_id: string | null;
   timestamp: GeneratedTimestamp;
   outcome: 'success' | 'denied' | 'failure';

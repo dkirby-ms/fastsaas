@@ -4,7 +4,6 @@ import { Router, type Response } from 'express';
 import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
-import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 
 export function createAuthRouter(config: ApiConfig) {
@@ -32,7 +31,6 @@ export function createAuthRouter(config: ApiConfig) {
     authenticateRequest(config),
     injectTenantContext(config),
     requireScopes([config.auth.requiredScope]),
-    authorizeRoute({ permission: 'auth:read', resource: 'auth', action: 'read', resourceId: (req) => req.context?.userId }),
     (req: ApiRequest, res: Response<ApiResponse<{ tenantId: string; userId: string; scopes: string[]; roles: string[] }>>) => {
       const context = req.context!;
 
