@@ -8,8 +8,7 @@
 
 ## Learnings
 - 2026-06-01T00:43:05.936+00:00 — Metering recovery drills are most trustworthy when they drive the real outbox worker in simulate mode, then verify `retry_scheduled`, `submitted`, and `dead_letter` transitions before documenting the live operator replay steps.
-
-_No learnings recorded yet._
+- 2026-06-01T20:22:40.911+00:00 — Subscription ownership tests should assert beneficiary-tenant binding directly in `SubscriptionService.subscribe()`, including the fallback to caller `tenantId` and the warning log when Marketplace resolve returns a different beneficiary tenant.
 
 ## 2026-05-31T19:45Z — Publisher Portal RBAC Review Ready
 

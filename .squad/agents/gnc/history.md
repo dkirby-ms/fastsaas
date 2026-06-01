@@ -136,3 +136,12 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - Webhook/metering runbook (PR #63) ready for GNC validation and drill scheduling in live staging
 - Tenant RLS enforcement (PR #64) reassigned to FIDO for merge-conflict resolution
 - Infrastructure baseline stable; app layer now driving Phase 1.5 schedule
+
+## Learnings
+### 2026-06-01T14:35:46.727+00:00
+- The API currently has no `packages/api/.env.example`, so its runtime contract only exists implicitly in `packages/api/src/config.ts` and migration commands.
+- Portal staging configuration is split between build-time `NEXT_PUBLIC_*` behavior in `packages/portal/Dockerfile` and runtime `API_BASE_URL` updates in `deploy-app-staging.yml`, which do not line up with the live portal code paths.
+- `infrastructure/env/staging-portal.env` references `portal-entra-client-secret` and `portal-nextauth-secret` via `secretref:`, but no secret provisioning step exists in the checked-in Bicep or workflows.
+- API staging wiring covers Entra auth plus Bicep-managed `DATABASE_URL`/`REDIS_URL`, but no checked-in staging source was found for `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, or `MARKETPLACE_METERING_API_KEY`.
+### 2026-06-01T20:22:40.911+00:00
+- Multi-tenant Entra access tokens for FastSaaS API validation should use the shared `common` JWKS discovery endpoint, while issuer validation must accept any `https://login.microsoftonline.com/{tenant}/v2.0` issuer when the configured authority is `common` or `organizations`.

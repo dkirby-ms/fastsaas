@@ -47,25 +47,32 @@ export interface SecurityHarness {
     scopes?: string[];
     roles?: string[];
   }): Promise<Subscription>;
+  close(): Promise<void>;
   ingestUsageEventFixture(options: {
     tenantId: string;
     body?: Partial<UsageEventIngestRequest>;
     scopes?: string[];
     roles?: string[];
   }): Promise<request.Response>;
-  close(): Promise<void>;
 }
 
-function createFulfillmentClient(): MarketplaceFulfillmentClient {
+interface FulfillmentResolveOverride {
+  planId?: string;
+  quantity?: number;
+  beneficiaryTenantId?: string;
+}
+
+function createFulfillmentClient(overrides: Map<string, FulfillmentResolveOverride>): MarketplaceFulfillmentClient {
   return {
     async resolveSubscription(marketplaceToken: string) {
+      const override = overrides.get(marketplaceToken);
       return {
         marketplaceSubscriptionId: `marketplace-${marketplaceToken}`,
-        planId: 'basic',
-        quantity: 5,
+        planId: override?.planId ?? 'basic',
+        quantity: override?.quantity ?? 5,
         offerId: 'offer-basic',
         purchaserTenantId: `purchaser-${marketplaceToken}`,
-        beneficiaryTenantId: `beneficiary-${marketplaceToken}`,
+        beneficiaryTenantId: override?.beneficiaryTenantId ?? `beneficiary-${marketplaceToken}`,
         metadata: {
           fixture: 'security-suite'
         }
@@ -132,7 +139,12 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const meteringRepository = new InMemoryUsageEventRepository(new SystemClock());
   const subscriptionRepository = new InMemorySubscriptionRepository();
   const publisherPlanRepository = new InMemoryPublisherPlanRepository();
-  const subscriptionService = new SubscriptionService(subscriptionRepository, createFulfillmentClient(), logger);
+  const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
+  const subscriptionService = new SubscriptionService(
+    subscriptionRepository,
+    createFulfillmentClient(fulfillmentOverrides),
+    logger
+  );
   const publisherService = new PublisherService(
     subscriptionRepository,
     publisherPlanRepository,
@@ -201,23 +213,32 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
       roles: options.roles ?? ['Owner']
     });
 
-    const response = await request(app)
-      .post('/v1/subscriptions')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        marketplaceToken: options.marketplaceToken ?? `fixture-${randomUUID()}`,
-        planId: options.planId,
-        seats: options.seats,
-        metadata: {
-          fixture: 'security-suite'
-        }
-      });
+    const marketplaceToken = options.marketplaceToken ?? `fixture-${randomUUID()}`;
+    fulfillmentOverrides.set(marketplaceToken, {
+      planId: options.planId,
+      quantity: options.seats,
+      beneficiaryTenantId: options.tenantId
+    });
 
-    if (response.status !== 201 || !response.body.data) {
-      throw new Error(`Expected subscription fixture creation to succeed, received ${response.status}`);
+    try {
+      const response = await request(app)
+        .post('/v1/subscriptions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          marketplaceToken,
+          metadata: {
+            fixture: 'security-suite'
+          }
+        });
+
+      if (response.status !== 201 || !response.body.data) {
+        throw new Error(`Expected subscription fixture creation to succeed, received ${response.status}`);
+      }
+
+      return response.body.data as Subscription;
+    } finally {
+      fulfillmentOverrides.delete(marketplaceToken);
     }
-
-    return response.body.data as Subscription;
   }
 
   async function ingestUsageEventFixture(options: {

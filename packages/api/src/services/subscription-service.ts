@@ -19,8 +19,6 @@ interface SubscribeInput extends ActorContext {
   tenantId: string;
   userId: string;
   marketplaceToken: string;
-  planId?: string;
-  seats?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -137,11 +135,30 @@ export class SubscriptionService {
       }
     });
 
+    if (
+      resolvedSubscription.beneficiaryTenantId &&
+      input.tenantId &&
+      resolvedSubscription.beneficiaryTenantId !== input.tenantId
+    ) {
+      this.logger.warn(
+        {
+          callerTenantId: input.tenantId,
+          beneficiaryTenantId: resolvedSubscription.beneficiaryTenantId,
+          marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
+          requestId: input.requestId
+        },
+        'Caller tenant differs from beneficiary tenant — using beneficiaryTenantId as subscription owner'
+      );
+    }
+
+    // Tenant binding comes from Marketplace resolve (beneficiaryTenantId),
+    // not the authenticated caller's JWT tid. This supports cross-tenant
+    // purchases where the buyer and beneficiary are different orgs.
     const subscription = await this.repository.createSubscription({
-      tenantId: input.tenantId,
+      tenantId: resolvedSubscription.beneficiaryTenantId ?? input.tenantId,
       marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      planId: input.planId ?? resolvedSubscription.planId,
-      seats: input.seats ?? resolvedSubscription.quantity,
+      planId: resolvedSubscription.planId,
+      seats: resolvedSubscription.quantity,
       offerId: resolvedSubscription.offerId,
       purchaserTenantId: resolvedSubscription.purchaserTenantId,
       beneficiaryTenantId: resolvedSubscription.beneficiaryTenantId,

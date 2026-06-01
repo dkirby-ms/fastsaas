@@ -20,14 +20,6 @@ function parseCreateSubscriptionBody(body: unknown): CreateSubscriptionRequest {
     throw AppError.badRequest('marketplaceToken is required');
   }
 
-  if (candidate.planId !== undefined && typeof candidate.planId !== 'string') {
-    throw AppError.badRequest('planId must be a string when provided');
-  }
-
-  if (candidate.seats !== undefined && (!Number.isInteger(candidate.seats) || Number(candidate.seats) <= 0)) {
-    throw AppError.badRequest('seats must be a positive integer when provided');
-  }
-
   if (
     candidate.metadata !== undefined &&
     (!candidate.metadata || typeof candidate.metadata !== 'object' || Array.isArray(candidate.metadata))
@@ -37,8 +29,6 @@ function parseCreateSubscriptionBody(body: unknown): CreateSubscriptionRequest {
 
   return {
     marketplaceToken: candidate.marketplaceToken,
-    planId: typeof candidate.planId === 'string' ? candidate.planId : undefined,
-    seats: typeof candidate.seats === 'number' ? candidate.seats : undefined,
     metadata: candidate.metadata as Record<string, unknown> | undefined
   };
 }
@@ -414,11 +404,6 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
    *             properties:
    *               marketplaceToken:
    *                 type: string
-   *               planId:
-   *                 type: string
-   *               seats:
-   *                 type: integer
-   *                 minimum: 1
    *               metadata:
    *                 type: object
    *                 additionalProperties: true
@@ -441,8 +426,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     authorizeRoute({
       resource: 'subscriptions',
       action: 'manage',
-      resourceId: (req) => (typeof req.body?.marketplaceToken === 'string' ? req.body.marketplaceToken : undefined),
-      metadata: (req) => ({ planId: typeof req.body?.planId === 'string' ? req.body.planId : undefined })
+      resourceId: (req) => (typeof req.body?.marketplaceToken === 'string' ? req.body.marketplaceToken : undefined)
     }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
@@ -451,8 +435,6 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
         const subscription = await subscriptionService.subscribe({
           ...actor,
           marketplaceToken: body.marketplaceToken,
-          planId: body.planId,
-          seats: body.seats,
           metadata: body.metadata
         });
 
