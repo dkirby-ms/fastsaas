@@ -5,6 +5,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isApiErrorStatus(error: unknown, status: number): error is ApiError {
+  return error instanceof ApiError && error.status === status;
+}
+
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     return error.userMessage;

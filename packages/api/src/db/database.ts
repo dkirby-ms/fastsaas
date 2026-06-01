@@ -1,4 +1,4 @@
-import type { SubscriptionStatus, UsageEventRecord } from '@fastsaas/shared';
+import type { PublisherPlanStatus, SubscriptionStatus, UsageEventRecord } from '@fastsaas/shared';
 import { Kysely, PostgresDialect, type ColumnType } from 'kysely';
 import { Pool } from 'pg';
 
@@ -10,6 +10,7 @@ type GeneratedTimestamp = ColumnType<Date, Date | string | undefined, Date | str
 type NullableTimestamp = ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
 type JsonColumn = ColumnType<JsonRecord, JsonRecord | string | undefined, JsonRecord | string>;
 type NullableJsonColumn = ColumnType<JsonRecord | null, JsonRecord | string | null | undefined, JsonRecord | string | null>;
+type StringArrayColumn = ColumnType<string[], string[] | string | undefined, string[] | string>;
 
 export interface UsageEventsTable {
   id: string;
@@ -93,12 +94,24 @@ export interface MarketplaceWebhookEventsTable {
   processed_at: NullableTimestamp;
 }
 
+export interface PublisherPlansTable {
+  publisher_tenant_id: string;
+  id: string;
+  name: string;
+  description: string;
+  price_monthly: string;
+  status: PublisherPlanStatus;
+  features: StringArrayColumn;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 export interface AuditLogsTable {
   id: string;
   tenant_id: string;
   actor_id: string;
   action: 'view' | 'manage' | 'export';
-  resource: 'subscriptions' | 'billing' | 'users' | 'metering' | 'audit_logs' | 'webhooks';
+  resource: 'subscriptions' | 'billing' | 'users' | 'metering' | 'audit_logs' | 'webhooks' | 'publisher';
   resource_id: string | null;
   timestamp: GeneratedTimestamp;
   outcome: 'success' | 'denied' | 'failure';
@@ -111,6 +124,7 @@ export interface Database {
   subscriptions: SubscriptionsTable;
   subscription_audit_logs: SubscriptionAuditLogsTable;
   marketplace_webhook_events: MarketplaceWebhookEventsTable;
+  publisher_plans: PublisherPlansTable;
   audit_logs: AuditLogsTable;
 }
 

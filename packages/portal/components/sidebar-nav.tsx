@@ -2,21 +2,32 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
+import { getPortalRole } from '@/lib/roles';
 
-const navigation = [
+const customerNavigation = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/plan', label: 'Plan' },
   { href: '/settings', label: 'Settings' },
 ];
 
+const publisherNavigation = [
+  { href: '/publisher', label: 'Overview' },
+  { href: '/publisher/plans', label: 'Plans' },
+  { href: '/publisher/tenants', label: 'Tenants' },
+];
+
 export function SidebarNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const portalRole = getPortalRole(session?.roles);
+  const navigation = portalRole === 'publisher' ? publisherNavigation : customerNavigation;
 
   return (
-    <nav aria-label="Customer portal navigation" className="space-y-2">
+    <nav aria-label={`${portalRole === 'publisher' ? 'Publisher' : 'Customer'} portal navigation`} className="space-y-2">
       {navigation.map((item) => {
-        const isActive = pathname === item.href;
+        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.href}

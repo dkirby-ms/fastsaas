@@ -11,11 +11,13 @@ import { healthRouter } from './routes/health';
 import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
+import type { PublisherService } from './services/publisher-service';
 import type { SubscriptionService } from './services/subscription-service';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
   auditService?: AuditService;
+  publisherService?: PublisherService;
 }
 
 export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
@@ -45,7 +47,16 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   const swaggerSetupHandler = swaggerUi.setup(openApiSpec, { explorer: true }) as unknown as RequestHandler;
   app.use('/docs', ...swaggerServeHandlers, swaggerSetupHandler);
 
-  app.use('/v1', createV1Router(config, meteringRuntime.service, dependencies.subscriptionService, dependencies.auditService));
+  app.use(
+    '/v1',
+    createV1Router(
+      config,
+      meteringRuntime.service,
+      dependencies.subscriptionService,
+      dependencies.auditService,
+      dependencies.publisherService
+    )
+  );
   app.use(notFoundHandler);
   app.use(errorHandler);
 
