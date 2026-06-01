@@ -2,6 +2,7 @@ import type { ApiResponse, MarketplaceWebhookPayload, Subscription } from '@fast
 import express, { Router, type Response } from 'express';
 
 import type { ApiConfig } from '../../config';
+import { runWithSystemExecutionContext } from '../../db/execution-context';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
@@ -82,12 +83,14 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
         }
 
         const body = parseWebhookBody(rawBody);
-        const result = await subscriptionService.processMarketplaceWebhook({
-          ...body,
-          idempotencyKey: buildIdempotencyKey(req, body),
-          requestId: body.requestId ?? readHeader(req, EVENT_ID_HEADERS) ?? String(req.id ?? 'unknown'),
-          correlationId: body.correlationId ?? req.correlationId ?? String(req.id ?? 'unknown')
-        });
+        const result = await runWithSystemExecutionContext(() =>
+          subscriptionService.processMarketplaceWebhook({
+            ...body,
+            idempotencyKey: buildIdempotencyKey(req, body),
+            requestId: body.requestId ?? readHeader(req, EVENT_ID_HEADERS) ?? String(req.id ?? 'unknown'),
+            correlationId: body.correlationId ?? req.correlationId ?? String(req.id ?? 'unknown')
+          })
+        );
 
         res.status(result.duplicate ? 200 : 202).json({
           status: 'success',

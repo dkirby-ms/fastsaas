@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import type { MeteringDashboardSummary, UsageEventDeadLetterRecord, UsageEventIngestRequest, UsageEventIngestResponse, UsageEventRecord } from '@fastsaas/shared';
 
+import { applySqlExecutionContext } from '../db/execution-context';
+import { buildEnableTenantRlsStatements } from '../db/rls';
 import { METERING_DEDUPE_WINDOW_MS, buildDashboardSummary, type ClaimedUsageEventRecord, type UsageEventRepository } from './repository';
 
 interface QueryableSqlClient {
@@ -164,10 +166,17 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
 
   constructor(private readonly db: PostgresUsageEventSqlClient) {}
 
+  private async executeWithContext<T>(callback: (tx: QueryableSqlClient) => Promise<T>): Promise<T> {
+    return this.db.$transaction(async (tx) => {
+      await applySqlExecutionContext(tx);
+      return callback(tx);
+    });
+  }
+
   async ingest(tenantId: string, event: UsageEventIngestRequest, idempotencyKey: string, now: Date): Promise<UsageEventIngestResponse> {
     await this.ensureSchema();
 
-    return this.db.$transaction(async (tx) => {
+    return this.executeWithContext(async (tx) => {
       const eventTimestamp = new Date(event.timestamp).toISOString();
       const dedupeCutoff = new Date(now.getTime() - METERING_DEDUPE_WINDOW_MS).toISOString();
       const existing = await tx.$queryRawUnsafe<UsageEventRow[]>(`
@@ -268,7 +277,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
     const claimToken = randomUUID();
     const nowIso = now.toISOString();
     const leaseExpiresAt = new Date(now.getTime() + leaseMs).toISOString();
-    const rows = await this.db.$transaction((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
+    const rows = await this.executeWithContext((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
       WITH candidate AS (
         SELECT id
         FROM usage_events
@@ -295,7 +304,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   async markSubmitted(event: ClaimedUsageEventRecord, submittedAt: Date): Promise<UsageEventRecord> {
     await this.ensureSchema();
 
-    const rows = await this.db.$queryRawUnsafe<UsageEventRow[]>(`
+    const rows = await this.executeWithContext((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
       UPDATE usage_events
       SET status = 'submitted',
           submitted_at = $3::timestamptz,
@@ -310,7 +319,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
       WHERE id = $1
         AND claim_token = $2
       RETURNING ${USAGE_EVENT_COLUMNS}
-    `, event.id, event.claimToken, submittedAt.toISOString());
+    `, event.id, event.claimToken, submittedAt.toISOString()));
 
     if (!rows[0]) {
       throw new Error(`Usage event ${event.id} is no longer claimed by this worker`);
@@ -323,7 +332,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
     await this.ensureSchema();
 
     const nowIso = new Date().toISOString();
-    const rows = await this.db.$queryRawUnsafe<UsageEventRow[]>(`
+    const rows = await this.executeWithContext((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
       UPDATE usage_events
       SET status = 'retry_scheduled',
           retry_count = $3,
@@ -338,7 +347,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
       WHERE id = $1
         AND claim_token = $2
       RETURNING ${USAGE_EVENT_COLUMNS}
-    `, event.id, event.claimToken, retryCount, nextAttemptAt.toISOString(), error.code, error.message, error.httpStatus, nowIso);
+    `, event.id, event.claimToken, retryCount, nextAttemptAt.toISOString(), error.code, error.message, error.httpStatus, nowIso));
 
     if (!rows[0]) {
       throw new Error(`Usage event ${event.id} is no longer claimed by this worker`);
@@ -350,7 +359,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   async markDeadLetter(event: ClaimedUsageEventRecord, entry: Omit<UsageEventDeadLetterRecord, 'id' | 'failedAt'>, now: Date): Promise<UsageEventRecord> {
     await this.ensureSchema();
 
-    return this.db.$transaction(async (tx) => {
+    return this.executeWithContext(async (tx) => {
       const nowIso = now.toISOString();
       const rows = await tx.$queryRawUnsafe<UsageEventRow[]>(`
         UPDATE usage_events
@@ -414,17 +423,17 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
     await this.ensureSchema();
 
     const rows = tenantId
-      ? await this.db.$queryRawUnsafe<DeadLetterRow[]>(`
+      ? await this.executeWithContext((tx) => tx.$queryRawUnsafe<DeadLetterRow[]>(`
           SELECT ${DEAD_LETTER_COLUMNS}
           FROM usage_event_dead_letters
           WHERE tenant_id = $1
           ORDER BY failed_at DESC
-        `, tenantId)
-      : await this.db.$queryRawUnsafe<DeadLetterRow[]>(`
+        `, tenantId))
+      : await this.executeWithContext((tx) => tx.$queryRawUnsafe<DeadLetterRow[]>(`
           SELECT ${DEAD_LETTER_COLUMNS}
           FROM usage_event_dead_letters
           ORDER BY failed_at DESC
-        `);
+        `));
 
     return rows.map((row) => mapDeadLetterRow(row));
   }
@@ -432,12 +441,12 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   async getById(id: string): Promise<UsageEventRecord | null> {
     await this.ensureSchema();
 
-    const rows = await this.db.$queryRawUnsafe<UsageEventRow[]>(`
+    const rows = await this.executeWithContext((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
       SELECT ${USAGE_EVENT_COLUMNS}
       FROM usage_events
       WHERE id = $1
       LIMIT 1
-    `, id);
+    `, id));
 
     return rows[0] ? mapUsageEventRow(rows[0]) : null;
   }
@@ -445,12 +454,12 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   async listByTenant(tenantId: string): Promise<UsageEventRecord[]> {
     await this.ensureSchema();
 
-    const rows = await this.db.$queryRawUnsafe<UsageEventRow[]>(`
+    const rows = await this.executeWithContext((tx) => tx.$queryRawUnsafe<UsageEventRow[]>(`
       SELECT ${USAGE_EVENT_COLUMNS}
       FROM usage_events
       WHERE tenant_id = $1
       ORDER BY created_at DESC
-    `, tenantId);
+    `, tenantId));
 
     return rows.map((row) => mapUsageEventRow(row));
   }
@@ -472,6 +481,17 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   }
 
   private async initializeSchema(): Promise<void> {
+    const [policyState] = await this.db.$queryRawUnsafe<Array<{ policyConfigured: boolean }>>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'usage_events'
+          AND policyname = 'usage_events_tenant_isolation'
+      ) AS "policyConfigured"
+    `);
+    const policyConfigured = policyState?.policyConfigured ?? false;
+
     await this.db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS usage_events (
         id TEXT PRIMARY KEY,
@@ -498,20 +518,24 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await this.db.$executeRawUnsafe(`
-      ALTER TABLE usage_events
-      ALTER COLUMN id TYPE TEXT USING id::text,
-      ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text,
-      ALTER COLUMN subscription_id TYPE TEXT USING subscription_id::text,
-      ALTER COLUMN dimension_id TYPE TEXT USING dimension_id::text,
-      ALTER COLUMN idempotency_key TYPE TEXT USING idempotency_key::text
-    `);
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS plan_id TEXT');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_token TEXT');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_expires_at TIMESTAMPTZ NULL');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_idempotency_key_key');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_tenant_event_ts_key');
+
+    if (!policyConfigured) {
+      await this.db.$executeRawUnsafe(`
+        ALTER TABLE usage_events
+        ALTER COLUMN id TYPE TEXT USING id::text,
+        ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text,
+        ALTER COLUMN subscription_id TYPE TEXT USING subscription_id::text,
+        ALTER COLUMN dimension_id TYPE TEXT USING dimension_id::text,
+        ALTER COLUMN idempotency_key TYPE TEXT USING idempotency_key::text
+      `);
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS plan_id TEXT');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_token TEXT');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_expires_at TIMESTAMPTZ NULL');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_idempotency_key_key');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_tenant_event_ts_key');
+    }
+
     await this.db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS usage_event_dead_letters (
         id TEXT PRIMARY KEY,
@@ -525,16 +549,32 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
         failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await this.db.$executeRawUnsafe(`
-      ALTER TABLE usage_event_dead_letters
-      ALTER COLUMN id TYPE TEXT USING id::text,
-      ALTER COLUMN usage_event_id TYPE TEXT USING usage_event_id::text,
-      ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text
-    `);
+
+    if (!policyConfigured) {
+      await this.db.$executeRawUnsafe(`
+        ALTER TABLE usage_event_dead_letters
+        ALTER COLUMN id TYPE TEXT USING id::text,
+        ALTER COLUMN usage_event_id TYPE TEXT USING usage_event_id::text,
+        ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text
+      `);
+    }
+
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_due ON usage_events (status, next_attempt_at, claim_expires_at, event_timestamp, created_at)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_tenant_created_at ON usage_events (tenant_id, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_dedupe_lookup ON usage_events (tenant_id, idempotency_key, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_event_lookup ON usage_events (tenant_id, event_id, event_timestamp, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_event_dead_letters_tenant_failed_at ON usage_event_dead_letters (tenant_id, failed_at DESC)');
+
+    if (policyConfigured) {
+      return;
+    }
+
+    for (const statement of buildEnableTenantRlsStatements('usage_events')) {
+      await this.db.$executeRawUnsafe(statement);
+    }
+
+    for (const statement of buildEnableTenantRlsStatements('usage_event_dead_letters')) {
+      await this.db.$executeRawUnsafe(statement);
+    }
   }
 }

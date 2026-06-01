@@ -1,11 +1,13 @@
-import { Migrator, type Kysely, type Migration, type MigrationProvider } from 'kysely';
+import { Migrator, type Kysely, type Migration, type MigrationProvider, type MigrationResultSet } from 'kysely';
 import type { Logger } from 'pino';
 
 import type { Database } from './database';
 import * as auditLogsMigration from './migrations/20260531T213532_audit_logs';
+import * as tenantRlsMigration from './migrations/20260531T213532_tenant_rls';
 
 const MIGRATIONS: Record<string, Migration> = {
-  '20260531T213532_audit_logs': auditLogsMigration
+  '20260531T213532_audit_logs': auditLogsMigration,
+  '20260531T213532_tenant_rls': tenantRlsMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {
@@ -14,22 +16,27 @@ class StaticMigrationProvider implements MigrationProvider {
   }
 }
 
-export async function migrateToLatest(db: Kysely<Database>, migrationLogger?: Logger): Promise<void> {
-  const migrator = new Migrator({
+export function createMigrator(db: Kysely<Database>): Migrator {
+  return new Migrator({
     db,
     provider: new StaticMigrationProvider()
   });
+}
 
-  const { error, results } = await migrator.migrateToLatest();
+export async function migrateToLatest(db: Kysely<Database>, migrationLogger?: Logger): Promise<MigrationResultSet> {
+  const migrator = createMigrator(db);
+  const result = await migrator.migrateToLatest();
 
-  for (const result of results ?? []) {
-    migrationLogger?.info({ migration: result.migrationName, status: result.status }, 'Database migration executed');
+  for (const migration of result.results ?? []) {
+    migrationLogger?.info({ migration: migration.migrationName, status: migration.status }, 'Database migration executed');
   }
 
-  if (error) {
-    migrationLogger?.error({ err: error }, 'Database migration failed');
-    throw error;
+  if (result.error) {
+    migrationLogger?.error({ err: result.error }, 'Database migration failed');
+    throw result.error;
   }
+
+  return result;
 }
 
 export const runMigrations = migrateToLatest;

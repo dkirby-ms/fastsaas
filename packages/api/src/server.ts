@@ -6,6 +6,7 @@ import type { Pool } from 'pg';
 import { createApp } from './app';
 import { createConfig } from './config';
 import { createDatabase, createPool, type Database } from './db/database';
+import { runWithSystemExecutionContext } from './db/execution-context';
 import { migrateToLatest } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
@@ -43,10 +44,11 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
   }
 
   const database = createDatabase(databaseUrl);
+  let meteringPool: Pool | undefined;
 
   try {
     await migrateToLatest(database, logger.child({ component: 'db-migrate' }));
-    const meteringPool = createPool(databaseUrl);
+    meteringPool = createPool(databaseUrl);
 
     return {
       database,
@@ -54,8 +56,9 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
       meteringSqlClient: new PgPoolSqlClient(meteringPool)
     };
   } catch (error) {
-    await database.destroy().catch(() => undefined);
-    logger.error({ err: error }, 'Failed to initialize database clients');
+    const cleanupTasks = [database.destroy(), meteringPool?.end()].filter((task): task is Promise<void> => Boolean(task));
+    await Promise.allSettled(cleanupTasks);
+    logger.error({ err: error }, 'Failed to initialize database clients or run migrations');
     throw error;
   }
 }
@@ -78,7 +81,7 @@ async function bootstrap(): Promise<void> {
 
   async function runMeteringWorker(): Promise<void> {
     try {
-      const result = await meteringRuntime.worker.runNextBatch();
+      const result = await runWithSystemExecutionContext(() => meteringRuntime.worker.runNextBatch());
       if (result.attempted > 0) {
         logger.info(result, 'Completed metering outbox batch');
       }
@@ -87,18 +90,24 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  setInterval(() => {
+  const meteringWorkerInterval = setInterval(() => {
     void runMeteringWorker();
-  }, config.metering.workerIntervalMs).unref();
+  }, config.metering.workerIntervalMs);
+  meteringWorkerInterval.unref();
 
   const server = app.listen(config.port, () => {
     logger.info({ port: config.port }, 'API server listening');
   });
 
-  registerShutdownHandlers(server, database, meteringPool);
+  registerShutdownHandlers(server, database, meteringPool, meteringWorkerInterval);
 }
 
-function registerShutdownHandlers(server: Server, database?: Kysely<Database>, meteringPool?: Pool): void {
+function registerShutdownHandlers(
+  server: Server,
+  database?: Kysely<Database>,
+  meteringPool?: Pool,
+  meteringWorkerInterval?: ReturnType<typeof setInterval>
+): void {
   let shuttingDown = false;
 
   const shutdown = (signal: string) => {
@@ -107,19 +116,23 @@ function registerShutdownHandlers(server: Server, database?: Kysely<Database>, m
     }
 
     shuttingDown = true;
-    logger.info({ signal }, 'Shutdown signal received');
-    server.close(async () => {
-      const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
-        (task): task is Promise<void> => Boolean(task)
-      );
-      const results = await Promise.allSettled(cleanupTasks);
+    if (meteringWorkerInterval) {
+      clearInterval(meteringWorkerInterval);
+    }
 
-      for (const result of results) {
-        if (result.status === 'rejected') {
-          logger.error({ err: result.reason }, 'Error shutting down database resources');
-          process.exitCode = 1;
+    logger.info({ signal }, 'Shutdown signal received');
+    server.close(() => {
+      void (async () => {
+        const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter((task): task is Promise<void> => Boolean(task));
+        const results = await Promise.allSettled(cleanupTasks);
+
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            logger.error({ err: result.reason }, 'Error shutting down database resources');
+            process.exitCode = 1;
+          }
         }
-      }
+      })();
     });
   };
 

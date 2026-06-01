@@ -4,6 +4,7 @@ import type { Subscription, SubscriptionAuditEntry, SubscriptionStatus } from '@
 import type { Kysely, Selectable, Transaction } from 'kysely';
 
 import type { Database } from '../db/database';
+import { withDatabaseRlsContext } from '../db/execution-context';
 
 export interface CreateSubscriptionInput {
   tenantId: string;
@@ -20,6 +21,7 @@ export interface CreateSubscriptionInput {
 
 export interface TransitionSubscriptionInput {
   subscriptionId: string;
+  tenantId: string;
   toStatus: SubscriptionStatus;
   correlationId: string;
   auditEntry: SubscriptionAuditEntry;
@@ -28,6 +30,7 @@ export interface TransitionSubscriptionInput {
 export interface RecordedWebhookEvent {
   idempotencyKey: string;
   marketplaceSubscriptionId: string;
+  tenantId?: string;
   action: string;
   correlationId: string;
   requestId: string;
@@ -214,7 +217,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
   async createSubscription(input: CreateSubscriptionInput): Promise<Subscription> {
-    return this.db.transaction().execute(async (trx) => {
+    return withDatabaseRlsContext(this.db, async (trx) => {
       const createdAt = new Date(input.auditEntry.createdAt);
       const created = await trx
         .insertInto('subscriptions')
@@ -240,6 +243,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
         .values({
           id: input.auditEntry.id,
           subscription_id: created.id,
+          tenant_id: input.tenantId,
           event_type: input.auditEntry.eventType,
           source: input.auditEntry.source,
           from_status: input.auditEntry.fromStatus,
@@ -264,42 +268,47 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   }
 
   async listByTenant(tenantId: string): Promise<Subscription[]> {
-    const rows = await this.db
-      .selectFrom('subscriptions')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .orderBy('created_at', 'desc')
-      .execute();
+    return withDatabaseRlsContext(this.db, async (trx) => {
+      const rows = await trx
+        .selectFrom('subscriptions')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .orderBy('created_at', 'desc')
+        .execute();
 
-    return this.hydrateSubscriptions(this.db, rows);
+      return this.hydrateSubscriptions(trx, rows);
+    });
   }
 
   async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
-    const event = await this.db
-      .selectFrom('marketplace_webhook_events')
-      .selectAll()
-      .where('idempotency_key', '=', idempotencyKey)
-      .executeTakeFirst();
+    return withDatabaseRlsContext(this.db, async (trx) => {
+      const event = await trx
+        .selectFrom('marketplace_webhook_events')
+        .selectAll()
+        .where('idempotency_key', '=', idempotencyKey)
+        .executeTakeFirst();
 
-    if (!event) {
-      return null;
-    }
+      if (!event) {
+        return null;
+      }
 
-    return {
-      idempotencyKey: event.idempotency_key,
-      marketplaceSubscriptionId: event.marketplace_subscription_id,
-      action: event.action,
-      correlationId: event.correlation_id,
-      requestId: event.request_id,
-      payload: asRecord(event.payload),
-      status: event.status as RecordedWebhookEvent['status'],
-      errorMessage: event.error_message ?? undefined,
-      processedAt: event.processed_at?.toISOString()
-    };
+      return {
+        idempotencyKey: event.idempotency_key,
+        marketplaceSubscriptionId: event.marketplace_subscription_id,
+        tenantId: event.tenant_id ?? undefined,
+        action: event.action,
+        correlationId: event.correlation_id,
+        requestId: event.request_id,
+        payload: asRecord(event.payload),
+        status: event.status as RecordedWebhookEvent['status'],
+        errorMessage: event.error_message ?? undefined,
+        processedAt: event.processed_at?.toISOString()
+      };
+    });
   }
 
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
-    return this.db.transaction().execute(async (trx) => {
+    return withDatabaseRlsContext(this.db, async (trx) => {
       const updatedAt = new Date(input.auditEntry.createdAt);
       const updated = await trx
         .updateTable('subscriptions')
@@ -321,6 +330,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
         .values({
           id: input.auditEntry.id,
           subscription_id: input.subscriptionId,
+          tenant_id: input.tenantId,
           event_type: input.auditEntry.eventType,
           source: input.auditEntry.source,
           from_status: input.auditEntry.fromStatus,
@@ -339,22 +349,13 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {
     const processedAt = event.processedAt ? new Date(event.processedAt) : null;
 
-    await this.db
-      .insertInto('marketplace_webhook_events')
-      .values({
-        idempotency_key: event.idempotencyKey,
-        marketplace_subscription_id: event.marketplaceSubscriptionId,
-        action: event.action,
-        correlation_id: event.correlationId,
-        request_id: event.requestId,
-        payload: event.payload,
-        status: event.status,
-        error_message: event.errorMessage ?? null,
-        processed_at: processedAt
-      })
-      .onConflict((oc) =>
-        oc.column('idempotency_key').doUpdateSet({
+    await withDatabaseRlsContext(this.db, async (trx) => {
+      await trx
+        .insertInto('marketplace_webhook_events')
+        .values({
+          idempotency_key: event.idempotencyKey,
           marketplace_subscription_id: event.marketplaceSubscriptionId,
+          tenant_id: event.tenantId ?? null,
           action: event.action,
           correlation_id: event.correlationId,
           request_id: event.requestId,
@@ -363,22 +364,37 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
           error_message: event.errorMessage ?? null,
           processed_at: processedAt
         })
-      )
-      .execute();
+        .onConflict((oc) =>
+          oc.column('idempotency_key').doUpdateSet({
+            marketplace_subscription_id: event.marketplaceSubscriptionId,
+            tenant_id: event.tenantId ?? null,
+            action: event.action,
+            correlation_id: event.correlationId,
+            request_id: event.requestId,
+            payload: event.payload,
+            status: event.status,
+            error_message: event.errorMessage ?? null,
+            processed_at: processedAt
+          })
+        )
+        .execute();
+    });
   }
 
   private async findSubscriptionBy(
     column: 'id' | 'marketplace_subscription_id',
     value: string
   ): Promise<Subscription | null> {
-    const row = await this.db.selectFrom('subscriptions').selectAll().where(column, '=', value).executeTakeFirst();
+    return withDatabaseRlsContext(this.db, async (trx) => {
+      const row = await trx.selectFrom('subscriptions').selectAll().where(column, '=', value).executeTakeFirst();
 
-    if (!row) {
-      return null;
-    }
+      if (!row) {
+        return null;
+      }
 
-    const [subscription] = await this.hydrateSubscriptions(this.db, [row]);
-    return subscription ?? null;
+      const [subscription] = await this.hydrateSubscriptions(trx, [row]);
+      return subscription ?? null;
+    });
   }
 
   private async getSubscriptionOrThrow(executor: DatabaseExecutor, subscriptionId: string): Promise<Subscription> {

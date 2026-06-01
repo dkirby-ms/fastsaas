@@ -187,7 +187,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     const token = await createToken({
       tenantId: options.tenantId,
       scopes: options.scopes,
-      roles: options.roles
+      roles: options.roles ?? ['Owner']
     });
 
     const response = await request(app)

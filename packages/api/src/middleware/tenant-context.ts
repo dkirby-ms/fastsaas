@@ -1,6 +1,7 @@
 import type { NextFunction, Response } from 'express';
 
 import type { ApiConfig } from '../config';
+import { runWithTenantExecutionContext } from '../db/execution-context';
 import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
 import { getRoles, getScopes, getUserId } from './auth';
@@ -38,6 +39,8 @@ export function injectTenantContext(config: ApiConfig) {
       roles: getRoles(req.auth)
     };
 
-    next();
+    runWithTenantExecutionContext(tenantId, req.context.requestId, () => {
+      next();
+    });
   };
 }

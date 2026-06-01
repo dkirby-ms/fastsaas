@@ -47,8 +47,22 @@ Assigned to EECOM:
 ## Learnings
 
 - **2026-05-29T19:30:29Z:** API foundation complete. JWT auth and tenant middleware ready for multi-tenant SaaS operations. Portal scaffold (FIDO) ready to integrate live endpoints.
+## PR #61 — Semantic-Release Version Baseline Fix (2026-05-31T20:29:23.499+00:00)
+
+**Status:** Complete (tag v0.1.0 created and pushed)
+
+**Context:** Kranz rejected PR #61 (semantic-release config by GNC) because semantic-release defaults to v1.0.0 on first run if no git tag exists. The repo is pre-1.0 (package.json v0.1.0), so the initial release would cut the wrong version.
+
+**Fix applied:**
+- Created git tag `v0.1.0` on the merge-base commit (`d450a34`) — the point before semantic-release config was added
+- Pushed tag to remote (`git push origin v0.1.0`)
+- This establishes v0.1.0 as the version baseline semantic-release will recognize
+
+**Outcome:** Semantic-release config now correctly defaults to computing next version from 0.1.0 baseline. GNC can re-merge after Kranz's re-review.
+
 ## Learnings
 
+- **2026-05-31T20:29:23.499+00:00:** Semantic-release requires an existing git tag to establish the version baseline; without it, it defaults to 1.0.0 on first run. Tag the merge-base with the intended baseline version before merging release config changes.
 - **2026-05-29T14:30:29.387-05:00:** API foundation now lives in `packages/api/` with Express + TypeScript, `packages/shared/src/index.ts` carries shared auth/response types, and the protected bootstrap route is `GET /v1/auth/context`.
 - **2026-05-29T14:30:29.387-05:00:** Auth uses `jose` JWT verification plus tenant-context middleware that reads `tenant_id`, `tid`, or `extension_tenant_id`, and global JSON logging/error handling is wired through `src/middleware/`.
 - **2026-05-29T14:30:29.387-05:00:** OpenAPI bootstrap is published at `/openapi.json` and `/docs`, with integration coverage in `packages/api/src/__tests__/app.integration.test.ts` for 401, 403, 200, and spec validation.
@@ -82,5 +96,15 @@ Assigned to EECOM:
 
 ## Learnings
 
+- **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.
+- **2026-06-01T00:04:54.260+00:00:** The tenant RLS migration is now executable via `packages/api/src/db/migrator.ts`, runs on API startup and `npm run migrate`, and the Docker-backed RLS integration suite must connect as a non-superuser app role because PostgreSQL superusers bypass RLS policies.
+
+## Cross-Team Updates — 2026-05-31T21:35:32.766Z
+
+**From Scribe Consolidation (Squad Inbox → Decisions)**
+
+- **RETRO blocking dependency:** RETRO's tenant isolation security test suite (PR #62, 28/33 tests passing) awaits RLS enforcement in production. EECOM's PR #64 merge unblocks unskipping of 5 RLS-dependent tests.
+- **GNC release automation:** Semantic-release baseline (`v0.1.0`) is now established. GNC PR #61 unblocked for merge; subsequent releases will automate version bumps across `packages/api`, `packages/portal`, and root CHANGELOG.md from conventional commits.
+- **Semantic versioning decision recorded:** Manual `npm version` for workspace bumps + Keep a Changelog pattern adopted for the team.
 - **2026-05-31T21:35:32.766+00:00:** RBAC hardening is centralized in `packages/api/src/middleware/rbac.ts` via `authorizeRoute`, and audit logging is split between `packages/api/src/services/audit-service.ts`, `packages/api/src/repositories/audit-log-repository.ts`, and the append-only `packages/api/src/db/migrations/20260531T213532_audit_logs.ts` migration plus shared tenant RLS helpers in `packages/api/src/db/rls.ts`.
 - **2026-06-01T00:04:54.260+00:00:** PR #65 follow-up aligns RBAC exactly to the design doc role model (`Admin`, `Owner`, `Member`, `Viewer`), runs API migrations through `packages/api/src/db/migrator.ts` during startup/`npm run migrate`, and verifies audit append-only plus tenant RLS against a real PostgreSQL role instead of in-memory fixtures.
