@@ -178,8 +178,8 @@ jobs:
         shell: bash
         env:
           CONTAINER_APP_NAME: ${{ steps.deployment.outputs.api_app_name }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
+          API_ENTRA_CLIENT_ID: ${{ secrets.API_ENTRA_CLIENT_ID }}
         run: |
           mapfile -t env_vars < <(python3 - <<'PY'
           from pathlib import Path
@@ -220,9 +220,9 @@ jobs:
         env:
           CONTAINER_APP_NAME: ${{ steps.deployment.outputs.portal_app_name }}
           API_BASE_URL: ${{ steps.deployment.outputs.api_url }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          PORTAL_CLIENT_ID: ${{ secrets.PORTAL_CLIENT_ID }}
+          ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
+          API_ENTRA_CLIENT_ID: ${{ secrets.API_ENTRA_CLIENT_ID }}
+          PORTAL_ENTRA_CLIENT_ID: ${{ secrets.PORTAL_ENTRA_CLIENT_ID }}
           PORTAL_URL: ${{ steps.deployment.outputs.portal_url }}
         run: |
           mapfile -t env_vars < <(python3 - <<'PY'
