@@ -65,7 +65,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.get(
     '/',
-    authorizeRoute({ resource: 'subscriptions', action: 'read' }),
+    authorizeRoute({ permission: 'subscriptions:read', resource: 'subscriptions', action: 'read' }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription[]>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -83,7 +83,12 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.get(
     '/:subscriptionId',
-    authorizeRoute({ resource: 'subscriptions', action: 'read', resourceId: getSubscriptionId }),
+    authorizeRoute({
+      permission: 'subscriptions:read',
+      resource: 'subscriptions',
+      action: 'read',
+      resourceId: getSubscriptionId
+    }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -102,8 +107,9 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.post(
     '/',
     authorizeRoute({
+      permission: 'subscriptions:manage',
       resource: 'subscriptions',
-      action: 'create',
+      action: 'manage',
       resourceId: (req) => (typeof req.body?.marketplaceToken === 'string' ? req.body.marketplaceToken : undefined),
       metadata: (req) => ({ planId: typeof req.body?.planId === 'string' ? req.body.planId : undefined })
     }),
@@ -132,7 +138,12 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.post(
     '/:subscriptionId/activate',
-    authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: getSubscriptionId }),
+    authorizeRoute({
+      permission: 'subscriptions:manage',
+      resource: 'subscriptions',
+      action: 'manage',
+      resourceId: getSubscriptionId
+    }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -157,7 +168,12 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.post(
     '/:subscriptionId/suspend',
-    authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: getSubscriptionId }),
+    authorizeRoute({
+      permission: 'subscriptions:manage',
+      resource: 'subscriptions',
+      action: 'manage',
+      resourceId: getSubscriptionId
+    }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -182,7 +198,12 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.delete(
     '/:subscriptionId',
-    authorizeRoute({ resource: 'subscriptions', action: 'delete', resourceId: getSubscriptionId }),
+    authorizeRoute({
+      permission: 'subscriptions:manage',
+      resource: 'subscriptions',
+      action: 'manage',
+      resourceId: getSubscriptionId
+    }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);

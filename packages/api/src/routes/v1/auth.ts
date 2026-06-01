@@ -32,7 +32,7 @@ export function createAuthRouter(config: ApiConfig) {
     authenticateRequest(config),
     injectTenantContext(config),
     requireScopes([config.auth.requiredScope]),
-    authorizeRoute({ resource: 'users', action: 'read', resourceId: (req) => req.context?.userId }),
+    authorizeRoute({ permission: 'auth:read', resource: 'auth', action: 'read', resourceId: (req) => req.context?.userId }),
     (req: ApiRequest, res: Response<ApiResponse<{ tenantId: string; userId: string; scopes: string[]; roles: string[] }>>) => {
       const context = req.context!;
 

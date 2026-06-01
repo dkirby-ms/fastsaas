@@ -45,7 +45,13 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   const swaggerSetupHandler = swaggerUi.setup(openApiSpec, { explorer: true }) as unknown as RequestHandler;
   app.use('/docs', ...swaggerServeHandlers, swaggerSetupHandler);
 
-  app.use('/v1', createV1Router(config, meteringRuntime.service, dependencies.subscriptionService));
+  app.use(
+    '/v1',
+    createV1Router(config, meteringRuntime.service, {
+      subscriptionService: dependencies.subscriptionService,
+      auditService: dependencies.auditService
+    })
+  );
   app.use(notFoundHandler);
   app.use(errorHandler);
 

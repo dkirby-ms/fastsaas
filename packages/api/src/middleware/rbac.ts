@@ -4,50 +4,40 @@ import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
 import type { RequestAuditContext } from '../services/audit-service';
 
-export const RBAC_ROLES = ['publisher_admin', 'publisher_user', 'customer_admin', 'customer_user'] as const;
-export const RBAC_RESOURCES = ['subscriptions', 'plans', 'tenants', 'metering', 'users'] as const;
-export const RBAC_ACTIONS = ['create', 'read', 'update', 'delete', 'manage'] as const;
+export const RBAC_ROLES = ['admin', 'owner', 'member', 'viewer'] as const;
+export const RBAC_PERMISSIONS = [
+  'auth:read',
+  'subscriptions:read',
+  'subscriptions:manage',
+  'billing:manage',
+  'users:manage',
+  'metering:read',
+  'metering:manage',
+  'metering:export',
+  'audit_logs:read',
+  'webhooks:manage'
+] as const;
+export const RBAC_RESOURCES = ['auth', 'subscriptions', 'billing', 'users', 'metering', 'audit_logs', 'webhooks'] as const;
+export const RBAC_ACTIONS = ['read', 'manage', 'export'] as const;
 
 export type RbacRole = (typeof RBAC_ROLES)[number];
+export type RbacPermission = (typeof RBAC_PERMISSIONS)[number];
 export type RbacResource = (typeof RBAC_RESOURCES)[number];
 export type RbacAction = (typeof RBAC_ACTIONS)[number];
 
-type PermissionMatrix = Record<RbacRole, Record<RbacResource, readonly RbacAction[]>>;
+type PermissionMatrix = Record<RbacRole, readonly RbacPermission[]>;
 
 export const PERMISSIONS_MATRIX: PermissionMatrix = {
-  publisher_admin: {
-    subscriptions: ['create', 'read', 'update', 'delete', 'manage'],
-    plans: ['create', 'read', 'update', 'delete', 'manage'],
-    tenants: ['create', 'read', 'update', 'delete', 'manage'],
-    metering: ['create', 'read', 'update', 'delete', 'manage'],
-    users: ['create', 'read', 'update', 'delete', 'manage']
-  },
-  publisher_user: {
-    subscriptions: ['create', 'read', 'update', 'manage'],
-    plans: ['read'],
-    tenants: ['read'],
-    metering: ['read', 'manage'],
-    users: ['read']
-  },
-  customer_admin: {
-    subscriptions: ['read', 'manage'],
-    plans: ['read'],
-    tenants: ['read', 'update'],
-    metering: ['read', 'create'],
-    users: ['create', 'read', 'update', 'delete', 'manage']
-  },
-  customer_user: {
-    subscriptions: ['read'],
-    plans: ['read'],
-    tenants: ['read'],
-    metering: ['read'],
-    users: ['read', 'update']
-  }
+  admin: RBAC_PERMISSIONS,
+  owner: RBAC_PERMISSIONS,
+  member: ['auth:read', 'subscriptions:read', 'metering:read', 'metering:manage'],
+  viewer: ['auth:read', 'subscriptions:read', 'metering:read']
 };
 
 const RBAC_ROLE_SET = new Set<string>(RBAC_ROLES);
 
 export interface AuthorizeRouteOptions {
+  permission: RbacPermission;
   resource: RbacResource;
   action: RbacAction;
   resourceId?: (req: ApiRequest) => string | undefined;
@@ -58,12 +48,12 @@ export function isRbacRole(role: string): role is RbacRole {
   return RBAC_ROLE_SET.has(role);
 }
 
-export function getGrantedActions(role: RbacRole, resource: RbacResource): readonly RbacAction[] {
-  return PERMISSIONS_MATRIX[role][resource];
+export function getGrantedPermissions(role: RbacRole): readonly RbacPermission[] {
+  return PERMISSIONS_MATRIX[role];
 }
 
-export function isActionAllowed(roles: readonly string[], resource: RbacResource, action: RbacAction): boolean {
-  return roles.filter(isRbacRole).some((role) => getGrantedActions(role, resource).includes(action));
+export function isPermissionAllowed(roles: readonly string[], permission: RbacPermission): boolean {
+  return roles.filter(isRbacRole).some((role) => getGrantedPermissions(role).includes(permission));
 }
 
 function buildAuditContext(req: ApiRequest, options: AuthorizeRouteOptions): RequestAuditContext {
@@ -84,15 +74,14 @@ export function authorizeRoute(options: AuthorizeRouteOptions): RequestHandler {
 
     req.audit = buildAuditContext(req, options);
 
-    if (isActionAllowed(req.context.roles, options.resource, options.action)) {
+    if (isPermissionAllowed(req.context.roles, options.permission)) {
       next();
       return;
     }
 
     next(
       AppError.forbidden('You do not have permission to perform this action', {
-        resource: options.resource,
-        action: options.action,
+        permission: options.permission,
         roles: req.context.roles.filter(isRbacRole)
       })
     );
