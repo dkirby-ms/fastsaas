@@ -18,23 +18,18 @@ COPY packages/portal ./packages/portal
 ARG API_BASE_URL=http://api:3000
 ARG APP_NAME=portal
 ARG HEALTH_PATH=/health
-ARG NEXTAUTH_SECRET=build-only-secret
-ARG AZURE_AD_TENANT_ID=build-tenant
-ARG AZURE_AD_CLIENT_ID=build-client
-ARG AZURE_AD_CLIENT_SECRET=build-secret
-ARG AZURE_AD_API_CLIENT_ID=build-api-client
 
 ENV API_BASE_URL=${API_BASE_URL}
 ENV NEXT_PUBLIC_API_BASE_URL=${API_BASE_URL}
 ENV APP_NAME=${APP_NAME}
 ENV HEALTH_PATH=${HEALTH_PATH}
-ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-ENV AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
-ENV AZURE_AD_CLIENT_ID=${AZURE_AD_CLIENT_ID}
-ENV AZURE_AD_CLIENT_SECRET=${AZURE_AD_CLIENT_SECRET}
-ENV AZURE_AD_API_CLIENT_ID=${AZURE_AD_API_CLIENT_ID}
 
-RUN npm run build --workspace=@fastsaas/portal
+RUN NEXTAUTH_SECRET=build-only-secret \
+    AZURE_AD_TENANT_ID=build-tenant \
+    AZURE_AD_CLIENT_ID=build-client \
+    AZURE_AD_CLIENT_SECRET=build-secret \
+    AZURE_AD_API_CLIENT_ID=build-api-client \
+    npm run build --workspace=@fastsaas/portal
 
 FROM node:22-alpine AS runner
 WORKDIR /app
