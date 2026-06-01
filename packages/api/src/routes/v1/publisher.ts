@@ -139,100 +139,28 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   throw AppError.badRequest('Publisher tenant action is not supported');
 }
 
-/**
- * @openapi
- * /v1/publisher/dashboard:
- *   get:
- *     summary: Get publisher dashboard metrics
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher dashboard metrics
- * /v1/publisher/plans:
- *   get:
- *     summary: List publisher plans
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher plan catalog
- *   post:
- *     summary: Create a publisher plan
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       201:
- *         description: Publisher plan created
- * /v1/publisher/plans/{planId}:
- *   put:
- *     summary: Update a publisher plan
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher plan catalog updated
- * /v1/publisher/subscriptions:
- *   get:
- *     summary: List subscriptions across tenants for publisher operations
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher subscription list
- * /v1/publisher/tenants:
- *   get:
- *     summary: List publisher tenant summaries
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher tenant summaries
- *   post:
- *     summary: Create a managed tenant subscription
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       201:
- *         description: Publisher tenant created
- * /v1/publisher/tenants/{tenantId}:
- *   get:
- *     summary: Get publisher tenant detail
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher tenant detail
- *   put:
- *     summary: Update publisher tenant settings
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher tenant updated
- * /v1/publisher/tenants/{tenantId}/{action}:
- *   post:
- *     summary: Transition publisher tenant lifecycle state
- *     tags: [Publisher]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Publisher tenant transitioned
- */
 export function createPublisherRouter(config: ApiConfig, publisherService: PublisherService) {
   const router = Router();
   router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
 
+  /**
+   * @swagger
+   * /v1/publisher/dashboard:
+   *   get:
+   *     summary: Get publisher dashboard metrics
+   *     description: Returns aggregate subscription, revenue, churn risk, and plan mix metrics for the authenticated publisher tenant.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Publisher dashboard metrics
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
   router.get(
     '/dashboard',
     authorizeRoute({ resource: 'publisher', action: 'view' }),
@@ -247,6 +175,24 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/plans:
+   *   get:
+   *     summary: List publisher plans
+   *     description: Returns the publisher plan catalog, including built-in defaults and saved plan overrides.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Publisher plan catalog
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
   router.get(
     '/plans',
     authorizeRoute({ resource: 'publisher', action: 'view' }),
@@ -261,6 +207,51 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/plans:
+   *   post:
+   *     summary: Create a publisher plan
+   *     description: Creates a publisher plan definition for the authenticated publisher tenant.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [name, description, priceMonthly, status]
+   *             properties:
+   *               id:
+   *                 type: string
+   *               name:
+   *                 type: string
+   *               description:
+   *                 type: string
+   *               priceMonthly:
+   *                 type: string
+   *               status:
+   *                 type: string
+   *                 enum: [active, draft]
+   *               features:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *     responses:
+   *       201:
+   *         description: Publisher plan created
+   *       400:
+   *         description: Request body is invalid
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       409:
+   *         description: A plan with the derived identifier already exists
+   */
   router.post(
     '/plans',
     authorizeRoute({ resource: 'publisher', action: 'manage' }),
@@ -275,6 +266,58 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/plans/{planId}:
+   *   put:
+   *     summary: Update a publisher plan
+   *     description: Updates a publisher plan definition and returns the refreshed plan catalog.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: planId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Publisher plan identifier.
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [name, description, priceMonthly, status]
+   *             properties:
+   *               id:
+   *                 type: string
+   *               name:
+   *                 type: string
+   *               description:
+   *                 type: string
+   *               priceMonthly:
+   *                 type: string
+   *               status:
+   *                 type: string
+   *                 enum: [active, draft]
+   *               features:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *     responses:
+   *       200:
+   *         description: Publisher plan catalog updated
+   *       400:
+   *         description: Request body is invalid
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Plan not found
+   */
   router.put(
     '/plans/:planId',
     authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
@@ -289,6 +332,24 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/subscriptions:
+   *   get:
+   *     summary: List publisher-visible subscriptions
+   *     description: Returns subscriptions visible to the publisher tenant for operational reporting.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Publisher subscription list
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
   router.get(
     '/subscriptions',
     authorizeRoute({ resource: 'publisher', action: 'view' }),
@@ -303,6 +364,24 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/tenants:
+   *   get:
+   *     summary: List managed publisher tenants
+   *     description: Returns summarized tenant records derived from the publisher-managed subscription catalog.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Publisher tenant summaries
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
   router.get(
     '/tenants',
     authorizeRoute({ resource: 'publisher', action: 'view' }),
@@ -317,6 +396,48 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/tenants:
+   *   post:
+   *     summary: Create a managed tenant subscription
+   *     description: Creates a managed tenant record backed by a publisher-owned subscription.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [displayName, primaryDomain, planId, seats, status]
+   *             properties:
+   *               displayName:
+   *                 type: string
+   *               primaryDomain:
+   *                 type: string
+   *               planId:
+   *                 type: string
+   *               seats:
+   *                 type: integer
+   *                 minimum: 1
+   *               status:
+   *                 type: string
+   *                 enum: [active, trialing, past_due, suspended, canceled]
+   *     responses:
+   *       201:
+   *         description: Publisher tenant created
+   *       400:
+   *         description: Request body is invalid
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Referenced plan not found
+   */
   router.post(
     '/tenants',
     authorizeRoute({ resource: 'publisher', action: 'manage' }),
@@ -331,6 +452,33 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/tenants/{tenantId}:
+   *   get:
+   *     summary: Get publisher tenant detail
+   *     description: Returns a detailed managed tenant view including usage and audit history.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: tenantId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Managed tenant identifier or associated subscription id.
+   *     responses:
+   *       200:
+   *         description: Publisher tenant detail
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   *       404:
+   *         description: Tenant not found
+   */
   router.get(
     '/tenants/:tenantId',
     authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getTenantId }),
@@ -345,6 +493,55 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/tenants/{tenantId}:
+   *   put:
+   *     summary: Update publisher tenant settings
+   *     description: Updates the managed tenant's plan, commercial, and status metadata.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: tenantId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Managed tenant identifier or associated subscription id.
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [displayName, primaryDomain, planId, seats, status]
+   *             properties:
+   *               displayName:
+   *                 type: string
+   *               primaryDomain:
+   *                 type: string
+   *               planId:
+   *                 type: string
+   *               seats:
+   *                 type: integer
+   *                 minimum: 1
+   *               status:
+   *                 type: string
+   *                 enum: [active, trialing, past_due, suspended, canceled]
+   *     responses:
+   *       200:
+   *         description: Publisher tenant updated
+   *       400:
+   *         description: Request body is invalid
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Tenant or plan not found
+   */
   router.put(
     '/tenants/:tenantId',
     authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getTenantId }),
@@ -359,6 +556,44 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     }
   );
 
+  /**
+   * @swagger
+   * /v1/publisher/tenants/{tenantId}/{action}:
+   *   post:
+   *     summary: Transition publisher tenant lifecycle state
+   *     description: Applies activate, suspend, or cancel lifecycle actions to a managed tenant subscription.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: tenantId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Managed tenant identifier or associated subscription id.
+   *       - in: path
+   *         name: action
+   *         required: true
+   *         schema:
+   *           type: string
+   *           enum: [activate, suspend, cancel]
+   *         description: Lifecycle action to apply to the managed tenant.
+   *     responses:
+   *       200:
+   *         description: Publisher tenant transitioned
+   *       400:
+   *         description: Tenant action is not supported
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Tenant not found
+   *       409:
+   *         description: Tenant subscription cannot transition to the requested status
+   */
   router.post(
     '/tenants/:tenantId/:action',
     authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getTenantId }),

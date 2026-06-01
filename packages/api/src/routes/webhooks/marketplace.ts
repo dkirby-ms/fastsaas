@@ -71,6 +71,67 @@ function buildIdempotencyKey(req: ApiRequest, body: MarketplaceWebhookPayload): 
 export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
   const router = Router();
 
+  /**
+   * @swagger
+   * /api/webhooks/marketplace:
+   *   post:
+   *     summary: Process Azure Marketplace subscription webhooks
+   *     description: Validates the signed Azure Marketplace webhook payload and applies the requested subscription lifecycle transition.
+   *     tags:
+   *       - Webhooks
+   *     parameters:
+   *       - in: header
+   *         name: x-ms-marketplace-timestamp
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Request timestamp used for replay-window validation and signature generation.
+   *       - in: header
+   *         name: x-ms-marketplace-signature
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: HMAC SHA-256 signature of `<timestamp>.<raw body>` using the configured webhook secret.
+   *       - in: header
+   *         name: x-ms-marketplace-event-id
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: Optional marketplace event identifier used for idempotency.
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [action, marketplaceSubscriptionId]
+   *             properties:
+   *               action:
+   *                 type: string
+   *                 enum: [Suspend, Unsubscribe, Reinstate]
+   *               marketplaceSubscriptionId:
+   *                 type: string
+   *               requestId:
+   *                 type: string
+   *               correlationId:
+   *                 type: string
+   *               details:
+   *                 type: object
+   *                 additionalProperties: true
+   *     responses:
+   *       202:
+   *         description: Webhook accepted and applied to the subscription
+   *       200:
+   *         description: Duplicate or idempotent webhook acknowledged without additional state change
+   *       400:
+   *         description: Webhook body is invalid
+   *       401:
+   *         description: Missing or invalid webhook signature or timestamp headers
+   *       404:
+   *         description: Marketplace subscription not found
+   *       409:
+   *         description: Subscription cannot transition to the requested status
+   */
   router.post(
     '/marketplace',
     express.raw({ type: 'application/json' }),

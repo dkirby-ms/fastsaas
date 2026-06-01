@@ -37,9 +37,6 @@ services:
       context: .
       dockerfile: packages/api/Dockerfile
       target: runtime
-      args:
-        SERVICE_NAME: api
-        SERVICE_PORT: 3000
     container_name: fastsaas-api
     depends_on:
       postgres:
@@ -66,9 +63,6 @@ services:
       context: .
       dockerfile: packages/portal/Dockerfile
       target: runtime
-      args:
-        SERVICE_NAME: portal
-        SERVICE_PORT: 3001
     container_name: fastsaas-portal
     depends_on:
       api:

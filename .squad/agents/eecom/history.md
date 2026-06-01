@@ -156,3 +156,7 @@ Team reworked Phase 1.5 tenant-isolation PRs for publication-path compliance and
 - Publisher type exports blocking PR #59 v2 approval
 - **2026-06-01T00:43:05.936+00:00:** Publisher portal backend now lives under `packages/api/src/routes/v1/publisher.ts` with Kysely-backed `publisher_plans`, default catalog overlays for `starter/growth/scale`, and publisher tenant management persisted through subscription metadata plus audit log entries so the portal can drop its mock-backed plan/tenant mutations.
 - **2026-06-01T12:15:53.994+00:00:** Publisher subscription reads must stay inside request-scoped tenant RLS by loading data through `SubscriptionRepository.listByTenant(actor.tenantId)`; publisher-managed tenant records are stored under the publisher tenant and identify the managed customer via `beneficiaryTenantId`/`metadata.managedTenantId` in `packages/api/src/services/publisher-service.ts`.
+
+## Learnings
+
+- **2026-06-01T14:29:34.125+00:00:** OpenAPI route discovery for `packages/api/` is driven entirely by per-handler `@swagger`/`@openapi` JSDoc blocks in the files listed by `src/openapi.ts`; unannotated routes like `subscriptions.ts`, `publisher.ts`, and `webhooks/marketplace.ts` do not appear under `/docs` even when the handlers are mounted.

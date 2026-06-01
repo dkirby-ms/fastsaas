@@ -94,6 +94,134 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
 
+  /**
+   * @swagger
+   * /v1/subscriptions:
+   *   get:
+   *     summary: List subscriptions for the authenticated tenant
+   *     description: Returns the marketplace subscriptions that belong to the tenant resolved from the bearer token.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Tenant subscription list
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [status, data, meta]
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                   enum: [success]
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     required:
+   *                       - id
+   *                       - tenantId
+   *                       - marketplaceSubscriptionId
+   *                       - planId
+   *                       - seats
+   *                       - status
+   *                       - correlationId
+   *                       - metadata
+   *                       - createdAt
+   *                       - updatedAt
+   *                       - auditLog
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                       tenantId:
+   *                         type: string
+   *                       marketplaceSubscriptionId:
+   *                         type: string
+   *                       planId:
+   *                         type: string
+   *                       seats:
+   *                         type: integer
+   *                         minimum: 1
+   *                       status:
+   *                         type: string
+   *                         enum: [PendingActivation, Active, Suspended, Unsubscribed]
+   *                       offerId:
+   *                         type: string
+   *                       purchaserTenantId:
+   *                         type: string
+   *                       beneficiaryTenantId:
+   *                         type: string
+   *                       correlationId:
+   *                         type: string
+   *                       metadata:
+   *                         type: object
+   *                         additionalProperties: true
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                       updatedAt:
+   *                         type: string
+   *                         format: date-time
+   *                       auditLog:
+   *                         type: array
+   *                         items:
+   *                           type: object
+   *                           required:
+   *                             - id
+   *                             - subscriptionId
+   *                             - eventType
+   *                             - source
+   *                             - toStatus
+   *                             - correlationId
+   *                             - requestId
+   *                             - details
+   *                             - createdAt
+   *                           properties:
+   *                             id:
+   *                               type: string
+   *                             subscriptionId:
+   *                               type: string
+   *                             eventType:
+   *                               type: string
+   *                             source:
+   *                               type: string
+   *                             fromStatus:
+   *                               type: string
+   *                               nullable: true
+   *                               enum: [PendingActivation, Active, Suspended, Unsubscribed, null]
+   *                             toStatus:
+   *                               type: string
+   *                               enum: [PendingActivation, Active, Suspended, Unsubscribed]
+   *                             correlationId:
+   *                               type: string
+   *                             requestId:
+   *                               type: string
+   *                             details:
+   *                               type: object
+   *                               additionalProperties: true
+   *                             createdAt:
+   *                               type: string
+   *                               format: date-time
+   *                 meta:
+   *                   type: object
+   *                   required: [requestId, timestamp, version]
+   *                   properties:
+   *                     requestId:
+   *                       type: string
+   *                     correlationId:
+   *                       type: string
+   *                     timestamp:
+   *                       type: string
+   *                       format: date-time
+   *                     version:
+   *                       type: string
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or tenant view permission
+   */
   router.get(
     '/',
     authorizeRoute({ resource: 'subscriptions', action: 'view' }),
@@ -112,6 +240,141 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     }
   );
 
+  /**
+   * @swagger
+   * /v1/subscriptions/{subscriptionId}:
+   *   get:
+   *     summary: Get a subscription for the authenticated tenant
+   *     description: Returns one subscription when the authenticated tenant owns it.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: subscriptionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Internal FastSaaS subscription identifier.
+   *     responses:
+   *       200:
+   *         description: Subscription detail
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [status, data, meta]
+   *               properties:
+   *                 status:
+   *                   type: string
+   *                   enum: [success]
+   *                 data:
+   *                   type: object
+   *                   required:
+   *                     - id
+   *                     - tenantId
+   *                     - marketplaceSubscriptionId
+   *                     - planId
+   *                     - seats
+   *                     - status
+   *                     - correlationId
+   *                     - metadata
+   *                     - createdAt
+   *                     - updatedAt
+   *                     - auditLog
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                     tenantId:
+   *                       type: string
+   *                     marketplaceSubscriptionId:
+   *                       type: string
+   *                     planId:
+   *                       type: string
+   *                     seats:
+   *                       type: integer
+   *                       minimum: 1
+   *                     status:
+   *                       type: string
+   *                       enum: [PendingActivation, Active, Suspended, Unsubscribed]
+   *                     offerId:
+   *                       type: string
+   *                     purchaserTenantId:
+   *                       type: string
+   *                     beneficiaryTenantId:
+   *                       type: string
+   *                     correlationId:
+   *                       type: string
+   *                     metadata:
+   *                       type: object
+   *                       additionalProperties: true
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *                     updatedAt:
+   *                       type: string
+   *                       format: date-time
+   *                     auditLog:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         required:
+   *                           - id
+   *                           - subscriptionId
+   *                           - eventType
+   *                           - source
+   *                           - toStatus
+   *                           - correlationId
+   *                           - requestId
+   *                           - details
+   *                           - createdAt
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                           subscriptionId:
+   *                             type: string
+   *                           eventType:
+   *                             type: string
+   *                           source:
+   *                             type: string
+   *                           fromStatus:
+   *                             type: string
+   *                             nullable: true
+   *                             enum: [PendingActivation, Active, Suspended, Unsubscribed, null]
+   *                           toStatus:
+   *                             type: string
+   *                             enum: [PendingActivation, Active, Suspended, Unsubscribed]
+   *                           correlationId:
+   *                             type: string
+   *                           requestId:
+   *                             type: string
+   *                           details:
+   *                             type: object
+   *                             additionalProperties: true
+   *                           createdAt:
+   *                             type: string
+   *                             format: date-time
+   *                 meta:
+   *                   type: object
+   *                   required: [requestId, timestamp, version]
+   *                   properties:
+   *                     requestId:
+   *                       type: string
+   *                     correlationId:
+   *                       type: string
+   *                     timestamp:
+   *                       type: string
+   *                       format: date-time
+   *                     version:
+   *                       type: string
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or tenant view permission
+   *       404:
+   *         description: Subscription not found for the authenticated tenant
+   */
   router.get(
     '/:subscriptionId',
     authorizeRoute({ resource: 'subscriptions', action: 'view', resourceId: getSubscriptionId }),
@@ -130,6 +393,49 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     }
   );
 
+  /**
+   * @swagger
+   * /v1/subscriptions:
+   *   post:
+   *     summary: Create a marketplace-backed subscription
+   *     description: Resolves a marketplace purchase token, creates the tenant subscription, and stores the initial PendingActivation record.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - marketplaceToken
+   *             properties:
+   *               marketplaceToken:
+   *                 type: string
+   *               planId:
+   *                 type: string
+   *               seats:
+   *                 type: integer
+   *                 minimum: 1
+   *               metadata:
+   *                 type: object
+   *                 additionalProperties: true
+   *     responses:
+   *       201:
+   *         description: Subscription created in pending activation state
+   *       400:
+   *         description: Request body is invalid
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or tenant management permission
+   *       409:
+   *         description: A subscription already exists for the marketplace purchase or the requested state conflicts
+   *       503:
+   *         description: Marketplace fulfillment dependency is unavailable
+   */
   router.post(
     '/',
     authorizeRoute({
@@ -161,6 +467,37 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     }
   );
 
+  /**
+   * @swagger
+   * /v1/subscriptions/{subscriptionId}/activate:
+   *   post:
+   *     summary: Activate a subscription
+   *     description: Activates a tenant-owned subscription. Only Admin and Owner roles may perform the lifecycle transition.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: subscriptionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Internal FastSaaS subscription identifier.
+   *     responses:
+   *       200:
+   *         description: Subscription activated
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or lifecycle role permissions
+   *       404:
+   *         description: Subscription not found for the authenticated tenant
+   *       409:
+   *         description: Subscription cannot transition to Active from its current status
+   *       503:
+   *         description: Marketplace fulfillment dependency is unavailable
+   */
   router.post('/:subscriptionId/activate', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
@@ -186,6 +523,37 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     }
   });
 
+  /**
+   * @swagger
+   * /v1/subscriptions/{subscriptionId}/suspend:
+   *   post:
+   *     summary: Suspend a subscription
+   *     description: Suspends a tenant-owned subscription. Only Admin and Owner roles may perform the lifecycle transition.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: subscriptionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Internal FastSaaS subscription identifier.
+   *     responses:
+   *       200:
+   *         description: Subscription suspended
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or lifecycle role permissions
+   *       404:
+   *         description: Subscription not found for the authenticated tenant
+   *       409:
+   *         description: Subscription cannot transition to Suspended from its current status
+   *       503:
+   *         description: Marketplace fulfillment dependency is unavailable
+   */
   router.post('/:subscriptionId/suspend', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
@@ -211,6 +579,37 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     }
   });
 
+  /**
+   * @swagger
+   * /v1/subscriptions/{subscriptionId}:
+   *   delete:
+   *     summary: Unsubscribe a tenant subscription
+   *     description: Unsubscribes a tenant-owned subscription. Only Admin and Owner roles may perform the lifecycle transition.
+   *     tags:
+   *       - Subscriptions
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: subscriptionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Internal FastSaaS subscription identifier.
+   *     responses:
+   *       200:
+   *         description: Subscription unsubscribed
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or lifecycle role permissions
+   *       404:
+   *         description: Subscription not found for the authenticated tenant
+   *       409:
+   *         description: Subscription cannot transition to Unsubscribed from its current status
+   *       503:
+   *         description: Marketplace fulfillment dependency is unavailable
+   */
   router.delete('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);

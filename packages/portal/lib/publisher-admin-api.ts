@@ -17,15 +17,15 @@ export const publisherAdminContracts = [
 ] as const;
 
 export function getPublisherApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_PUBLISHER_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+  return process.env.PUBLISHER_API_BASE_URL ?? process.env.API_BASE_URL ?? '';
 }
 
 export function isPublisherAdminApiEnabled() {
-  return process.env.NEXT_PUBLIC_ENABLE_PUBLISHER_ADMIN_API === 'true' && getPublisherApiBaseUrl().length > 0;
+  return process.env.ENABLE_PUBLISHER_ADMIN_API === 'true' && getPublisherApiBaseUrl().length > 0;
 }
 
 export function getPublisherIntegrationMode(): 'mock' | 'live' {
-  if (process.env.NEXT_PUBLIC_USE_MOCK_API !== 'false') {
+  if (process.env.USE_MOCK_API !== 'false') {
     return 'mock';
   }
 
