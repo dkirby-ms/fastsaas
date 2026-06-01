@@ -5,7 +5,7 @@ import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
-import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { authenticateRequest, getRoles, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { SubscriptionService } from '../../services/subscription-service';
@@ -55,13 +55,33 @@ function buildActorContext(req: ApiRequest) {
 }
 
 function getSubscriptionId(req: ApiRequest): string {
-  return Array.isArray(req.params.subscriptionId) ? req.params.subscriptionId[0] ?? '' : req.params.subscriptionId;
+  const { subscriptionId } = req.params;
+
+  if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+    throw AppError.badRequest('subscriptionId path parameter is required');
+  }
+
+  return subscriptionId;
+}
+
+function assertLifecycleAccess(req: ApiRequest): void {
+  const tokenRoles = req.context?.roles ?? getRoles(req.auth);
+  const normalizedTokenRoles = tokenRoles.map((role) => role.trim().toLowerCase());
+
+  if (normalizedTokenRoles.includes('admin') || normalizedTokenRoles.includes('owner')) {
+    return;
+  }
+
+  throw AppError.forbidden('The access token does not grant the required role', {
+    requiredRoles: ['Admin', 'Owner'],
+    tokenRoles
+  });
 }
 
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), injectTenantContext(config), requireScopes([config.auth.requiredScope]));
+  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
 
   router.get(
     '/',
@@ -136,8 +156,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
         const subscription = await subscriptionService.activateSubscription({
-          subscriptionId: getSubscriptionId(req),
+          subscriptionId,
           tenantId: actor.tenantId,
           requestId: actor.requestId,
           correlationId: actor.correlationId,
@@ -161,8 +184,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
         const subscription = await subscriptionService.suspendSubscription({
-          subscriptionId: getSubscriptionId(req),
+          subscriptionId,
           tenantId: actor.tenantId,
           requestId: actor.requestId,
           correlationId: actor.correlationId,
@@ -186,8 +212,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
         const subscription = await subscriptionService.unsubscribeSubscription({
-          subscriptionId: getSubscriptionId(req),
+          subscriptionId,
           tenantId: actor.tenantId,
           requestId: actor.requestId,
           correlationId: actor.correlationId,

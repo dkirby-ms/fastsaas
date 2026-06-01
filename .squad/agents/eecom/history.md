@@ -54,6 +54,7 @@ _No learnings recorded yet._
 - **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
 - **2026-05-30T21:21:50.014+00:00:** PostgreSQL Flexible Server public-mode deployments must create explicit firewall rules; this branch now adds Azure-services and dev-wide public rules only when no delegated subnet is configured, leaving private-mode deployments unchanged.
 - **2026-05-31T18:54:21.897+00:00:** Prisma API containers should use Debian-based Node images instead of Alpine; `node:22-slim` plus `binaryTargets = ["native", "debian-openssl-3.0.x"]` avoids musl/OpenSSL engine crashes in runtime containers.
+- **2026-06-01T00:18:00.000+00:00:** Subscription lifecycle routes now enforce Admin/Owner authorization after tenant ownership lookup, so same-tenant Member/Viewer calls fail with `403` while cross-tenant probes still collapse to `404` without leaking record existence.
 
 ## PR #24 — PostgreSQL Firewall Fix (2026-05-30T21:21:50.014+00:00)
 
