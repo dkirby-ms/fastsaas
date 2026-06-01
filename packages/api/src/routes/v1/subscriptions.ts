@@ -427,8 +427,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     '/',
     authorizeRoute({
       resource: 'subscriptions',
-      action: 'manage',
-      resourceId: (req) => (typeof req.body?.marketplaceToken === 'string' ? req.body.marketplaceToken : undefined)
+      action: 'manage'
     }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {

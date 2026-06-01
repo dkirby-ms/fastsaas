@@ -5,6 +5,7 @@ import type { Kysely, Selectable, Transaction } from 'kysely';
 
 import type { Database } from '../db/database';
 import { withDatabaseRlsContext } from '../db/execution-context';
+import { redactMarketplaceTokens } from '../lib/marketplace-token-redaction';
 
 export interface CreateSubscriptionInput {
   tenantId: string;
@@ -91,7 +92,24 @@ function clone<T>(value: T): T {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? redactMarketplaceTokens(value as Record<string, unknown>)
+    : {};
+}
+
+function sanitizeAuditEntry(entry: SubscriptionAuditEntry): SubscriptionAuditEntry {
+  return {
+    ...entry,
+    details: redactMarketplaceTokens(entry.details)
+  };
+}
+
+function sanitizeSubscription(subscription: Subscription): Subscription {
+  return {
+    ...subscription,
+    metadata: redactMarketplaceTokens(subscription.metadata),
+    auditLog: subscription.auditLog.map((entry) => sanitizeAuditEntry(entry))
+  };
 }
 
 function mapAuditEntry(entry: {
@@ -187,18 +205,19 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       purchaserTenantId: input.purchaserTenantId,
       beneficiaryTenantId: input.beneficiaryTenantId,
       correlationId: input.correlationId,
-      metadata: clone(input.metadata),
+      metadata: clone(redactMarketplaceTokens(input.metadata)),
       createdAt,
       updatedAt: createdAt,
       auditLog: []
     };
 
-    const auditEntry = { ...input.auditEntry, subscriptionId: subscription.id };
+    const auditEntry = sanitizeAuditEntry({ ...input.auditEntry, subscriptionId: subscription.id });
     subscription.auditLog.push(auditEntry);
-    this.subscriptions.set(subscription.id, clone(subscription));
+    const sanitizedSubscription = sanitizeSubscription(subscription);
+    this.subscriptions.set(subscription.id, clone(sanitizedSubscription));
     this.marketplaceIndex.set(subscription.marketplaceSubscriptionId, subscription.id);
 
-    return clone(subscription);
+    return clone(sanitizedSubscription);
   }
 
   async updateManagedSubscription(input: UpdateManagedSubscriptionInput): Promise<Subscription> {
@@ -221,17 +240,19 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       purchaserTenantId: input.purchaserTenantId,
       beneficiaryTenantId: input.beneficiaryTenantId,
       correlationId: input.correlationId,
-      metadata: clone(input.metadata),
+      metadata: clone(redactMarketplaceTokens(input.metadata)),
       updatedAt,
-      auditLog: updatedAuditLog
+      auditLog: updatedAuditLog.map((entry) => sanitizeAuditEntry(entry))
     };
 
-    this.subscriptions.set(updated.id, clone(updated));
-    return clone(updated);
+    const sanitizedSubscription = sanitizeSubscription(updated);
+    this.subscriptions.set(updated.id, clone(sanitizedSubscription));
+    return clone(sanitizedSubscription);
   }
 
   async findById(subscriptionId: string): Promise<Subscription | null> {
-    return clone(this.subscriptions.get(subscriptionId) ?? null);
+    const subscription = this.subscriptions.get(subscriptionId);
+    return subscription ? clone(sanitizeSubscription(subscription)) : null;
   }
 
   async findByMarketplaceSubscriptionId(marketplaceSubscriptionId: string): Promise<Subscription | null> {
@@ -247,13 +268,13 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
     return [...this.subscriptions.values()]
       .filter((subscription) => subscription.tenantId === tenantId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .map((subscription) => clone(subscription));
+      .map((subscription) => clone(sanitizeSubscription(subscription)));
   }
 
   async listAll(): Promise<Subscription[]> {
     return [...this.subscriptions.values()]
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .map((subscription) => clone(subscription));
+      .map((subscription) => clone(sanitizeSubscription(subscription)));
   }
 
   async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
@@ -271,11 +292,12 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       status: input.toStatus,
       correlationId: input.correlationId,
       updatedAt: input.auditEntry.createdAt,
-      auditLog: [...existing.auditLog, { ...input.auditEntry, subscriptionId: existing.id }]
+      auditLog: [...existing.auditLog, sanitizeAuditEntry({ ...input.auditEntry, subscriptionId: existing.id })]
     };
 
-    this.subscriptions.set(updated.id, clone(updated));
-    return clone(updated);
+    const sanitizedSubscription = sanitizeSubscription(updated);
+    this.subscriptions.set(updated.id, clone(sanitizedSubscription));
+    return clone(sanitizedSubscription);
   }
 
   async recordWebhookEvent(event: RecordedWebhookEvent): Promise<void> {
@@ -307,7 +329,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
             purchaser_tenant_id: input.purchaserTenantId ?? null,
             beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
             correlation_id: input.correlationId,
-            metadata: input.metadata,
+            metadata: redactMarketplaceTokens(input.metadata),
             created_at: createdAt,
             updated_at: createdAt
           })
@@ -326,7 +348,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
             to_status: input.auditEntry.toStatus,
             correlation_id: input.auditEntry.correlationId,
             request_id: input.auditEntry.requestId,
-            details: input.auditEntry.details,
+            details: redactMarketplaceTokens(input.auditEntry.details),
             created_at: createdAt
           })
           .execute();
@@ -362,7 +384,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
           purchaser_tenant_id: input.purchaserTenantId ?? null,
           beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
           correlation_id: input.correlationId,
-          metadata: input.metadata,
+          metadata: redactMarketplaceTokens(input.metadata),
           updated_at: updatedAt
         })
         .where('id', '=', input.subscriptionId)
@@ -381,7 +403,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
             to_status: input.auditEntry.toStatus,
             correlation_id: input.auditEntry.correlationId,
             request_id: input.auditEntry.requestId,
-            details: input.auditEntry.details,
+            details: redactMarketplaceTokens(input.auditEntry.details),
             created_at: updatedAt
           })
           .execute();
@@ -482,7 +504,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
             to_status: input.auditEntry.toStatus,
             correlation_id: input.auditEntry.correlationId,
             request_id: input.auditEntry.requestId,
-            details: input.auditEntry.details,
+            details: redactMarketplaceTokens(input.auditEntry.details),
             created_at: updatedAt
           })
           .execute();

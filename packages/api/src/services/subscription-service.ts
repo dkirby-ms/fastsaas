@@ -4,6 +4,7 @@ import type { MarketplaceWebhookPayload, Subscription, SubscriptionAuditEntry, S
 import type { Logger } from 'pino';
 
 import { AppError } from '../errors/app-error';
+import { redactMarketplaceTokens } from '../lib/marketplace-token-redaction';
 import {
   MarketplaceFulfillmentError,
   type FulfillmentOperationResult,
@@ -69,7 +70,7 @@ const allowedTransitions: Record<SubscriptionStatus, SubscriptionStatus[]> = {
 };
 
 function normalizeDetails(details?: Record<string, unknown>): Record<string, unknown> {
-  return details ? { ...details } : {};
+  return redactMarketplaceTokens(details ? { ...details } : {});
 }
 
 function isLifecycleAction(action: MarketplaceWebhookPayload['action']): action is MarketplaceLifecycleAction {
