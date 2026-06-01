@@ -6,7 +6,7 @@ import type { RequestAuditContext } from '../services/audit-service';
 
 export const RBAC_ROLES = ['Admin', 'Owner', 'Member', 'Viewer'] as const;
 export const RBAC_RESOURCES = ['subscriptions', 'billing', 'users', 'metering', 'audit_logs', 'webhooks', 'publisher'] as const;
-export const RBAC_ACTIONS = ['view', 'manage', 'export'] as const;
+export const RBAC_ACTIONS = ['view', 'write', 'manage', 'export'] as const;
 
 export type RbacRole = (typeof RBAC_ROLES)[number];
 export type RbacResource = (typeof RBAC_RESOURCES)[number];
@@ -26,6 +26,7 @@ export const RBAC_PERMISSION_DESCRIPTORS: readonly RbacPermissionDescriptor[] = 
   { label: 'View tenant members', resource: 'users', action: 'view' },
   { label: 'Invite or remove users', resource: 'users', action: 'manage' },
   { label: 'View metering analytics', resource: 'metering', action: 'view' },
+  { label: 'Submit metering usage', resource: 'metering', action: 'write' },
   { label: 'Export usage and billing CSV', resource: 'billing', action: 'export' },
   { label: 'View audit logs (tenant-scoped)', resource: 'audit_logs', action: 'view' },
   { label: 'Configure webhooks', resource: 'webhooks', action: 'manage' },

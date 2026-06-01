@@ -144,6 +144,34 @@ describe('RBAC boundary security catalog', () => {
     expect(response.body.error.details.missingScopes).toEqual(missingScopes);
   });
 
+  it('blocks member metering writes even when the metering write scope is present', async () => {
+    const tenantId = 'tenant-member-metering-write';
+    const subscription = await harness.createSubscriptionFixture({
+      tenantId,
+      marketplaceToken: 'member-metering-write-subscription'
+    });
+    const token = await harness.createToken({
+      tenantId,
+      roles: ['Member'],
+      scopes: [harness.config.metering.writeScope]
+    });
+
+    const response = await request(harness.app)
+      .post('/v1/metering/events')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        eventId: 'member-metering-write-event',
+        subscriptionId: subscription.id,
+        planId: subscription.planId,
+        dimensionId: 'api-calls',
+        quantity: 1,
+        timestamp: new Date().toISOString()
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+  });
+
   it.each(lifecycleBoundaryCases)(
     'enforces Admin/Owner-only subscription lifecycle access for $role on $action',
     async ({ role, action, initialStatus, expectedStatus, expectedSubscriptionStatus }) => {

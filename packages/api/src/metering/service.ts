@@ -2,6 +2,7 @@ import type { MeteringDashboardSummary, UsageEventIngestRequest, UsageEventInges
 
 import type { ApiConfig } from '../config';
 import { AppError } from '../errors/app-error';
+import type { SubscriptionRepository } from '../repositories/subscription-repository';
 import type { Clock } from './clock';
 import type { UsageEventRepository } from './repository';
 
@@ -40,12 +41,35 @@ export class MeteringService {
   constructor(
     private readonly config: ApiConfig,
     private readonly repository: UsageEventRepository,
-    private readonly clock: Clock
+    private readonly clock: Clock,
+    private readonly subscriptionRepository?: Pick<SubscriptionRepository, 'findById'>
   ) {}
 
   async ingestEvent(tenantId: string, event: UsageEventIngestRequest): Promise<UsageEventIngestResponse> {
     validateRequest(event);
-    return this.repository.ingest(tenantId, event, buildIdempotencyKey(tenantId, event), this.clock.now());
+
+    const resolvedEvent = await this.resolveOwnedSubscription(tenantId, event);
+    return this.repository.ingest(tenantId, resolvedEvent, buildIdempotencyKey(tenantId, resolvedEvent), this.clock.now());
+  }
+
+  private async resolveOwnedSubscription(tenantId: string, event: UsageEventIngestRequest): Promise<UsageEventIngestRequest> {
+    if (!this.subscriptionRepository) {
+      return event;
+    }
+
+    const subscription = await this.subscriptionRepository.findById(event.subscriptionId);
+    if (!subscription || subscription.tenantId !== tenantId) {
+      throw AppError.notFound('Subscription was not found');
+    }
+
+    return {
+      ...event,
+      subscriptionId: subscription.marketplaceSubscriptionId,
+      metadata: {
+        ...event.metadata,
+        tenantSubscriptionId: subscription.id
+      }
+    };
   }
 
   async getDashboardSummary(tenantId: string): Promise<MeteringDashboardSummary> {

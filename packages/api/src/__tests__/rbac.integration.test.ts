@@ -24,6 +24,7 @@ import { RBAC_MATRIX_FIXTURE } from './rbac-matrix.fixture';
 
 const ACTION_METHODS: Record<RbacAction, 'get' | 'post'> = {
   view: 'get',
+  write: 'post',
   manage: 'post',
   export: 'get'
 };

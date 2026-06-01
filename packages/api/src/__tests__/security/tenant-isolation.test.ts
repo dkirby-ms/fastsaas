@@ -125,21 +125,51 @@ describe('tenant isolation security catalog', () => {
     expect(ownerResponse.body.data.status).toBe('PendingActivation');
   });
 
+  it('rejects cross-tenant metering submissions and preserves legitimate tenant submissions', async () => {
+    const ownerTenantId = 'tenant-meter-owner';
+    const attackerTenantId = 'tenant-meter-attacker';
+    const ownerSubscription = await harness.createSubscriptionFixture({
+      tenantId: ownerTenantId,
+      marketplaceToken: 'metering-owner-subscription'
+    });
+
+    const attackResponse = await harness.ingestUsageEventFixture({
+      tenantId: attackerTenantId,
+      body: { subscriptionId: ownerSubscription.id, eventId: 'cross-tenant-metering-attack' }
+    });
+
+    expect(attackResponse.status).toBe(404);
+    expect(attackResponse.body.error.code).toBe('NOT_FOUND');
+    expect(await harness.meteringRepository.listByTenant(attackerTenantId)).toHaveLength(0);
+
+    const ownerResponse = await harness.ingestUsageEventFixture({
+      tenantId: ownerTenantId,
+      body: { subscriptionId: ownerSubscription.id, eventId: 'owner-metering-event' }
+    });
+
+    expect(ownerResponse.status).toBe(202);
+    expect(ownerResponse.body.data.event.subscriptionId).toBe(ownerSubscription.marketplaceSubscriptionId);
+    expect(ownerResponse.body.data.event.metadata.tenantSubscriptionId).toBe(ownerSubscription.id);
+    expect(await harness.meteringRepository.listByTenant(ownerTenantId)).toHaveLength(1);
+  });
+
   it('keeps metering dashboard counts tenant-scoped even when multiple tenants ingest usage', async () => {
     const tenantA = 'tenant-meter-a';
     const tenantB = 'tenant-meter-b';
+    const tenantASubscription = await harness.createSubscriptionFixture({ tenantId: tenantA, marketplaceToken: 'tenant-a-metering' });
+    const tenantBSubscription = await harness.createSubscriptionFixture({ tenantId: tenantB, marketplaceToken: 'tenant-b-metering' });
 
     await harness.ingestUsageEventFixture({
       tenantId: tenantA,
-      body: { subscriptionId: 'tenant-a-subscription', eventId: 'tenant-a-event-1' }
+      body: { subscriptionId: tenantASubscription.id, eventId: 'tenant-a-event-1' }
     });
     await harness.ingestUsageEventFixture({
       tenantId: tenantB,
-      body: { subscriptionId: 'tenant-b-subscription', eventId: 'tenant-b-event-1' }
+      body: { subscriptionId: tenantBSubscription.id, eventId: 'tenant-b-event-1' }
     });
     await harness.ingestUsageEventFixture({
       tenantId: tenantB,
-      body: { subscriptionId: 'tenant-b-subscription', eventId: 'tenant-b-event-2' }
+      body: { subscriptionId: tenantBSubscription.id, eventId: 'tenant-b-event-2' }
     });
 
     const tenantAToken = await harness.createToken({ tenantId: tenantA, scopes: [harness.config.metering.readScope] });
