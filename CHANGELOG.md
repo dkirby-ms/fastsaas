@@ -1,3 +1,9 @@
+## [0.5.0](https://github.com/dkirby-ms/fastsaas/compare/v0.4.3...v0.5.0) (2026-06-01)
+
+### Features
+
+* multi-tenant auth and beneficiary tenant binding ([#80](https://github.com/dkirby-ms/fastsaas/issues/80)) ([4cbbfa9](https://github.com/dkirby-ms/fastsaas/commit/4cbbfa9834ad206e1bcd710fc36b32f976365bdb))
+
 ## [0.4.3](https://github.com/dkirby-ms/fastsaas/compare/v0.4.2...v0.4.3) (2026-06-01)
 
 ### Bug Fixes
