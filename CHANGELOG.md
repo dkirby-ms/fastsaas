@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/dkirby-ms/fastsaas/compare/v0.8.0...v0.8.1) (2026-06-01)
+
+### Bug Fixes
+
+* encode dynamic path segments in publisher portal API client ([#95](https://github.com/dkirby-ms/fastsaas/issues/95)) ([6cf0534](https://github.com/dkirby-ms/fastsaas/commit/6cf05345fcc20c16bef752817d3b778ef4830ecf))
+* redact marketplace purchase tokens from audit data and API responses ([#92](https://github.com/dkirby-ms/fastsaas/issues/92)) ([a146cf0](https://github.com/dkirby-ms/fastsaas/commit/a146cf05a569b119c622b18feae56868e66ca83a))
+
 ## [0.8.0](https://github.com/dkirby-ms/fastsaas/compare/v0.7.0...v0.8.0) (2026-06-01)
 
 ### Features
