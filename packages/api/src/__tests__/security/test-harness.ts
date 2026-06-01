@@ -82,7 +82,13 @@ function createFulfillmentClient(overrides: Map<string, FulfillmentResolveOverri
     async suspendSubscription() {},
     async unsubscribeSubscription() {},
     async updateSubscription() {},
-    async reinstateSubscription() {}
+    async reinstateSubscription() {},
+    async getOperation() {
+      throw new Error('getOperation should not be called in security tests');
+    },
+    async updateOperationStatus() {
+      throw new Error('updateOperationStatus should not be called in security tests');
+    }
   };
 }
 

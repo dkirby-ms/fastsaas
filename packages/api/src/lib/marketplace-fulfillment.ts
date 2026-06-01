@@ -12,6 +12,19 @@ export interface FulfillmentResolveResult {
   metadata?: Record<string, unknown>;
 }
 
+export interface FulfillmentOperationResult {
+  id: string;
+  subscriptionId: string;
+  action: string;
+  status: string;
+  offerId?: string;
+  publisherId?: string;
+  planId?: string;
+  quantity?: number;
+  errorStatusCode?: string;
+  errorMessage?: string;
+}
+
 export interface MarketplaceFulfillmentClient {
   resolveSubscription(marketplaceToken: string, requestId: string, correlationId: string): Promise<FulfillmentResolveResult>;
   activateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number, requestId: string, correlationId: string): Promise<void>;
@@ -19,6 +32,14 @@ export interface MarketplaceFulfillmentClient {
   unsubscribeSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
   updateSubscription(marketplaceSubscriptionId: string, planId: string, quantity: number, requestId: string, correlationId: string): Promise<void>;
   reinstateSubscription(marketplaceSubscriptionId: string, requestId: string, correlationId: string): Promise<void>;
+  getOperation(marketplaceSubscriptionId: string, operationId: string, requestId: string, correlationId: string): Promise<FulfillmentOperationResult>;
+  updateOperationStatus(
+    marketplaceSubscriptionId: string,
+    operationId: string,
+    status: 'Success' | 'Failure',
+    requestId: string,
+    correlationId: string
+  ): Promise<void>;
 }
 
 export class MarketplaceFulfillmentError extends Error {
@@ -139,6 +160,62 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
       action: 'reinstate',
       requestId,
       correlationId
+    });
+  }
+
+  async getOperation(
+    marketplaceSubscriptionId: string,
+    operationId: string,
+    requestId: string,
+    correlationId: string
+  ): Promise<FulfillmentOperationResult> {
+    const url = new URL(
+      `/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}/operations/${encodeURIComponent(operationId)}`,
+      this.options.baseUrl
+    );
+    url.searchParams.set('api-version', this.options.apiVersion);
+
+    const response = await this.request<Record<string, unknown>>(url, {
+      method: 'GET',
+      action: 'get-operation',
+      requestId,
+      correlationId
+    });
+
+    return {
+      id: typeof response.id === 'string' ? response.id : operationId,
+      subscriptionId:
+        typeof response.subscriptionId === 'string' ? response.subscriptionId : marketplaceSubscriptionId,
+      action: typeof response.action === 'string' ? response.action : 'Unknown',
+      status: typeof response.status === 'string' ? response.status : 'Unknown',
+      offerId: typeof response.offerId === 'string' ? response.offerId : undefined,
+      publisherId: typeof response.publisherId === 'string' ? response.publisherId : undefined,
+      planId: typeof response.planId === 'string' ? response.planId : undefined,
+      quantity: typeof response.quantity === 'number' ? response.quantity : undefined,
+      errorStatusCode: typeof response.errorStatusCode === 'string' ? response.errorStatusCode : undefined,
+      errorMessage: typeof response.errorMessage === 'string' ? response.errorMessage : undefined
+    };
+  }
+
+  async updateOperationStatus(
+    marketplaceSubscriptionId: string,
+    operationId: string,
+    status: 'Success' | 'Failure',
+    requestId: string,
+    correlationId: string
+  ): Promise<void> {
+    const url = new URL(
+      `/api/saas/subscriptions/${encodeURIComponent(marketplaceSubscriptionId)}/operations/${encodeURIComponent(operationId)}`,
+      this.options.baseUrl
+    );
+    url.searchParams.set('api-version', this.options.apiVersion);
+
+    await this.request(url, {
+      method: 'PATCH',
+      action: 'update-operation',
+      requestId,
+      correlationId,
+      body: { status }
     });
   }
 
