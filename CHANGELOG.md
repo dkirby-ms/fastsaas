@@ -1,3 +1,9 @@
+## [0.4.3](https://github.com/dkirby-ms/fastsaas/compare/v0.4.2...v0.4.3) (2026-06-01)
+
+### Bug Fixes
+
+* wire up Tailwind v4 PostCSS pipeline for portal ([ce8d748](https://github.com/dkirby-ms/fastsaas/commit/ce8d74853c063653e1eced444d0b212be4619e46))
+
 ## [0.4.2](https://github.com/dkirby-ms/fastsaas/compare/v0.4.1...v0.4.2) (2026-06-01)
 
 ### Bug Fixes
