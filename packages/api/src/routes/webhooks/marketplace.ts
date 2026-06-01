@@ -99,7 +99,7 @@ function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
 }
 
 function buildIdempotencyKey(req: ApiRequest, body: MarketplaceWebhookPayload): string {
-  const eventId = body.requestId ?? body.operationId ?? readHeader(req, EVENT_ID_HEADERS);
+  const eventId = body.operationId ?? body.requestId ?? readHeader(req, EVENT_ID_HEADERS);
   if (eventId) {
     return `marketplace:${eventId}`;
   }
