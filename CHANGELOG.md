@@ -1,3 +1,10 @@
+## [0.7.0](https://github.com/dkirby-ms/fastsaas/compare/v0.6.0...v0.7.0) (2026-06-01)
+
+### Features
+
+* **api:** add Marketplace change webhook handlers ([#82](https://github.com/dkirby-ms/fastsaas/issues/82)) ([b958b8d](https://github.com/dkirby-ms/fastsaas/commit/b958b8d6cf8b706f8cd7c15f59b1e554e0a2c5f1)), closes [#75](https://github.com/dkirby-ms/fastsaas/issues/75)
+* implement Marketplace landing page onboarding flow ([#81](https://github.com/dkirby-ms/fastsaas/issues/81)) ([66e1241](https://github.com/dkirby-ms/fastsaas/commit/66e12411fcb7518eb3d5379787c56d9716db6223)), closes [#79](https://github.com/dkirby-ms/fastsaas/issues/79)
+
 ## [0.6.0](https://github.com/dkirby-ms/fastsaas/compare/v0.5.0...v0.6.0) (2026-06-01)
 
 ### Features
