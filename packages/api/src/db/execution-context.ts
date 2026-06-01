@@ -82,7 +82,10 @@ export async function applySqlExecutionContext(
   context = getDatabaseExecutionContext()
 ): Promise<void> {
   await executor.$executeRawUnsafe(`SELECT set_config('${APP_CURRENT_TENANT_SETTING}', $1, true)`, context.tenantId ?? '');
-  await executor.$executeRawUnsafe(`SELECT set_config('${APP_BYPASS_RLS_SETTING}', $1, true)`, context.bypassRls ? 'true' : 'false');
+  await executor.$executeRawUnsafe(
+    `SELECT set_config('${APP_BYPASS_RLS_SETTING}', $1, true)`,
+    context.bypassRls ? 'true' : 'false'
+  );
 }
 
 export async function withDatabaseRlsContext<T>(
@@ -92,8 +95,14 @@ export async function withDatabaseRlsContext<T>(
 ): Promise<T> {
   const context = resolveDatabaseExecutionContext(overrides);
 
-  return db.transaction().execute(async (trx) => {
-    await applyDatabaseExecutionContext(trx, context);
-    return callback(trx, context);
+  if (!context.bypassRls && !context.tenantId) {
+    throw new Error('A tenant-scoped database operation requires a tenant id');
+  }
+
+  return executionContextStorage.run(context, async () => {
+    return db.transaction().execute(async (trx) => {
+      await applyDatabaseExecutionContext(trx, context);
+      return callback(trx, context);
+    });
   });
 }

@@ -1,11 +1,12 @@
 import type { ApiResponse, CreateSubscriptionRequest, Subscription } from '@fastsaas/shared';
-import { Router, type Response } from 'express';
+import { Router, type RequestHandler, type Response } from 'express';
 
 import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
-import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { authenticateRequest, getRoles, requireScopes } from '../../middleware/auth';
+import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { SubscriptionService } from '../../services/subscription-service';
 
@@ -27,7 +28,10 @@ function parseCreateSubscriptionBody(body: unknown): CreateSubscriptionRequest {
     throw AppError.badRequest('seats must be a positive integer when provided');
   }
 
-  if (candidate.metadata !== undefined && (!candidate.metadata || typeof candidate.metadata !== 'object' || Array.isArray(candidate.metadata))) {
+  if (
+    candidate.metadata !== undefined &&
+    (!candidate.metadata || typeof candidate.metadata !== 'object' || Array.isArray(candidate.metadata))
+  ) {
     throw AppError.badRequest('metadata must be an object when provided');
   }
 
@@ -53,10 +57,41 @@ function buildActorContext(req: ApiRequest) {
   };
 }
 
-function getSubscriptionIdParam(req: ApiRequest): string {
+function getSubscriptionId(req: ApiRequest): string {
   const { subscriptionId } = req.params;
 
-  return Array.isArray(subscriptionId) ? subscriptionId[0] : subscriptionId;
+  if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+    throw AppError.badRequest('subscriptionId path parameter is required');
+  }
+
+  return subscriptionId;
+}
+
+function assertLifecycleAccess(req: ApiRequest): void {
+  const tokenRoles = req.context?.roles ?? getRoles(req.auth);
+  const normalizedTokenRoles = tokenRoles.map((role) => role.trim().toLowerCase());
+
+  if (normalizedTokenRoles.includes('admin') || normalizedTokenRoles.includes('owner')) {
+    return;
+  }
+
+  throw AppError.forbidden('The access token does not grant the required role', {
+    requiredRoles: ['Admin', 'Owner'],
+    tokenRoles
+  });
+}
+
+function recordSubscriptionLifecycleAudit(lifecycleAction: 'activate' | 'suspend' | 'unsubscribe'): RequestHandler {
+  return (req: ApiRequest, _res, next) => {
+    req.audit = {
+      resource: 'subscriptions',
+      action: 'manage',
+      resourceId: getSubscriptionId(req),
+      metadata: { lifecycleAction }
+    };
+
+    next();
+  };
 }
 
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
@@ -64,118 +99,156 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config));
 
-  router.get('/', async (req: ApiRequest, res: Response<ApiResponse<Subscription[]>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const subscriptions = await subscriptionService.listSubscriptions(actor.tenantId);
-      res.status(200).json({
-        status: 'success',
-        data: subscriptions,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+  router.get(
+    '/',
+    authorizeRoute({ resource: 'subscriptions', action: 'view' }),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription[]>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const subscriptions = await subscriptionService.listSubscriptions(actor.tenantId);
+        res.status(200).json({
+          status: 'success',
+          data: subscriptions,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.get('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const subscription = await subscriptionService.getSubscriptionForTenant(getSubscriptionIdParam(req), actor.tenantId);
-      res.status(200).json({
-        status: 'success',
-        data: subscription,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+  router.get(
+    '/:subscriptionId',
+    authorizeRoute({ resource: 'subscriptions', action: 'view', resourceId: getSubscriptionId }),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const subscription = await subscriptionService.getSubscriptionForTenant(getSubscriptionId(req), actor.tenantId);
+        res.status(200).json({
+          status: 'success',
+          data: subscription,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.post('/', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const body = parseCreateSubscriptionBody(req.body);
-      const subscription = await subscriptionService.subscribe({
-        ...actor,
-        marketplaceToken: body.marketplaceToken,
-        planId: body.planId,
-        seats: body.seats,
-        metadata: body.metadata
-      });
+  router.post(
+    '/',
+    authorizeRoute({
+      resource: 'subscriptions',
+      action: 'manage',
+      resourceId: (req) => (typeof req.body?.marketplaceToken === 'string' ? req.body.marketplaceToken : undefined),
+      metadata: (req) => ({ planId: typeof req.body?.planId === 'string' ? req.body.planId : undefined })
+    }),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const body = parseCreateSubscriptionBody(req.body);
+        const subscription = await subscriptionService.subscribe({
+          ...actor,
+          marketplaceToken: body.marketplaceToken,
+          planId: body.planId,
+          seats: body.seats,
+          metadata: body.metadata
+        });
 
-      res.status(201).json({
-        status: 'success',
-        data: subscription,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+        res.status(201).json({
+          status: 'success',
+          data: subscription,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.post('/:subscriptionId/activate', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const subscription = await subscriptionService.activateSubscription({
-        subscriptionId: getSubscriptionIdParam(req),
-        tenantId: actor.tenantId,
-        requestId: actor.requestId,
-        correlationId: actor.correlationId,
-        source: actor.source
-      });
+  router.post(
+    '/:subscriptionId/activate',
+    recordSubscriptionLifecycleAudit('activate'),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
+        const subscription = await subscriptionService.activateSubscription({
+          subscriptionId,
+          tenantId: actor.tenantId,
+          requestId: actor.requestId,
+          correlationId: actor.correlationId,
+          source: actor.source
+        });
 
-      res.status(200).json({
-        status: 'success',
-        data: subscription,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+        res.status(200).json({
+          status: 'success',
+          data: subscription,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.post('/:subscriptionId/suspend', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const subscription = await subscriptionService.suspendSubscription({
-        subscriptionId: getSubscriptionIdParam(req),
-        tenantId: actor.tenantId,
-        requestId: actor.requestId,
-        correlationId: actor.correlationId,
-        source: actor.source
-      });
+  router.post(
+    '/:subscriptionId/suspend',
+    recordSubscriptionLifecycleAudit('suspend'),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
+        const subscription = await subscriptionService.suspendSubscription({
+          subscriptionId,
+          tenantId: actor.tenantId,
+          requestId: actor.requestId,
+          correlationId: actor.correlationId,
+          source: actor.source
+        });
 
-      res.status(200).json({
-        status: 'success',
-        data: subscription,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+        res.status(200).json({
+          status: 'success',
+          data: subscription,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
-  router.delete('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
-    try {
-      const actor = buildActorContext(req);
-      const subscription = await subscriptionService.unsubscribeSubscription({
-        subscriptionId: getSubscriptionIdParam(req),
-        tenantId: actor.tenantId,
-        requestId: actor.requestId,
-        correlationId: actor.correlationId,
-        source: actor.source
-      });
+  router.delete(
+    '/:subscriptionId',
+    recordSubscriptionLifecycleAudit('unsubscribe'),
+    async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const subscriptionId = getSubscriptionId(req);
+        await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+        assertLifecycleAccess(req);
+        const subscription = await subscriptionService.unsubscribeSubscription({
+          subscriptionId,
+          tenantId: actor.tenantId,
+          requestId: actor.requestId,
+          correlationId: actor.correlationId,
+          source: actor.source
+        });
 
-      res.status(200).json({
-        status: 'success',
-        data: subscription,
-        meta: buildResponseMeta(req, config.apiVersion)
-      });
-    } catch (error) {
-      next(error);
+        res.status(200).json({
+          status: 'success',
+          data: subscription,
+          meta: buildResponseMeta(req, config.apiVersion)
+        });
+      } catch (error) {
+        next(error);
+      }
     }
-  });
+  );
 
   return router;
 }

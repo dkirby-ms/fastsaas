@@ -38,8 +38,67 @@ function buildEnableTenantRlsStatements(tableName: string, tenantColumn = 'tenan
 function buildDisableTenantRlsStatements(tableName: string): string[] {
   const policyName = `${tableName}_tenant_isolation`;
 
-  return [`DROP POLICY IF EXISTS ${policyName} ON ${tableName}`, `ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY`];
+  return [
+    `DROP POLICY IF EXISTS ${policyName} ON ${tableName}`,
+    `ALTER TABLE ${tableName} NO FORCE ROW LEVEL SECURITY`,
+    `ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY`
+  ];
 }
+
+const APPLICATION_SCHEMA_STATEMENTS = [
+  'CREATE EXTENSION IF NOT EXISTS pgcrypto',
+  `
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      tenant_id TEXT NOT NULL,
+      marketplace_subscription_id TEXT NOT NULL UNIQUE,
+      plan_id TEXT NOT NULL,
+      seats INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      offer_id TEXT NULL,
+      purchaser_tenant_id TEXT NULL,
+      beneficiary_tenant_id TEXT NULL,
+      correlation_id TEXT NOT NULL,
+      metadata JSONB NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS subscription_audit_logs (
+      id TEXT PRIMARY KEY,
+      subscription_id TEXT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+      tenant_id TEXT NULL,
+      event_type TEXT NOT NULL,
+      source TEXT NOT NULL,
+      from_status TEXT NULL,
+      to_status TEXT NOT NULL,
+      correlation_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      details JSONB NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS marketplace_webhook_events (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      marketplace_subscription_id TEXT NOT NULL,
+      tenant_id TEXT NULL,
+      action TEXT NOT NULL,
+      correlation_id TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL,
+      error_message TEXT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      processed_at TIMESTAMPTZ NULL
+    )
+  `,
+  'CREATE INDEX IF NOT EXISTS idx_subscriptions_tenant_created_at ON subscriptions (tenant_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_subscription_audit_logs_subscription_created_at ON subscription_audit_logs (subscription_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_marketplace_webhook_events_marketplace_subscription_created_at ON marketplace_webhook_events (marketplace_subscription_id, created_at DESC)'
+] as const;
 
 const METERING_SCHEMA_STATEMENTS = [
   `
@@ -120,6 +179,7 @@ async function tableExists(db: Kysely<unknown>, tableName: string): Promise<bool
 }
 
 export async function up(db: Kysely<unknown>): Promise<void> {
+  await executeStatements(db, APPLICATION_SCHEMA_STATEMENTS);
   await executeStatements(db, METERING_SCHEMA_STATEMENTS);
 
   await sql.raw('ALTER TABLE subscription_audit_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT').execute(db);

@@ -1,3 +1,5 @@
+import type { Server } from 'node:http';
+
 import type { Kysely } from 'kysely';
 import type { Pool } from 'pg';
 
@@ -15,10 +17,20 @@ import {
   KyselySubscriptionRepository,
   type SubscriptionRepository
 } from './repositories/subscription-repository';
+import {
+  InMemoryAuditLogRepository,
+  KyselyAuditLogRepository,
+  type AuditLogRepository
+} from './repositories/audit-log-repository';
+import { AuditService } from './services/audit-service';
 import { SubscriptionService } from './services/subscription-service';
 
 function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
+}
+
+function createAuditLogRepository(database?: Kysely<Database>): AuditLogRepository {
+  return database ? new KyselyAuditLogRepository(database) : new InMemoryAuditLogRepository();
 }
 
 async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
@@ -32,14 +44,10 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
   }
 
   const database = createDatabase(databaseUrl);
-  const meteringPool = createPool(databaseUrl);
 
   try {
-    const result = await migrateToLatest(database);
-
-    for (const migration of result.results ?? []) {
-      logger.info({ migration: migration.migrationName, status: migration.status }, 'Database migration result');
-    }
+    await migrateToLatest(database, logger.child({ component: 'db-migrate' }));
+    const meteringPool = createPool(databaseUrl);
 
     return {
       database,
@@ -47,8 +55,8 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
       meteringSqlClient: new PgPoolSqlClient(meteringPool)
     };
   } catch (error) {
-    await Promise.allSettled([database.destroy(), meteringPool.end()]);
-    logger.error({ err: error }, 'Failed to initialize database clients or run migrations');
+    await database.destroy().catch(() => undefined);
+    logger.error({ err: error }, 'Failed to initialize database clients');
     throw error;
   }
 }
@@ -58,6 +66,7 @@ async function bootstrap(): Promise<void> {
   const { database, meteringPool, meteringSqlClient } = await initializeDatabaseDependencies(config.databaseUrl);
   const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
   const subscriptionRepository = createSubscriptionRepository(database);
+  const auditLogRepository = createAuditLogRepository(database);
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
@@ -65,7 +74,8 @@ async function bootstrap(): Promise<void> {
     logger
   });
   const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
-  const app = createApp(config, { ...meteringRuntime, subscriptionService });
+  const auditService = new AuditService(auditLogRepository, logger.child({ component: 'audit' }));
+  const app = createApp(config, { ...meteringRuntime, subscriptionService, auditService });
 
   async function runMeteringWorker(): Promise<void> {
     try {
@@ -87,6 +97,15 @@ async function bootstrap(): Promise<void> {
     logger.info({ port: config.port }, 'API server listening');
   });
 
+  registerShutdownHandlers(server, database, meteringPool, meteringWorkerInterval);
+}
+
+function registerShutdownHandlers(
+  server: Server,
+  database?: Kysely<Database>,
+  meteringPool?: Pool,
+  meteringWorkerInterval?: NodeJS.Timeout
+): void {
   let shuttingDown = false;
 
   const shutdown = (signal: string) => {
@@ -95,7 +114,9 @@ async function bootstrap(): Promise<void> {
     }
 
     shuttingDown = true;
-    clearInterval(meteringWorkerInterval);
+    if (meteringWorkerInterval) {
+      clearInterval(meteringWorkerInterval);
+    }
     logger.info({ signal }, 'Shutdown signal received');
     server.close(async () => {
       const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
@@ -117,6 +138,6 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch((error) => {
-  logger.error({ err: error }, 'API server failed to start');
+  logger.error({ err: error }, 'Failed to start API server');
   process.exitCode = 1;
 });

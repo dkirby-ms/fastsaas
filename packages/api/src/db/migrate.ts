@@ -1,30 +1,27 @@
 import { createConfig } from '../config';
+import { logger } from '../lib/logger';
 import { createDatabase } from './database';
 import { migrateToLatest } from './migrator';
 
 async function main(): Promise<void> {
   const config = createConfig();
-  const databaseUrl = config.database.url?.trim();
+  const databaseUrl = config.databaseUrl ?? config.database.url?.trim();
 
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required to run migrations');
   }
 
-  const db = createDatabase(databaseUrl);
+  const database = createDatabase(databaseUrl);
 
   try {
-    const result = await migrateToLatest(db);
-
-    for (const migration of result.results ?? []) {
-      const status = migration.status === 'Success' ? 'applied' : migration.status.toLowerCase();
-      console.info(`${status}: ${migration.migrationName}`);
-    }
+    await migrateToLatest(database, logger.child({ component: 'db-migrate' }));
+    logger.info('Database migrations are up to date');
   } finally {
-    await db.destroy();
+    await database.destroy();
   }
 }
 
 void main().catch((error) => {
-  console.error(error);
+  logger.error({ err: error }, 'Database migration command failed');
   process.exitCode = 1;
 });

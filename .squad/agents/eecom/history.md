@@ -68,6 +68,7 @@ _No learnings recorded yet._
 - **2026-05-29T14:30:29.387-05:00:** Metering ingestion now uses a tenant-scoped outbox model with derived idempotency keys (`tenant:eventId:timestamp`), retry scheduling for 429/5xx, DLQ capture after retry exhaustion, and a dashboard summary endpoint for SLA timeliness.
 - **2026-05-30T21:21:50.014+00:00:** PostgreSQL Flexible Server public-mode deployments must create explicit firewall rules; this branch now adds Azure-services and dev-wide public rules only when no delegated subnet is configured, leaving private-mode deployments unchanged.
 - **2026-05-31T18:54:21.897+00:00:** Prisma API containers should use Debian-based Node images instead of Alpine; `node:22-slim` plus `binaryTargets = ["native", "debian-openssl-3.0.x"]` avoids musl/OpenSSL engine crashes in runtime containers.
+- **2026-06-01T00:18:00.000+00:00:** Subscription lifecycle routes now enforce Admin/Owner authorization after tenant ownership lookup, so same-tenant Member/Viewer calls fail with `403` while cross-tenant probes still collapse to `404` without leaking record existence.
 
 ## PR #24 — PostgreSQL Firewall Fix (2026-05-30T21:21:50.014+00:00)
 
@@ -96,6 +97,7 @@ _No learnings recorded yet._
 
 - **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.
 - **2026-06-01T00:04:54.260+00:00:** The tenant RLS migration is now executable via `packages/api/src/db/migrator.ts`, runs on API startup and `npm run migrate`, and the Docker-backed RLS integration suite must connect as a non-superuser app role because PostgreSQL superusers bypass RLS policies.
+- **2026-06-01T00:00:00.000+00:00:** Migration providers must enforce deterministic filename ordering and each migration must guard or create every table it touches, or fresh PostgreSQL bootstraps can fail before later dependencies exist.
 
 ## Cross-Team Updates — 2026-05-31T21:35:32.766Z
 
@@ -104,3 +106,5 @@ _No learnings recorded yet._
 - **RETRO blocking dependency:** RETRO's tenant isolation security test suite (PR #62, 28/33 tests passing) awaits RLS enforcement in production. EECOM's PR #64 merge unblocks unskipping of 5 RLS-dependent tests.
 - **GNC release automation:** Semantic-release baseline (`v0.1.0`) is now established. GNC PR #61 unblocked for merge; subsequent releases will automate version bumps across `packages/api`, `packages/portal`, and root CHANGELOG.md from conventional commits.
 - **Semantic versioning decision recorded:** Manual `npm version` for workspace bumps + Keep a Changelog pattern adopted for the team.
+- **2026-05-31T21:35:32.766+00:00:** RBAC hardening is centralized in `packages/api/src/middleware/rbac.ts` via `authorizeRoute`, and audit logging is split between `packages/api/src/services/audit-service.ts`, `packages/api/src/repositories/audit-log-repository.ts`, and the append-only `packages/api/src/db/migrations/20260531T213532_audit_logs.ts` migration plus shared tenant RLS helpers in `packages/api/src/db/rls.ts`.
+- **2026-06-01T00:04:54.260+00:00:** PR #65 follow-up aligns RBAC exactly to the design doc role model (`Admin`, `Owner`, `Member`, `Viewer`), runs API migrations through `packages/api/src/db/migrator.ts` during startup/`npm run migrate`, and verifies audit append-only plus tenant RLS against a real PostgreSQL role instead of in-memory fixtures.
