@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { REDACTED_MARKETPLACE_TOKEN } from '../../lib/marketplace-token-redaction';
 import { createSecurityHarness, type SecurityHarness } from './test-harness';
 
 const itIfRls = process.env.SECURITY_RLS_ENABLED === 'true' ? it : it.skip;
@@ -55,6 +56,41 @@ describe('tenant isolation security catalog', () => {
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('NOT_FOUND');
     expect(response.body.error.message).toBe('Subscription was not found');
+  });
+
+  it('redacts marketplace purchase tokens from subscription responses', async () => {
+    const tenantId = 'tenant-token-redaction';
+    const rawMarketplaceToken = 'marketplace-secret-token';
+    const createdSubscription = await harness.createSubscriptionFixture({
+      tenantId,
+      marketplaceToken: rawMarketplaceToken,
+      metadata: {
+        marketplaceToken: rawMarketplaceToken,
+        nested: {
+          marketplaceToken: rawMarketplaceToken
+        }
+      }
+    });
+    const token = await harness.createToken({
+      tenantId,
+      scopes: [harness.config.auth.requiredScope],
+      roles: ['Owner']
+    });
+
+    expect(createdSubscription.metadata.marketplaceToken).toBe(REDACTED_MARKETPLACE_TOKEN);
+    expect((createdSubscription.metadata.nested as { marketplaceToken: string }).marketplaceToken).toBe(
+      REDACTED_MARKETPLACE_TOKEN
+    );
+    expect(createdSubscription.auditLog[0]?.details.marketplaceToken).toBe(REDACTED_MARKETPLACE_TOKEN);
+
+    const subscriptionResponse = await request(harness.app)
+      .get(`/v1/subscriptions/${createdSubscription.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(subscriptionResponse.status).toBe(200);
+    expect(subscriptionResponse.body.data.metadata.marketplaceToken).toBe(REDACTED_MARKETPLACE_TOKEN);
+    expect(subscriptionResponse.body.data.metadata.nested.marketplaceToken).toBe(REDACTED_MARKETPLACE_TOKEN);
+    expect(subscriptionResponse.body.data.auditLog[0].details.marketplaceToken).toBe(REDACTED_MARKETPLACE_TOKEN);
   });
 
   it('blocks cross-tenant subscription state changes and preserves the owner record', async () => {

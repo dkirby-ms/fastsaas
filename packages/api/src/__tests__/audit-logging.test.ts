@@ -9,6 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createConfig, type ApiConfig } from '../config';
 import { withDatabaseRlsContext } from '../db/execution-context';
+import { redactMarketplaceTokens, REDACTED_MARKETPLACE_TOKEN } from '../lib/marketplace-token-redaction';
 import { authenticateRequest, requireScopes } from '../middleware/auth';
 import { authorizeRoute } from '../middleware/rbac';
 import { requestLogger } from '../middleware/request-logger';
@@ -170,6 +171,51 @@ describe('audit logging hardening', () => {
     expect(logs.every((entry) => entry.tenantId === 'tenant-a')).toBe(true);
     expect(logs.every((entry) => entry.actorId === 'tenant-a-user')).toBe(true);
     expect(logs.map((entry) => entry.resourceId).sort()).toEqual(['sub-123', 'sub-456']);
+  });
+
+  it('redacts marketplace purchase tokens from stored audit history on read', async () => {
+    const repository = new KyselyAuditLogRepository(postgres.db);
+    const service = new AuditService(repository, {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+      child: () => undefined
+    } as never);
+    const rawMarketplaceToken = 'marketplace-secret-token';
+
+    await repository.append({
+      id: 'audit-redacted-on-read',
+      tenantId: 'tenant-a',
+      actorId: 'user-a',
+      action: 'manage',
+      resource: 'subscriptions',
+      resourceId: rawMarketplaceToken,
+      timestamp: '2026-06-01T21:41:30.419+00:00',
+      outcome: 'success',
+      metadata: {
+        method: 'POST',
+        path: '/v1/subscriptions',
+        requestBody: {
+          marketplaceToken: rawMarketplaceToken,
+          nested: { marketplaceToken: rawMarketplaceToken }
+        }
+      }
+    });
+
+    const [log] = await service.listByTenant('tenant-a');
+
+    expect(log?.resourceId).toBe(REDACTED_MARKETPLACE_TOKEN);
+    expect(log?.metadata).toEqual(
+      redactMarketplaceTokens({
+        method: 'POST',
+        path: '/v1/subscriptions',
+        requestBody: {
+          marketplaceToken: rawMarketplaceToken,
+          nested: { marketplaceToken: rawMarketplaceToken }
+        }
+      })
+    );
+    expect(JSON.stringify(log)).not.toContain(rawMarketplaceToken);
   });
 
   it('enforces append-only audit logs with PostgreSQL triggers', async () => {

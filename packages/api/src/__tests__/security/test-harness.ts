@@ -49,6 +49,7 @@ export interface SecurityHarness {
     seats?: number;
     scopes?: string[];
     roles?: string[];
+    metadata?: Record<string, unknown>;
   }): Promise<Subscription>;
   close(): Promise<void>;
   ingestUsageEventFixture(options: {
@@ -218,6 +219,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
       seats?: number;
       scopes?: string[];
       roles?: string[];
+      metadata?: Record<string, unknown>;
     } = {}
   ): Promise<Subscription> {
     const token = await createToken({
@@ -240,7 +242,8 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
         .send({
           marketplaceToken,
           metadata: {
-            fixture: 'security-suite'
+            fixture: 'security-suite',
+            ...(options.metadata ?? {})
           }
         });
 

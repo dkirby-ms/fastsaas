@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 
 import type { AuditLogEntry, AuditLogOutcome, AuditLogRepository } from '../repositories/audit-log-repository';
 import type { RbacAction, RbacResource } from '../middleware/rbac';
+import { redactMarketplaceAuditResourceId, redactMarketplaceTokens } from '../lib/marketplace-token-redaction';
 
 export interface RequestAuditContext {
   action: RbacAction;
@@ -36,6 +37,16 @@ function resolveOutcome(statusCode: number): AuditLogOutcome {
   return 'failure';
 }
 
+function sanitizeAuditEntry(entry: AuditLogEntry): AuditLogEntry {
+  const metadata = redactMarketplaceTokens(entry.metadata);
+
+  return {
+    ...entry,
+    resourceId: redactMarketplaceAuditResourceId(entry.resource, entry.resourceId, metadata),
+    metadata
+  };
+}
+
 export class AuditService {
   constructor(
     private readonly repository: AuditLogRepository,
@@ -43,21 +54,25 @@ export class AuditService {
   ) {}
 
   async record(input: RecordAuditEventInput): Promise<AuditLogEntry> {
-    return this.repository.append({
-      id: randomUUID(),
-      tenantId: input.tenantId,
-      actorId: input.actorId,
-      action: input.action,
-      resource: input.resource,
-      resourceId: input.resourceId,
-      timestamp: input.timestamp ?? new Date().toISOString(),
-      outcome: input.outcome,
-      metadata: input.metadata ?? {}
-    });
+    const metadata = redactMarketplaceTokens(input.metadata ?? {});
+
+    return sanitizeAuditEntry(
+      await this.repository.append({
+        id: randomUUID(),
+        tenantId: input.tenantId,
+        actorId: input.actorId,
+        action: input.action,
+        resource: input.resource,
+        resourceId: redactMarketplaceAuditResourceId(input.resource, input.resourceId, metadata),
+        timestamp: input.timestamp ?? new Date().toISOString(),
+        outcome: input.outcome,
+        metadata
+      })
+    );
   }
 
   async listByTenant(tenantId: string): Promise<AuditLogEntry[]> {
-    return this.repository.listByTenant(tenantId);
+    return (await this.repository.listByTenant(tenantId)).map((entry) => sanitizeAuditEntry(entry));
   }
 }
 
