@@ -1,6 +1,7 @@
 import { createPool } from '../db/database';
 import { PgPoolSqlClient } from '../db/sql-client-adapter';
 import type { ApiConfig } from '../config';
+import type { SubscriptionRepository } from '../repositories/subscription-repository';
 import { HttpMarketplaceMeteringClient, type MarketplaceMeteringClient } from './client';
 import { type Clock, SystemClock } from './clock';
 import { PostgresUsageEventRepository, type PostgresUsageEventSqlClient } from './postgres-repository';
@@ -14,6 +15,7 @@ export interface MeteringRuntimeDependencies {
   marketplaceClient?: MarketplaceMeteringClient;
   random?: () => number;
   sqlClient?: PostgresUsageEventSqlClient;
+  subscriptionRepository?: Pick<SubscriptionRepository, 'findById'>;
 }
 
 function createDefaultRepository(
@@ -40,7 +42,7 @@ export function createMeteringRuntime(config: ApiConfig, dependencies: MeteringR
     clock,
     repository,
     marketplaceClient,
-    service: new MeteringService(config, repository, clock),
+    service: new MeteringService(config, repository, clock, dependencies.subscriptionRepository),
     worker: new MeteringOutboxWorker(config, repository, marketplaceClient, clock, dependencies.random)
   };
 }

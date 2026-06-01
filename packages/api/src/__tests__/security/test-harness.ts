@@ -165,6 +165,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   );
   const app = createApp(config, {
     repository: meteringRepository,
+    subscriptionRepository,
     subscriptionService,
     publisherService,
     tenantMemberService

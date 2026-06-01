@@ -105,7 +105,14 @@ async function bootstrap(): Promise<void> {
     publisherPlanRepository,
     logger.child({ component: 'publisher' })
   );
-  const app = createApp(config, { ...meteringRuntime, subscriptionService, auditService, publisherService, tenantMemberService });
+  const app = createApp(config, {
+    ...meteringRuntime,
+    subscriptionRepository,
+    subscriptionService,
+    auditService,
+    publisherService,
+    tenantMemberService
+  });
 
   async function runMeteringWorker(): Promise<void> {
     try {

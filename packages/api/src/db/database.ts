@@ -122,7 +122,7 @@ export interface AuditLogsTable {
   id: string;
   tenant_id: string;
   actor_id: string;
-  action: 'view' | 'manage' | 'export';
+  action: 'view' | 'write' | 'manage' | 'export';
   resource: 'subscriptions' | 'billing' | 'users' | 'metering' | 'audit_logs' | 'webhooks' | 'publisher';
   resource_id: string | null;
   timestamp: GeneratedTimestamp;
