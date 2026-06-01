@@ -33,7 +33,7 @@ describe('publisher administration routes', () => {
 
     expect(ownerResponse.status).toBe(200);
     expect(memberResponse.status).toBe(403);
-    expect(memberResponse.body.error.details.resource).toBe('publisher');
+    expect(memberResponse.body.error).not.toHaveProperty('details');
   });
 
   it('scopes publisher subscriptions to the actor tenant and overlays publisher plan updates', async () => {

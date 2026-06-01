@@ -102,7 +102,7 @@ describe('API foundation and auth baseline', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
-    expect(response.body.error.details.missingScopes).toEqual([config.auth.requiredScope]);
+    expect(response.body.error).not.toHaveProperty('details');
   });
 
   it('returns 403 when a valid token is missing tenant claims', async () => {

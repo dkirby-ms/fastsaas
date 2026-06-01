@@ -141,7 +141,8 @@ describe('RBAC boundary security catalog', () => {
     const response = await request(harness.app).get(path).set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error.details.missingScopes).toEqual(missingScopes);
+    expect(response.body.error).not.toHaveProperty('details');
+    expect(response.body.error.message).toContain('scope');
   });
 
   it('blocks member metering writes even when the metering write scope is present', async () => {
@@ -192,8 +193,8 @@ describe('RBAC boundary security catalog', () => {
       expect(response.status).toBe(expectedStatus);
 
       if (expectedStatus === 403) {
-        expect(response.body.error.details.requiredRoles).toEqual(['Admin', 'Owner']);
-        expect(response.body.error.details.tokenRoles).toEqual([role]);
+        expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
+        expect(response.body.error).not.toHaveProperty('details');
       }
 
       const ownerToken = await harness.createToken({

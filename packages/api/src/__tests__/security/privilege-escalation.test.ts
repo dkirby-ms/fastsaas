@@ -35,7 +35,7 @@ describe('privilege escalation security catalog', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
-    expect(response.body.error.details.missingScopes).toEqual([harness.config.metering.writeScope]);
+    expect(response.body.error).not.toHaveProperty('details');
   });
 
   it('does not let an elevated role bypass the metering read scope requirement', async () => {
@@ -50,7 +50,7 @@ describe('privilege escalation security catalog', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error.details.missingScopes).toEqual([harness.config.metering.readScope]);
+    expect(response.body.error).not.toHaveProperty('details');
   });
 
   it('does not let an elevated role bypass the baseline subscription scope requirement', async () => {
@@ -65,7 +65,7 @@ describe('privilege escalation security catalog', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error.details.missingScopes).toEqual([harness.config.auth.requiredScope]);
+    expect(response.body.error).not.toHaveProperty('details');
   });
 
   it('does not let a member user trigger subscription lifecycle actions reserved for Admin and Owner', async () => {
@@ -83,8 +83,7 @@ describe('privilege escalation security catalog', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
-    expect(response.body.error.details.requiredRoles).toEqual(['Admin', 'Owner']);
-    expect(response.body.error.details.tokenRoles).toEqual(['Member']);
+    expect(response.body.error).not.toHaveProperty('details');
 
     const ownerToken = await harness.createToken({
       tenantId,
@@ -114,8 +113,7 @@ describe('privilege escalation security catalog', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('AUTH_FORBIDDEN');
-    expect(response.body.error.details.requiredRoles).toEqual(['Admin', 'Owner']);
-    expect(response.body.error.details.tokenRoles).toEqual(['Viewer']);
+    expect(response.body.error).not.toHaveProperty('details');
 
     const ownerToken = await harness.createToken({
       tenantId,
@@ -160,7 +158,6 @@ describe('privilege escalation security catalog', () => {
 
     expect(escalationResponse.status).toBe(403);
     expect(escalationResponse.body.error.code).toBe('AUTH_FORBIDDEN');
-    expect(escalationResponse.body.error.details.requestedRole).toBe('Owner');
-    expect(escalationResponse.body.error.details.allowedInviteRoles).toEqual(['Admin', 'Member']);
+    expect(escalationResponse.body.error).not.toHaveProperty('details');
   });
 });

@@ -28,8 +28,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, req: ApiReques
     status: 'error',
     error: {
       code: appError.code,
-      message: appError.message,
-      details: appError.details
+      message: appError.message
     },
     meta: buildResponseMeta(req)
   });
