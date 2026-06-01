@@ -130,9 +130,11 @@ export function createMembersRouter(config: ApiConfig, tenantMemberService: Tena
     authorizeRoute({ resource: 'users', action: 'manage' }),
     async (req: ApiRequest, res: Response<ApiResponse<TenantMember>>, next) => {
       try {
+        const invite = parseInviteBody(req.body);
         tenantMemberService.assertRequestRole(req, ['Owner', 'Admin'], ['Admin', 'Owner']);
+        tenantMemberService.assertAssignableInviteRole(req, invite.role);
         req.audit = { action: 'manage', resource: 'users' };
-        const member = await tenantMemberService.inviteMember(buildActorContext(req), parseInviteBody(req.body));
+        const member = await tenantMemberService.inviteMember(buildActorContext(req), invite);
         res.status(201).json({
           status: 'success',
           data: member,

@@ -2,7 +2,7 @@ import type { Logger } from 'pino';
 
 import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
-import { isRequestRoleAllowed, normalizeRbacRole, type RbacRole } from '../middleware/rbac';
+import { getNormalizedRequestRoles, isRequestRoleAllowed, normalizeRbacRole, type RbacRole } from '../middleware/rbac';
 import type { TenantMember, TenantMemberRepository } from '../repositories/tenant-member-repository';
 
 export interface TenantMemberActorContext {
@@ -26,6 +26,13 @@ function normalizeEmail(email?: string): string | undefined {
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === '23505');
 }
+
+const INVITABLE_ROLES_BY_ACTOR: Record<RbacRole, readonly RbacRole[]> = {
+  Owner: ['Admin', 'Owner', 'Member', 'Viewer'],
+  Admin: ['Admin', 'Member'],
+  Member: [],
+  Viewer: []
+};
 
 export class TenantMemberService {
   constructor(
@@ -132,6 +139,22 @@ export class TenantMemberService {
       allowedJwtRoles,
       roleSource: req.context?.roleSource ?? 'none',
       roles: (req.context?.roles ?? []).map((role) => normalizeRbacRole(role)).filter((role): role is RbacRole => Boolean(role))
+    });
+  }
+
+  assertAssignableInviteRole(req: ApiRequest, role: RbacRole): void {
+    const actorRole = getNormalizedRequestRoles(req).find((candidate) => candidate === 'Owner' || candidate === 'Admin');
+    const allowedInviteRoles = actorRole ? INVITABLE_ROLES_BY_ACTOR[actorRole] : [];
+
+    if (actorRole && allowedInviteRoles.includes(role)) {
+      return;
+    }
+
+    throw AppError.forbidden('You do not have permission to assign this member role', {
+      requestedRole: role,
+      allowedInviteRoles,
+      actorRoles: getNormalizedRequestRoles(req),
+      roleSource: req.context?.roleSource ?? 'none'
     });
   }
 
