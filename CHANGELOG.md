@@ -1,3 +1,11 @@
+## [0.8.2](https://github.com/dkirby-ms/fastsaas/compare/v0.8.1...v0.8.2) (2026-06-01)
+
+### Bug Fixes
+
+* add RBAC and tenant ownership check to metering endpoint ([#94](https://github.com/dkirby-ms/fastsaas/issues/94)) ([44a67e3](https://github.com/dkirby-ms/fastsaas/commit/44a67e38d3f00dade9d675ec7978cc5de0085c2a))
+* fail startup when critical secrets are missing instead of using defaults ([#93](https://github.com/dkirby-ms/fastsaas/issues/93)) ([75a7289](https://github.com/dkirby-ms/fastsaas/commit/75a72893c4a3ffb444e3597fffbd35c16e9f3c9d))
+* sanitize upstream error details before returning to clients ([#96](https://github.com/dkirby-ms/fastsaas/issues/96)) ([b6cce4f](https://github.com/dkirby-ms/fastsaas/commit/b6cce4fa075cb34d23c32e17742a929f6780ec3f))
+
 ## [0.8.1](https://github.com/dkirby-ms/fastsaas/compare/v0.8.0...v0.8.1) (2026-06-01)
 
 ### Bug Fixes
