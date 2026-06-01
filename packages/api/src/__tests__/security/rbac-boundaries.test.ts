@@ -33,7 +33,11 @@ const readBoundaryCases: BoundaryCase[] = [
   { role: 'Admin', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Owner', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Member', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
-  { role: 'Viewer', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 }
+  { role: 'Viewer', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
+  { role: 'Admin', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Owner', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Member', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 403 },
+  { role: 'Viewer', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 403 }
 ];
 
 const lifecycleBoundaryCases: LifecycleBoundaryCase[] = [
@@ -109,9 +113,10 @@ describe('RBAC boundary security catalog', () => {
         scopes
       });
 
-      const response = method === 'get'
-        ? await request(harness.app).get(path).set('Authorization', `Bearer ${token}`)
-        : await request(harness.app).post(path).set('Authorization', `Bearer ${token}`);
+      const response =
+        method === 'get'
+          ? await request(harness.app).get(path).set('Authorization', `Bearer ${token}`)
+          : await request(harness.app).post(path).set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(expectedStatus);
     }
@@ -129,9 +134,7 @@ describe('RBAC boundary security catalog', () => {
       scopes
     });
 
-    const response = await request(harness.app)
-      .get(path)
-      .set('Authorization', `Bearer ${token}`);
+    const response = await request(harness.app).get(path).set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(403);
     expect(response.body.error.details.missingScopes).toEqual(missingScopes);
@@ -149,9 +152,10 @@ describe('RBAC boundary security catalog', () => {
       });
       const { method, path } = buildLifecyclePath(action, subscription.id);
 
-      const response = method === 'delete'
-        ? await request(harness.app).delete(path).set('Authorization', `Bearer ${token}`)
-        : await request(harness.app).post(path).set('Authorization', `Bearer ${token}`);
+      const response =
+        method === 'delete'
+          ? await request(harness.app).delete(path).set('Authorization', `Bearer ${token}`)
+          : await request(harness.app).post(path).set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(expectedStatus);
 

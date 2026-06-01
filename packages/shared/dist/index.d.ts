@@ -202,4 +202,81 @@ export interface MarketplaceWebhookPayload {
     correlationId?: string;
     details?: Record<string, unknown>;
 }
+export type PortalRole = 'customer' | 'publisher';
+export interface AuthContextData {
+    tenantId: string;
+    userId: string;
+    scopes: string[];
+    roles: string[];
+}
+export type PublisherPlanStatus = 'active' | 'draft';
+export interface PublisherDashboardPlanSummary {
+    planId: string;
+    planName: string;
+    tenantCount: number;
+}
+export interface PublisherDashboardData {
+    subscriptionCount: number;
+    activeTenants: number;
+    monthlyRecurringRevenue: string;
+    churnRiskCount: number;
+    plans: PublisherDashboardPlanSummary[];
+}
+export interface PublisherPlan {
+    id: string;
+    name: string;
+    description: string;
+    priceMonthly: string;
+    status: PublisherPlanStatus;
+    activeSubscriptions: number;
+    features: string[];
+}
+export interface PublisherPlansResponse {
+    plans: PublisherPlan[];
+}
+export type PublisherTenantStatus = SubscriptionState;
+export interface PublisherTenantSummary {
+    id: string;
+    displayName: string;
+    primaryDomain: string;
+    planId: string;
+    planName: string;
+    status: PublisherTenantStatus;
+    monthlyRecurringRevenue: string;
+    seats: number;
+    subscriptionId?: string;
+    lastUpdated: string;
+}
+export interface PublisherTenantUsageSummary {
+    activeUsers: number;
+    apiRequestsThisMonth: number;
+    storageGb: number;
+}
+export interface PublisherTenantAuditEntry {
+    id: string;
+    label: string;
+    timestamp: string;
+}
+export interface PublisherTenantDetail extends PublisherTenantSummary {
+    purchaserTenantId?: string;
+    beneficiaryTenantId?: string;
+    usage: PublisherTenantUsageSummary;
+    audit: PublisherTenantAuditEntry[];
+}
+export interface PublisherTenantsResponse {
+    tenants: PublisherTenantSummary[];
+}
+export interface PublisherPlanUpdateInput {
+    name: string;
+    description: string;
+    priceMonthly: string;
+    status: PublisherPlanStatus;
+}
+export interface PublisherTenantUpsertInput {
+    displayName: string;
+    primaryDomain: string;
+    planId: string;
+    seats: number;
+    status: PublisherTenantStatus;
+}
 export * from './squad-places.js';

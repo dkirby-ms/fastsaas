@@ -9,6 +9,11 @@
 ## Learnings
 - 2026-06-01T00:43:05.936+00:00 — Metering recovery drills are most trustworthy when they drive the real outbox worker in simulate mode, then verify `retry_scheduled`, `submitted`, and `dead_letter` transitions before documenting the live operator replay steps.
 
+_No learnings recorded yet._
+
+## 2026-05-31T19:45Z — Publisher Portal RBAC Review Ready
+
+FIDO completed publisher portal pages with session-based role gating. Pages are protected by customer/publisher role checks. RETRO may review RBAC implementation in `packages/portal/app/(portal)/publisher/*` and `packages/portal/src/components/publisher-nav.tsx` as part of issue #44 (tenant isolation security test suite). PR #59 available for review.
 ### 2026-05-31T21:35:32.766Z
 - Tenant isolation security test suite (PR #62) has 28/33 tests green but 5 tests remain skipped pending RLS enforcement in production.
 - EECOM's tenant RLS rollout (PR #64) establishes the precondition for unskipping these tests: request-scoped execution context propagated to PostgreSQL session settings via `src/db/execution-context.ts` and RLS helpers in `src/db/rls.ts`.

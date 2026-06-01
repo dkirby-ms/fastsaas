@@ -9,7 +9,9 @@ export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolea
     'metering:view': true,
     'billing:export': true,
     'audit_logs:view': true,
-    'webhooks:manage': true
+    'webhooks:manage': true,
+    'publisher:view': true,
+    'publisher:manage': true
   },
   Owner: {
     'subscriptions:view': true,
@@ -19,7 +21,9 @@ export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolea
     'metering:view': true,
     'billing:export': true,
     'audit_logs:view': true,
-    'webhooks:manage': true
+    'webhooks:manage': true,
+    'publisher:view': true,
+    'publisher:manage': true
   },
   Member: {
     'subscriptions:view': true,
@@ -29,7 +33,9 @@ export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolea
     'metering:view': true,
     'billing:export': false,
     'audit_logs:view': false,
-    'webhooks:manage': false
+    'webhooks:manage': false,
+    'publisher:view': false,
+    'publisher:manage': false
   },
   Viewer: {
     'subscriptions:view': true,
@@ -39,6 +45,8 @@ export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolea
     'metering:view': true,
     'billing:export': false,
     'audit_logs:view': false,
-    'webhooks:manage': false
+    'webhooks:manage': false,
+    'publisher:view': false,
+    'publisher:manage': false
   }
 };

@@ -1,0 +1,61 @@
+'use client';
+
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { ErrorAlert } from '@/components/error-alert';
+import { ForbiddenState } from '@/components/forbidden-state';
+import { LoadingPanel } from '@/components/loading-panel';
+import { portalApi } from '@/lib/api-client';
+import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+
+export function PublisherDashboardClient() {
+  const dashboardQuery = useQuery({ queryKey: ['publisher-dashboard'], queryFn: portalApi.getPublisherDashboard });
+
+  if (dashboardQuery.isLoading) return <LoadingPanel label="Loading publisher metrics" />;
+  if (dashboardQuery.isError) {
+    if (isApiErrorStatus(dashboardQuery.error, 403)) {
+      return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account does not have publisher access.')} href="/dashboard" cta="Open customer portal" />;
+    }
+    return <ErrorAlert message={getErrorMessage(dashboardQuery.error, 'We could not load publisher metrics.')} />;
+  }
+  if (!dashboardQuery.data) return <LoadingPanel label="Loading publisher metrics" />;
+
+  const dashboard = dashboardQuery.data;
+  const stats = [
+    { label: 'Subscriptions', value: dashboard.subscriptionCount.toString() },
+    { label: 'Active tenants', value: dashboard.activeTenants.toString() },
+    { label: 'MRR', value: dashboard.monthlyRecurringRevenue },
+    { label: 'At risk', value: dashboard.churnRiskCount.toString() },
+  ];
+
+  return (
+    <section className="space-y-6">
+      <header className="rounded-3xl bg-slate-950 px-6 py-8 text-white shadow-panel">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Publisher overview</p>
+        <h1 className="mt-3 text-3xl font-semibold">Marketplace operations at a glance</h1>
+        <p className="mt-3 max-w-3xl text-sm text-slate-300">Track subscription health, revenue, and tenant activity from the same tenant-scoped auth session used by the API.</p>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => <article key={stat.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-panel"><p className="text-sm text-slate-500">{stat.label}</p><p className="mt-3 text-3xl font-semibold text-slate-950">{stat.value}</p></article>)}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+        <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel">
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-slate-950">Plan mix</h2><p className="mt-1 text-sm text-slate-500">Current tenant distribution across your plan catalog.</p></div><Link href="/publisher/plans" className="text-sm font-semibold text-brand-700 hover:text-brand-800">Manage plans</Link></div>
+          <div className="mt-6 space-y-3">
+            {dashboard.plans.map((plan) => <div key={plan.planId} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"><div><p className="font-medium text-slate-950">{plan.planName}</p><p className="text-sm text-slate-500">{plan.planId}</p></div><span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">{plan.tenantCount} tenants</span></div>)}
+          </div>
+        </article>
+
+        <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel">
+          <h2 className="text-xl font-semibold text-slate-950">Next steps</h2>
+          <div className="mt-6 space-y-4">
+            <Link href="/publisher/tenants" className="block rounded-2xl border border-slate-200 px-4 py-4 transition hover:border-brand-400 hover:bg-brand-50"><p className="font-semibold text-slate-950">Review tenant statuses</p><p className="mt-1 text-sm text-slate-500">Open the tenant workspace to activate, suspend, or inspect subscriptions.</p></Link>
+            <Link href="/publisher/plans" className="block rounded-2xl border border-slate-200 px-4 py-4 transition hover:border-brand-400 hover:bg-brand-50"><p className="font-semibold text-slate-950">Tune your catalog</p><p className="mt-1 text-sm text-slate-500">Adjust plan metadata now and swap to dedicated API routes as they land.</p></Link>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { signOut, useSession } from 'next-auth/react';
 import { SidebarNav } from '@/components/sidebar-nav';
+import { getPortalRole } from '@/lib/roles';
 import { usePortalShellStore } from '@/lib/store';
 
 export function PortalShell({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -9,6 +10,9 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
   const sidebarOpen = usePortalShellStore((state) => state.sidebarOpen);
   const toggleSidebar = usePortalShellStore((state) => state.toggleSidebar);
   const userName = session?.user?.name ?? 'Customer';
+  const portalRole = getPortalRole(session?.roles);
+  const portalTitle = portalRole === 'publisher' ? 'Publisher Portal' : 'Customer Portal';
+  const portalSubtitle = portalRole === 'publisher' ? 'Marketplace operations' : 'Customer self-service';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
@@ -17,7 +21,8 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">FastSaaS</p>
-              <h1 className="mt-2 text-lg font-semibold">Customer Portal</h1>
+              <h1 className="mt-2 text-lg font-semibold">{portalTitle}</h1>
+              <p className="mt-1 text-sm text-slate-500">{portalSubtitle}</p>
             </div>
             <button
               type="button"

@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import type { DashboardData, PortalAction } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
+import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import { portalApi } from '@/lib/api-client';
-import { getErrorMessage } from '@/lib/errors';
+import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
 const stateTone: Record<DashboardData['subscription']['state'], string> = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -24,11 +25,7 @@ const actionTone: Record<PortalAction['tone'], string> = {
 
 export function DashboardClient() {
   const queryClient = useQueryClient();
-  const dashboardQuery = useQuery({
-    queryKey: ['portal-dashboard'],
-    queryFn: portalApi.getDashboard,
-  });
-
+  const dashboardQuery = useQuery({ queryKey: ['portal-dashboard'], queryFn: portalApi.getDashboard });
   const actionMutation = useMutation({
     mutationFn: portalApi.runAction,
     onSuccess: (data) => {
@@ -37,17 +34,14 @@ export function DashboardClient() {
     },
   });
 
-  if (dashboardQuery.isLoading) {
-    return <LoadingPanel label="Loading your subscription overview" />;
-  }
-
+  if (dashboardQuery.isLoading) return <LoadingPanel label="Loading your subscription overview" />;
   if (dashboardQuery.isError) {
+    if (isApiErrorStatus(dashboardQuery.error, 403)) {
+      return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account cannot open the customer portal.')} href="/publisher" cta="Open publisher portal" />;
+    }
     return <ErrorAlert message={getErrorMessage(dashboardQuery.error, 'We could not load your subscription overview.')} />;
   }
-
-  if (!dashboardQuery.data) {
-    return <LoadingPanel label="Loading your subscription overview" />;
-  }
+  if (!dashboardQuery.data) return <LoadingPanel label="Loading your subscription overview" />;
 
   const { subscription, usage, actions, user } = dashboardQuery.data;
 
@@ -57,9 +51,7 @@ export function DashboardClient() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Subscription status</p>
           <h1 className="mt-3 text-3xl font-semibold">Welcome back, {user.name.split(' ')[0]}</h1>
-          <p className="mt-3 max-w-2xl text-sm text-slate-300">
-            Keep tabs on your subscription, billing cadence, and key lifecycle actions from one place.
-          </p>
+          <p className="mt-3 max-w-2xl text-sm text-slate-300">Keep tabs on your subscription, billing cadence, and key lifecycle actions from one place.</p>
         </div>
         <dl className="rounded-3xl bg-white/10 p-5 backdrop-blur">
           <dt className="text-sm text-slate-300">Renewal date</dt>
@@ -78,37 +70,20 @@ export function DashboardClient() {
               <h2 className="text-xl font-semibold">{subscription.planName}</h2>
               <p className="mt-1 text-sm text-slate-500">Tenant {subscription.tenantId}</p>
             </div>
-            <span className={clsx('rounded-full px-3 py-1 text-sm font-semibold capitalize', stateTone[subscription.state])}>
-              {subscription.state.replace('_', ' ')}
-            </span>
+            <span className={clsx('rounded-full px-3 py-1 text-sm font-semibold capitalize', stateTone[subscription.state])}>{subscription.state.replace('_', ' ')}</span>
           </div>
           <dl className="mt-6 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <dt className="text-sm text-slate-500">Plan</dt>
-              <dd className="mt-2 text-lg font-semibold text-slate-950">{subscription.planName}</dd>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <dt className="text-sm text-slate-500">Cycle</dt>
-              <dd className="mt-2 text-lg font-semibold capitalize text-slate-950">{subscription.billingCycle}</dd>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <dt className="text-sm text-slate-500">Seat usage</dt>
-              <dd className="mt-2 text-lg font-semibold text-slate-950">{usage.activeMembers} / {usage.seatsPurchased}</dd>
-            </div>
+            <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Plan</dt><dd className="mt-2 text-lg font-semibold text-slate-950">{subscription.planName}</dd></div>
+            <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Cycle</dt><dd className="mt-2 text-lg font-semibold capitalize text-slate-950">{subscription.billingCycle}</dd></div>
+            <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Seat usage</dt><dd className="mt-2 text-lg font-semibold text-slate-950">{usage.activeMembers} / {usage.seatsPurchased}</dd></div>
           </dl>
         </article>
 
         <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel">
           <h2 className="text-xl font-semibold">This month</h2>
           <dl className="mt-6 space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <dt className="text-sm text-slate-500">API requests</dt>
-              <dd className="mt-2 text-2xl font-semibold text-slate-950">{usage.apiRequestsThisMonth.toLocaleString()}</dd>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <dt className="text-sm text-slate-500">Customer contact</dt>
-              <dd className="mt-2 text-base font-medium text-slate-950">{user.email}</dd>
-            </div>
+            <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">API requests</dt><dd className="mt-2 text-2xl font-semibold text-slate-950">{usage.apiRequestsThisMonth.toLocaleString()}</dd></div>
+            <div className="rounded-2xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Customer contact</dt><dd className="mt-2 text-base font-medium text-slate-950">{user.email}</dd></div>
           </dl>
         </article>
       </div>
@@ -126,14 +101,7 @@ export function DashboardClient() {
             <section key={action.id} className="rounded-2xl border border-slate-200 p-4">
               <h3 className="text-base font-semibold text-slate-950">{action.label}</h3>
               <p className="mt-2 text-sm text-slate-500">{action.description}</p>
-              <button
-                type="button"
-                className={clsx('mt-5 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', actionTone[action.tone])}
-                onClick={() => actionMutation.mutate(action.id)}
-                disabled={actionMutation.isPending}
-              >
-                {action.label}
-              </button>
+              <button type="button" className={clsx('mt-5 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', actionTone[action.tone])} onClick={() => actionMutation.mutate(action.id)} disabled={actionMutation.isPending}>{action.label}</button>
             </section>
           ))}
         </div>
