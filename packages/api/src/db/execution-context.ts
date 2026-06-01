@@ -92,8 +92,14 @@ export async function withDatabaseRlsContext<T>(
 ): Promise<T> {
   const context = resolveDatabaseExecutionContext(overrides);
 
-  return db.transaction().execute(async (trx) => {
-    await applyDatabaseExecutionContext(trx, context);
-    return callback(trx, context);
-  });
+  if (!context.bypassRls && !context.tenantId) {
+    throw new Error('A tenant-scoped database operation requires a tenant id');
+  }
+
+  return executionContextStorage.run(context, () =>
+    db.transaction().execute(async (trx) => {
+      await applyDatabaseExecutionContext(trx, context);
+      return callback(trx, context);
+    })
+  );
 }

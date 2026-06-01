@@ -46,3 +46,10 @@ See `.squad/agents/kranz/history-archive.md` for detailed 2026-05-29 and 2026-05
 - Scoped infrastructure workarounds only; shared template defaults preserved
 - Two-phase Bicep strategy for infrastructure provisioning
 - Azure Managed Redis as replacement for retired Azure Cache for Redis
+
+### PR #59 Re-review #2 — EECOM's Publisher Admin Routes (2026-06-01T11:23:27Z)
+- **Status:** REJECTED
+- **Finding:** The live Kysely-backed publisher routes with Admin/Owner RBAC enforcement are architecturally sound, but `npm run typecheck --workspace=@fastsaas/api` fails with 29 errors because 14+ `Publisher*` types imported from `@fastsaas/shared` do not exist in the shared package
+- **Action:** Rejected; require Publisher type definitions in `packages/shared/src/index.ts` and a clean typecheck pass on the merge ref
+- **Validation:** Checked out worktree, merged origin/main (clean), reviewed route/service/repo/RBAC code, ran typecheck
+- **Learning:** Cross-package type dependencies must be wired in the shared package before the consuming workspace can pass typecheck; reviewing architecture alone is insufficient without build validation

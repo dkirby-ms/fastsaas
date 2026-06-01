@@ -107,3 +107,7 @@ EECOM fixed Prisma OpenSSL compatibility by switching API container base from `n
 - **PR #61 unblocked:** Semantic-release version baseline (`v0.1.0`) established on merge-base commit. Kranz approval recorded. Ready for merge post-review.
 - **EECOM tenant RLS:** PR #64 merged in (Issue #45), enabling RLS policies across tenant-scoped tables. RETRO's security tests (PR #62) can now unskip 5 RLS-dependent test cases.
 - **Monorepo versioning locked in:** Semantic Versioning decision recorded — manual `npm version` for workspace bumps + Keep a Changelog (root) for team release notes.
+### 2026-05-31T21:35:32.766+00:00
+- Marketplace webhook authentication is enforced before JSON parsing, using the raw request body plus the timestamp header to compute an HMAC-SHA256 digest, and the replay window defaults to five minutes via `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`.
+- Metering retries only for `429` and `5xx` responses, honors `retry-after` when present, and moves exhausted events into `usage_event_dead_letters`, so operator drills must validate both retry scheduling and dead-letter recovery.
+- A practical runbook pattern for this repo is dual-mode validation: deterministic local drills for auth/retry logic and live staging probes for signed webhook ingress behavior.

@@ -39,5 +39,9 @@ export function buildEnableTenantRlsStatements(tableName: string, tenantColumn =
 export function buildDisableTenantRlsStatements(tableName: string): string[] {
   const policyName = getTenantPolicyName(tableName);
 
-  return [`DROP POLICY IF EXISTS ${policyName} ON ${tableName}`, `ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY`];
+  return [
+    `DROP POLICY IF EXISTS ${policyName} ON ${tableName}`,
+    `ALTER TABLE ${tableName} NO FORCE ROW LEVEL SECURITY`,
+    `ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY`
+  ];
 }
