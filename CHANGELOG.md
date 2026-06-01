@@ -1,3 +1,10 @@
+## [0.4.1](https://github.com/dkirby-ms/fastsaas/compare/v0.4.0...v0.4.1) (2026-06-01)
+
+### Bug Fixes
+
+* **deploy:** add missing env vars to portal environment step ([597fa43](https://github.com/dkirby-ms/fastsaas/commit/597fa43909e4f1eaf8e03b897725d0bc1c7bd08d))
+* rename AZURE_AD_* to ENTRA_* in tenant-rls integration test ([0f26b08](https://github.com/dkirby-ms/fastsaas/commit/0f26b080b88e416605d97488960be21999970cbc))
+
 ## [0.4.0](https://github.com/dkirby-ms/fastsaas/compare/v0.3.0...v0.4.0) (2026-06-01)
 
 ### Features
