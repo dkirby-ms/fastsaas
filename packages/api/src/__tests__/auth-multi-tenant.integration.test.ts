@@ -64,7 +64,7 @@ afterAll(async () => {
 });
 
 async function createToken(options?: { issuer?: string; tenantId?: string }) {
-  const tenantId = options?.tenantId ?? 'customer-tenant-id';
+  const tenantId = options?.tenantId ?? '550e8400-e29b-41d4-a716-446655440000';
 
   return new SignJWT({
     scp: config.auth.requiredScope,
@@ -83,18 +83,34 @@ async function createToken(options?: { issuer?: string; tenantId?: string }) {
 
 describe('multi-tenant organizations authority', () => {
   it('accepts access tokens issued by external organization tenants', async () => {
-    const token = await createToken({ tenantId: 'customer-tenant-id' });
+    const tenantId = '550e8400-e29b-41d4-a716-446655440000';
+    const token = await createToken({ tenantId });
     const response = await request(app)
       .get('/v1/auth/context')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({
-      tenantId: 'customer-tenant-id',
+      tenantId,
       userId: 'user-123',
       scopes: [config.auth.requiredScope],
       roles: ['Viewer']
     });
+  });
+
+  it.each([
+    'https://login.microsoftonline.com/common/v2.0',
+    'https://login.microsoftonline.com/consumers/v2.0',
+    'https://login.microsoftonline.com/organizations/v2.0'
+  ])('rejects special multi-tenant issuer %s', async (issuer) => {
+    const token = await createToken({ issuer });
+    const response = await request(app)
+      .get('/v1/auth/context')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_UNAUTHORIZED');
+    expect(response.body.error.message).toBe('Bearer token issuer is invalid');
   });
 
   it('rejects tokens whose issuer is not a Microsoft Entra tenant issuer', async () => {

@@ -78,8 +78,9 @@ function validateIssuer(payload: JWTPayload, config: ApiConfig): void {
   const tokenTenantId = typeof payload.tid === 'string' ? payload.tid : undefined;
 
   if (config.auth.azureTenantId === 'common' || config.auth.azureTenantId === 'organizations') {
-    const commonIssuerPattern = /^https:\/\/login\.microsoftonline\.com\/[^/]+\/v2\.0$/;
-    if (!commonIssuerPattern.test(issuer)) {
+    // Only accept GUID-format tenant IDs (real org tenants), reject 'common', 'consumers', 'organizations'
+    const orgIssuerPattern = /^https:\/\/login\.microsoftonline\.com\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/v2\.0$/i;
+    if (!orgIssuerPattern.test(issuer)) {
       throw AppError.unauthorized('Bearer token issuer is invalid');
     }
 
