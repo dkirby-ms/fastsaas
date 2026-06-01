@@ -24,17 +24,17 @@ type AuthEnv = {
 };
 
 function getAuthEnv(): AuthEnv {
-  const tenantId = requireEnv('AZURE_AD_TENANT_ID');
-  const clientId = requireEnv('AZURE_AD_CLIENT_ID');
-  const clientSecret = requireEnv('AZURE_AD_CLIENT_SECRET');
-  const apiClientId = requireEnv('AZURE_AD_API_CLIENT_ID');
+  const tenantId = requireEnv('ENTRA_TENANT_ID');
+  const clientId = requireEnv('ENTRA_CLIENT_ID');
+  const clientSecret = requireEnv('ENTRA_CLIENT_SECRET');
+  const apiClientId = requireEnv('ENTRA_API_CLIENT_ID');
 
   return {
     tenantId,
     issuer: `https://login.microsoftonline.com/${tenantId}/v2.0`,
     clientId,
     clientSecret,
-    apiScope: process.env.AZURE_AD_API_SCOPE?.trim() || `api://${apiClientId}/.default`,
+    apiScope: process.env.ENTRA_API_SCOPE?.trim() || `api://${apiClientId}/.default`,
     secret: requireEnv('NEXTAUTH_SECRET'),
   };
 }

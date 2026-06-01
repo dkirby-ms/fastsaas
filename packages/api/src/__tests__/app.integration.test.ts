@@ -42,11 +42,11 @@ beforeAll(async () => {
   config = createConfig({
     API_PORT: '3001',
     NODE_ENV: 'test',
-    AZURE_AD_TENANT_ID: 'fastsaas-test-tenant',
-    AZURE_AD_CLIENT_ID: 'fastsaas-tests-client',
-    AZURE_AD_AUDIENCE: 'api://fastsaas-tests',
-    AZURE_AD_ISSUER: 'https://login.microsoftonline.com/fastsaas-test-tenant/v2.0',
-    AZURE_AD_JWKS_URI: `http://127.0.0.1:${port}/discovery/v2.0/keys`,
+    ENTRA_TENANT_ID: 'fastsaas-test-tenant',
+    ENTRA_CLIENT_ID: 'fastsaas-tests-client',
+    ENTRA_AUDIENCE: 'api://fastsaas-tests',
+    ENTRA_ISSUER: 'https://login.microsoftonline.com/fastsaas-test-tenant/v2.0',
+    ENTRA_JWKS_URI: `http://127.0.0.1:${port}/discovery/v2.0/keys`,
     JWT_REQUIRED_SCOPE: 'api:read'
   });
   app = createApp(config);

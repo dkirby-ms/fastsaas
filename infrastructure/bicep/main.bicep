@@ -354,11 +354,11 @@ var apiEnvVars = [
     value: 'production'
   }
   {
-    name: 'AZURE_AD_TENANT_ID'
+    name: 'ENTRA_TENANT_ID'
     value: azureTenantId
   }
   {
-    name: 'AZURE_AD_CLIENT_ID'
+    name: 'ENTRA_CLIENT_ID'
     value: azureClientId
   }
 ]
