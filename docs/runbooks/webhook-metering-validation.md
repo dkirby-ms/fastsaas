@@ -1,11 +1,11 @@
 # Webhook and metering validation runbook
 
-**Last updated:** 2026-05-31T21:35:32.766+00:00
+**Last updated:** 2026-06-01T00:04:54.260+00:00
 **Owners:** GNC (operations), EECOM (backend escalation)
 
 ## Purpose
 
-Validate webhook authentication, duplicate protection, replay protection, metering retry behavior, and dead-letter recovery before promoting changes beyond staging.
+Validate the real operator recovery path for Marketplace webhooks and the real metering outbox retry / dead-letter flow before promoting changes beyond staging.
 
 ## Code paths validated
 
@@ -18,11 +18,13 @@ Validate webhook authentication, duplicate protection, replay protection, meteri
 
 ## Preconditions
 
-- Staging API is healthy.
-- Operators know the staging API URL.
+- Staging API is healthy and operators know the Container App name / resource group.
 - `MARKETPLACE_WEBHOOK_SECRET` for staging is available.
 - A staging subscription exists for the webhook subscription ID used in drills.
-- If metering drills need live 429/5xx validation, temporarily point `MARKETPLACE_METERING_ENDPOINT` at a drill stub before starting the exercise.
+- Operators can see the currently registered Marketplace webhook URL in the Commercial Marketplace technical configuration.
+- Operators have staging log access and read-only SQL access.
+- For metering drills, a controlled stub endpoint is available and can return Marketplace-like `429` / `5xx` responses.
+- For live metering injection through the API, a bearer token with `metering:write` and `metering:read` for the staging tenant is available.
 
 ## Auth and retry facts to preserve
 
@@ -30,134 +32,269 @@ Validate webhook authentication, duplicate protection, replay protection, meteri
 - Accepted timestamp headers: `x-ms-marketplace-timestamp`, `x-ms-signature-timestamp`, `x-marketplace-timestamp`.
 - Accepted signature headers: `x-ms-marketplace-signature`, `x-marketplace-signature`.
 - Replay protection uses `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`, default `300000` ms (5 minutes).
-- Duplicate webhook detection keys off the marketplace event/request identifier when present and otherwise falls back to action + subscription + timestamp.
+- Duplicate webhook detection keys off the marketplace event / request identifier when present and otherwise falls back to action + subscription + timestamp.
 - Metering retries only on `429`, `500`, `502`, `503`, and `504`.
 - `retry-after` is honored when Marketplace sends it; otherwise the worker uses exponential backoff with jitter.
 - Exhausted events move to `usage_event_dead_letters` and the corresponding `usage_events.status` becomes `dead_letter`.
 
 ## Drill commands
 
-### Deterministic simulation
+### Deterministic local drill
 
-Run the local drill harness before or after the staging exercise:
+Run the deterministic harness first. It exercises the real webhook middleware plus the real HTTP metering client / outbox worker against a controlled local stub.
 
 ```bash
 npm run drill:runbook:simulate
 ```
 
-### Staging webhook probes
+The local drill now covers:
+
+- duplicate webhook delivery
+- replay-window rejection
+- invalid HMAC rejection
+- client timeout handling
+- dead Marketplace endpoint leading to retry exhaustion and DLQ
+- mixed metering batch with `429`, `503`, and healthy submissions in the same worker batch
+
+### Staging webhook drill
 
 ```bash
 export STAGING_API_BASE_URL="https://<staging-api>"
 export MARKETPLACE_WEBHOOK_SECRET="<staging-secret>"
 export WEBHOOK_MARKETPLACE_SUBSCRIPTION_ID="<staging-marketplace-subscription-id>"
+export WEBHOOK_REGISTERED_ENDPOINT_URL="https://<currently-registered-marketplace-webhook>"
 npm run drill:runbook:staging
 ```
 
 Optional staging-only overrides:
 
-- `WEBHOOK_DEAD_ENDPOINT_URL` — explicit unreachable or wrong URL for dead-endpoint drill.
-- `WEBHOOK_TIMEOUT_URL` — a deliberately slow URL used to force a client timeout.
-- `WEBHOOK_TIMEOUT_MS` — client timeout in milliseconds, default `1500`.
-- `WEBHOOK_ACTION` — defaults to `Suspend`.
+- `WEBHOOK_EXPECTED_ENDPOINT_URL` — defaults to `$STAGING_API_BASE_URL/api/webhooks/marketplace`
+- `WEBHOOK_TIMEOUT_URL` — deliberately slow URL used to force a client timeout
+- `WEBHOOK_TIMEOUT_MS` — client timeout in milliseconds, default `1500`
+- `WEBHOOK_ACTION` — defaults to `Suspend`
 
 ## Scenario matrix
 
-| Scenario | Expected outcome | Primary evidence |
-| --- | --- | --- |
-| Dead webhook endpoint | Non-2xx probe result, no state transition | CLI drill output, Container Apps ingress checks |
-| Webhook timeout | Client timeout observed, endpoint health checked separately | CLI drill output, `az containerapp logs show` |
-| Duplicate delivery | First call accepted, second call handled as duplicate | HTTP `202` then `200`, `marketplace_webhook_events` row preserved |
-| Replay attack | Request rejected with 401 and replay-window details | HTTP `401`, auth error body |
-| Invalid HMAC | Request rejected with 401 | HTTP `401`, auth error body |
-| Metering API timeout | Event scheduled for retry, later succeeds or dead-letters | worker logs, `usage_events` status |
-| Metering 429 | Retry scheduled using `retry-after` or exponential backoff | worker logs, `usage_events.next_attempt_at` |
-| Metering 5xx | Retry scheduled until max retries, then dead-lettered | worker logs, `usage_event_dead_letters` |
-| Batch failure | Healthy events still submit while failing events retry or dead-letter | batch summary, table inspection |
+| Scenario | How it is executed | Expected outcome | Primary evidence |
+| --- | --- | --- | --- |
+| Marketplace-registered webhook endpoint | Compare the registered URL with the live ingress URL, then send the signed probe to the registered URL | Registered URL matches live ingress and accepts the signed probe | CLI drill output, Container App ingress, Marketplace technical configuration |
+| Duplicate delivery | Send the same signed payload twice | First call accepted, second call handled as duplicate | HTTP `202` then `200`, `marketplace_webhook_events` row preserved |
+| Replay attack | Send a valid signature with an expired timestamp | Request rejected with `401` and replay-window details | HTTP `401`, auth error body |
+| Invalid HMAC | Send the same payload with a bad signature | Request rejected with `401` | HTTP `401`, auth error body |
+| Dead Marketplace endpoint | Point `MARKETPLACE_METERING_ENDPOINT` at a refused / dead stub URL | Event moves from `retry_scheduled` to `dead_letter` after retry exhaustion | worker logs, `usage_events`, `usage_event_dead_letters` |
+| Metering 429 + 5xx mixed batch | Point `MARKETPLACE_METERING_ENDPOINT` at a stub that returns `429` with `Retry-After`, `503`, and `200` | Healthy event submits immediately, failures retry with the correct delay | worker logs, `usage_events.next_attempt_at`, SQL inspection |
 
-## Staging recovery playbooks
+## Investigating webhook failures in staging
 
-### 1. Dead webhook endpoint
+### 1. Confirm the live ingress URL and revision health
 
-1. Confirm the staging API revision is healthy:
+```bash
+az containerapp show \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --query properties.configuration.ingress.fqdn \
+  --output tsv
+
+az containerapp revision list \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --output table
+
+curl --fail --show-error --silent "$STAGING_API_BASE_URL/health"
+```
+
+The expected Marketplace webhook URL is:
+
+```bash
+printf 'https://%s/api/webhooks/marketplace\n' "$(az containerapp show \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --query properties.configuration.ingress.fqdn \
+  --output tsv)"
+```
+
+### 2. Inspect recent webhook and worker logs
+
+```bash
+az containerapp logs show \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --tail 200
+```
+
+Look specifically for:
+
+- webhook `401` auth failures
+- repeated `404` / ingress failures on the registered endpoint
+- `Scheduled usage event retry`
+- `Moved usage event to dead letter queue`
+- `Completed metering outbox batch`
+
+### 3. Check the active env values that affect validation
+
+```bash
+az containerapp show \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --query "properties.template.containers[0].env[?name=='MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS' || name=='MARKETPLACE_METERING_ENDPOINT' || name=='METERING_BATCH_SIZE'].{name:name,value:value,secretRef:secretRef}" \
+  --output table
+```
+
+## Actual operator recovery playbooks
+
+### 1. Marketplace-registered webhook endpoint is stale or dead
+
+1. Get the live ingress FQDN from Container Apps:
    ```bash
-   curl --fail --show-error --silent "$STAGING_API_BASE_URL/health"
+   az containerapp show \
+     --resource-group rg-fastsaas-staging \
+     --name staging-api \
+     --query properties.configuration.ingress.fqdn \
+     --output tsv
    ```
-2. Check ingress and latest revision status:
+2. Build the only valid webhook URL for the current revision:
    ```bash
-   az containerapp revision list --resource-group rg-fastsaas-staging --name staging-api --output table
+   printf 'https://%s/api/webhooks/marketplace\n' "$(az containerapp show \
+     --resource-group rg-fastsaas-staging \
+     --name staging-api \
+     --query properties.configuration.ingress.fqdn \
+     --output tsv)"
    ```
-3. Review recent logs for auth or routing failures:
+3. Compare that URL with the value currently registered in **Commercial Marketplace → Offer → Technical configuration → Webhook endpoint URL**.
+4. If the registered value is stale, update it there first. Do not treat a synthetic wrong-path `404` as recovery evidence.
+5. If the live ingress itself is unhealthy, recover the Container App revision before changing Marketplace registration:
    ```bash
-   az containerapp logs show --resource-group rg-fastsaas-staging --name staging-api --tail 200
+   az containerapp revision list \
+     --resource-group rg-fastsaas-staging \
+     --name staging-api \
+     --output table
    ```
-4. If the endpoint URL changed, update the upstream webhook registration before replaying traffic.
-5. Re-run `npm run drill:runbook:staging` and confirm duplicate/replay scenarios still behave as expected.
+6. Re-run `npm run drill:runbook:staging`. The drill is only complete when the Marketplace-registered URL and the live ingress URL match and the signed probe succeeds.
 
-### 2. Webhook timeout
+### 2. Valid signed webhooks are timing out or returning `401`
 
-1. Confirm `/health` stays green while the client timeout occurs.
-2. Inspect Container App logs for long-running dependency calls or revision restarts.
-3. If startup or revision churn is involved, restart the unhealthy revision and wait for readiness before retrying.
-4. If timeouts correlate with downstream fulfillment latency, escalate to EECOM and pause further replay until latency stabilizes.
-5. Repeat the timeout probe and a normal signed webhook to confirm recovery.
+1. Confirm `/health` stays green and the active revision is stable.
+2. Inspect logs for raw auth failures versus downstream business logic failures.
+3. Verify the active revision still has the correct webhook secret and replay-window tolerance.
+4. If legitimate traffic is being rejected, rotate the webhook secret in Azure, update the upstream sender, then restart the API revision.
+5. Re-run the duplicate, replay, and invalid-HMAC probes. Recovery is complete only when a fresh valid probe succeeds and stale / tampered probes still fail.
 
-### 3. Duplicate delivery
+### 3. Metering retry / DLQ recovery using a controlled Marketplace stub
 
-1. Verify the first delivery was accepted and the duplicate returned `200` without a second state transition.
-2. Inspect the stored webhook idempotency record when database access is available:
-   ```sql
-   SELECT idempotency_key, status, processed_at
-   FROM marketplace_webhook_events
-   ORDER BY processed_at DESC
-   LIMIT 10;
-   ```
-3. If duplicates are reprocessing state, halt replay activity and escalate to EECOM immediately.
-4. Do not delete webhook history rows during incident response; preserve evidence for replay analysis.
+Use a stub that accepts the same JSON body the API sends to Marketplace:
 
-### 4. Replay attack or invalid HMAC
+```json
+{
+  "resourceId": "sub-drill-429",
+  "quantity": 10,
+  "dimension": "api_calls",
+  "effectiveStartTime": "2026-06-01T00:00:00.000Z",
+  "planId": "plan-growth"
+}
+```
 
-1. Confirm the response is `401` and not a downstream application error.
-2. Verify the configured secret and timestamp tolerance on the active Container App revision.
-3. If legitimate traffic is being rejected, rotate the webhook secret in Azure, update the upstream sender, and redeploy/restart the API revision.
-4. Re-run the valid signed drill and confirm that only stale or tampered payloads fail.
+Required stub behaviors:
 
-### 5. Metering API timeout
+- `429` with `Retry-After: 2`
+- `503` or `500` with a response body
+- a dead / refused endpoint for DLQ verification
+- `200` for the healthy event in the mixed batch
 
-1. Review API worker logs for `Scheduled usage event retry` or `Metering worker run failed` messages.
-2. Inspect current queue depth:
-   ```sql
-   SELECT status, count(*)
-   FROM usage_events
-   GROUP BY status;
-   ```
-3. Confirm `next_attempt_at` is moving forward for affected events.
-4. If the Marketplace endpoint is unavailable, keep the worker running and monitor retry growth.
-5. If events age toward the SLA threshold, prepare a temporary endpoint override or manual replay plan before the retry budget is exhausted.
+Point staging at the stub before enqueuing drill traffic:
 
-### 6. Metering 429 rate limiting
+```bash
+az containerapp update \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --set-env-vars MARKETPLACE_METERING_ENDPOINT="https://<metering-stub>/api/usageEvent"
+```
 
-1. Confirm the response included `retry-after` when available.
-2. Check whether retries are being delayed instead of hammering the upstream service.
-3. If 429s persist, reduce batch pressure by lowering `METERING_BATCH_SIZE` and redeploying staging.
-4. Continue monitoring `retry_scheduled` and `dead_letter` counts until the queue drains.
+Inject drill events through the real API path:
 
-### 7. Metering 5xx or batch failures
+```bash
+export STAGING_API_BEARER_TOKEN="<token-with-metering-write>"
 
-1. Validate that only failing events are retried or dead-lettered and that healthy events still submit.
-2. Inspect dead letters:
-   ```sql
-   SELECT event_id, tenant_id, http_status, retry_count, failed_at
-   FROM usage_event_dead_letters
-   ORDER BY failed_at DESC
-   LIMIT 20;
-   ```
-3. Correct the upstream endpoint or credentials.
-4. Replay dead-lettered usage after the fix by re-enqueuing payloads from `usage_event_dead_letters.payload` into `usage_events` with fresh `next_attempt_at` values.
-5. Re-run the deterministic drill harness and one live staging probe before closing the incident.
+curl --fail --show-error --silent \
+  -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "eventId":"drill-429",
+    "subscriptionId":"sub-drill-429",
+    "planId":"plan-growth",
+    "dimensionId":"api_calls",
+    "quantity":10,
+    "timestamp":"2026-06-01T00:00:00.000Z"
+  }'
+
+curl --fail --show-error --silent \
+  -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "eventId":"drill-503",
+    "subscriptionId":"sub-drill-503",
+    "planId":"plan-growth",
+    "dimensionId":"api_calls",
+    "quantity":5,
+    "timestamp":"2026-06-01T00:00:00.000Z"
+  }'
+
+curl --fail --show-error --silent \
+  -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "eventId":"drill-ok",
+    "subscriptionId":"sub-drill-ok",
+    "planId":"plan-growth",
+    "dimensionId":"api_calls",
+    "quantity":1,
+    "timestamp":"2026-06-01T00:00:00.000Z"
+  }'
+```
+
+Inspect the actual outbox state:
+
+```sql
+SELECT event_id, status, retry_count, next_attempt_at, last_http_status, last_error_message
+FROM usage_events
+WHERE event_id IN ('drill-429', 'drill-503', 'drill-ok', 'drill-dead-endpoint')
+ORDER BY created_at DESC;
+
+SELECT event_id, http_status, retry_count, failed_at
+FROM usage_event_dead_letters
+WHERE event_id IN ('drill-dead-endpoint', 'drill-503')
+ORDER BY failed_at DESC;
+```
+
+Interpretation:
+
+- `drill-ok` should become `submitted` immediately.
+- `drill-429` should move to `retry_scheduled` with a `next_attempt_at` approximately 2 seconds ahead of the worker run.
+- `drill-503` should move to `retry_scheduled` with exponential backoff if there is no `Retry-After`.
+- `drill-dead-endpoint` should eventually move to `dead_letter` and create a `usage_event_dead_letters` row.
+
+Restore the real Marketplace endpoint after the drill and verify the queue drains:
+
+```bash
+az containerapp update \
+  --resource-group rg-fastsaas-staging \
+  --name staging-api \
+  --set-env-vars MARKETPLACE_METERING_ENDPOINT="https://<real-marketplace-endpoint>"
+```
+
+Then confirm recovery:
+
+```sql
+SELECT status, count(*)
+FROM usage_events
+GROUP BY status
+ORDER BY status;
+```
 
 ## Escalation guidance
 
-- **GNC owns:** Container Apps health, environment variables, endpoint overrides, deployment rollback, and drill execution.
-- **EECOM owns:** webhook business-state correctness, fulfillment side effects, and metering domain logic.
-- Escalate immediately if duplicate webhook deliveries change subscription state, if valid signed webhooks fail within the replay window, or if metering dead letters keep growing after endpoint recovery.
+- **GNC owns:** Container Apps health, revision recovery, env var updates, offer technical-configuration updates, and drill execution.
+- **EECOM owns:** webhook business-state correctness, fulfillment side effects, metering worker logic, and DLQ replay guidance.
+- Escalate immediately if duplicate webhook deliveries change subscription state, if valid signed webhooks fail within the replay window, or if `usage_event_dead_letters` continues growing after the stub / endpoint fault is removed.

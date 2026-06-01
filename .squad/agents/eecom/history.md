@@ -30,7 +30,8 @@ Assigned to EECOM:
 
 ## Learnings
 
-_No learnings recorded yet._
+- **2026-06-01T00:04:54.260+00:00:** PR #63 runbook validation now requires checking the actual Marketplace-registered webhook URL against the live Container Apps ingress, and the drill harness now drives metering retries through the real HTTP client with 429/503/dead-endpoint responses.
+
 ## Orchestration — 2026-05-29T19:30:29Z
 
 **#1 API Foundation — COMPLETE (PR #7)**

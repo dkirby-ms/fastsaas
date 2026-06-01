@@ -7,7 +7,7 @@ import request from 'supertest';
 import { createApp } from '../../packages/api/src/app';
 import { createConfig, type ApiConfig } from '../../packages/api/src/config';
 import { type Clock } from '../../packages/api/src/metering/clock';
-import { MarketplaceMeteringError, type MarketplaceMeteringClient, type MarketplaceSubmitUsageEvent } from '../../packages/api/src/metering/client';
+import { HttpMarketplaceMeteringClient } from '../../packages/api/src/metering/client';
 import { InMemoryUsageEventRepository } from '../../packages/api/src/metering/repository';
 import { MeteringService } from '../../packages/api/src/metering/service';
 import { MeteringOutboxWorker } from '../../packages/api/src/metering/worker';
@@ -23,6 +23,17 @@ interface DrillResult {
   details: string;
 }
 
+interface MeteringStubStep {
+  status: number;
+  body?: string;
+  retryAfterSeconds?: number;
+}
+
+interface MeteringStubHandle {
+  url: string;
+  close(): Promise<void>;
+}
+
 class FakeClock implements Clock {
   constructor(private current = new Date('2026-05-31T21:35:32.766Z')) {}
 
@@ -32,26 +43,6 @@ class FakeClock implements Clock {
 
   advanceMs(ms: number): void {
     this.current = new Date(this.current.getTime() + ms);
-  }
-}
-
-class SequenceMarketplaceClient implements MarketplaceMeteringClient {
-  private readonly stepsByEvent = new Map<string, Array<{ type: 'ok' } | { type: 'error'; error: MarketplaceMeteringError }>>();
-
-  queue(eventId: string, steps: Array<{ type: 'ok' } | { type: 'error'; error: MarketplaceMeteringError }>): void {
-    this.stepsByEvent.set(eventId, [...steps]);
-  }
-
-  async submitUsageEvent(event: MarketplaceSubmitUsageEvent): Promise<void> {
-    const queue = this.stepsByEvent.get(event.eventId) ?? [];
-    const step = queue.shift();
-    this.stepsByEvent.set(event.eventId, queue);
-
-    if (!step || step.type === 'ok') {
-      return;
-    }
-
-    throw step.error;
   }
 }
 
@@ -80,6 +71,24 @@ function assert(condition: unknown, message: string): void {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function createDrillConfig(overrides: NodeJS.ProcessEnv = {}): ApiConfig {
+  return createConfig({
+    ...process.env,
+    AUTH_BYPASS_ENABLED: 'true',
+    NODE_ENV: 'test',
+    MARKETPLACE_WEBHOOK_SECRET: process.env.MARKETPLACE_WEBHOOK_SECRET ?? 'local-marketplace-webhook-secret',
+    MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS: '300000',
+    METERING_BATCH_SIZE: '10',
+    METERING_CLAIM_LEASE_MS: '60000',
+    METERING_MAX_RETRIES: '2',
+    METERING_RETRY_BASE_DELAY_MS: '1000',
+    METERING_RETRY_MAX_DELAY_MS: '30000',
+    METERING_RETRY_JITTER_RATIO: '0',
+    METERING_SUBMISSION_SLA_MS: '14400000',
+    ...overrides
+  });
 }
 
 async function seedWebhookSubscription(repository: InMemorySubscriptionRepository): Promise<void> {
@@ -124,24 +133,29 @@ async function seedWebhookSubscription(repository: InMemorySubscriptionRepositor
   });
 }
 
-function createWebhookConfig(): ApiConfig {
-  return createConfig({
-    AUTH_BYPASS_ENABLED: 'true',
-    NODE_ENV: 'test',
-    MARKETPLACE_WEBHOOK_SECRET: process.env.MARKETPLACE_WEBHOOK_SECRET ?? 'local-marketplace-webhook-secret',
-    MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS: '300000',
-    METERING_BATCH_SIZE: '10',
-    METERING_CLAIM_LEASE_MS: '60000',
-    METERING_MAX_RETRIES: '2',
-    METERING_RETRY_BASE_DELAY_MS: '1000',
-    METERING_RETRY_MAX_DELAY_MS: '30000',
-    METERING_RETRY_JITTER_RATIO: '0',
-    METERING_SUBMISSION_SLA_MS: '14400000'
+function buildWebhookPayload(subscriptionId: string, action: string, requestId = `evt-${randomUUID()}`): string {
+  return JSON.stringify({
+    action,
+    marketplaceSubscriptionId: subscriptionId,
+    requestId
   });
 }
 
+function buildSignedWebhook(secret: string, bodyText: string, timestamp = new Date().toISOString()): {
+  body: Buffer;
+  signature: string;
+  timestamp: string;
+} {
+  const body = Buffer.from(bodyText);
+  return {
+    body,
+    signature: createSignature(secret, timestamp, body),
+    timestamp
+  };
+}
+
 async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
-  const config = createWebhookConfig();
+  const config = createDrillConfig();
   const repository = new InMemorySubscriptionRepository();
   await seedWebhookSubscription(repository);
   const subscriptionService = new SubscriptionService(repository, {
@@ -153,29 +167,24 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
     updateSubscription: async () => undefined
   }, console as never);
   const app = createApp(config, { subscriptionService });
-  const bodyText = JSON.stringify({
-    action: 'Suspend',
-    marketplaceSubscriptionId: process.env.WEBHOOK_MARKETPLACE_SUBSCRIPTION_ID ?? 'marketplace-sub-drill',
-    requestId: 'evt-webhook-drill'
-  });
-  const body = Buffer.from(bodyText);
-  const timestamp = new Date().toISOString();
-  const signature = createSignature(config.marketplace.webhookSecret, timestamp, body);
-
+  const subscriptionId = process.env.WEBHOOK_MARKETPLACE_SUBSCRIPTION_ID ?? 'marketplace-sub-drill';
+  const action = process.env.WEBHOOK_ACTION ?? 'Suspend';
   const results: DrillResult[] = [];
 
   try {
+    const bodyText = buildWebhookPayload(subscriptionId, action, 'evt-webhook-drill');
+    const signed = buildSignedWebhook(config.marketplace.webhookSecret, bodyText);
     const first = await request(app)
       .post('/api/webhooks/marketplace')
       .set('content-type', 'application/json')
-      .set('x-ms-marketplace-timestamp', timestamp)
-      .set('x-ms-marketplace-signature', signature)
+      .set('x-ms-marketplace-timestamp', signed.timestamp)
+      .set('x-ms-marketplace-signature', signed.signature)
       .send(bodyText);
     const second = await request(app)
       .post('/api/webhooks/marketplace')
       .set('content-type', 'application/json')
-      .set('x-ms-marketplace-timestamp', timestamp)
-      .set('x-ms-marketplace-signature', signature)
+      .set('x-ms-marketplace-timestamp', signed.timestamp)
+      .set('x-ms-marketplace-signature', signed.signature)
       .send(bodyText);
 
     assert(first.status === 202, `expected first delivery to return 202, received ${first.status}`);
@@ -186,12 +195,14 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
   }
 
   try {
+    const bodyText = buildWebhookPayload(subscriptionId, action, 'evt-webhook-replay');
     const replayTimestamp = new Date(Date.now() - (6 * 60 * 1000)).toISOString();
+    const replay = buildSignedWebhook(config.marketplace.webhookSecret, bodyText, replayTimestamp);
     const replayResponse = await request(app)
       .post('/api/webhooks/marketplace')
       .set('content-type', 'application/json')
-      .set('x-ms-marketplace-timestamp', replayTimestamp)
-      .set('x-ms-marketplace-signature', createSignature(config.marketplace.webhookSecret, replayTimestamp, body))
+      .set('x-ms-marketplace-timestamp', replay.timestamp)
+      .set('x-ms-marketplace-signature', replay.signature)
       .send(bodyText);
 
     assert(replayResponse.status === 401, `expected replay rejection to return 401, received ${replayResponse.status}`);
@@ -201,10 +212,12 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
   }
 
   try {
+    const bodyText = buildWebhookPayload(subscriptionId, action, 'evt-webhook-invalid-hmac');
+    const signed = buildSignedWebhook(config.marketplace.webhookSecret, bodyText);
     const tampered = await request(app)
       .post('/api/webhooks/marketplace')
       .set('content-type', 'application/json')
-      .set('x-ms-marketplace-timestamp', timestamp)
+      .set('x-ms-marketplace-timestamp', signed.timestamp)
       .set('x-ms-marketplace-signature', 'sha256=deadbeef')
       .send(bodyText);
 
@@ -215,18 +228,8 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
   }
 
   try {
-    const deadEndpoint = await request(app)
-      .post('/api/webhooks/not-configured')
-      .set('content-type', 'application/json')
-      .send(bodyText);
-
-    assert(deadEndpoint.status === 404, `expected dead endpoint simulation to return 404, received ${deadEndpoint.status}`);
-    results.push({ name: 'webhook dead endpoint', status: 'passed', details: 'Wrong-path simulation returned HTTP 404.' });
-  } catch (error) {
-    results.push({ name: 'webhook dead endpoint', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
-  }
-
-  try {
+    const bodyText = buildWebhookPayload(subscriptionId, action, 'evt-webhook-timeout');
+    const signed = buildSignedWebhook(config.marketplace.webhookSecret, bodyText);
     const slowServer = createServer((_req, res) => {
       setTimeout(() => {
         res.statusCode = 202;
@@ -244,10 +247,10 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-ms-marketplace-timestamp': timestamp,
-          'x-ms-marketplace-signature': signature
+          'x-ms-marketplace-timestamp': signed.timestamp,
+          'x-ms-marketplace-signature': signed.signature
         },
-        body,
+        body: signed.body,
         signal: controller.signal
       });
     } catch {
@@ -266,132 +269,194 @@ async function runSimulatedWebhookDrills(): Promise<DrillResult[]> {
   return results;
 }
 
-async function runSimulatedMeteringDrills(): Promise<DrillResult[]> {
-  const config = createWebhookConfig();
+async function startMeteringStub(stepsByResourceId: Record<string, MeteringStubStep[]>): Promise<MeteringStubHandle> {
+  const queues = new Map<string, MeteringStubStep[]>(
+    Object.entries(stepsByResourceId).map(([resourceId, steps]) => [resourceId, [...steps]])
+  );
+  const server = createServer(async (req, res) => {
+    if (req.method !== 'POST') {
+      res.statusCode = 405;
+      res.end('method not allowed');
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    let resourceId = 'unknown';
+    try {
+      const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+      resourceId = typeof payload.resourceId === 'string' ? payload.resourceId : 'unknown';
+    } catch {
+      res.statusCode = 400;
+      res.end('invalid json');
+      return;
+    }
+
+    const queue = queues.get(resourceId) ?? [];
+    const step = queue.shift() ?? { status: 200, body: JSON.stringify({ status: 'accepted' }) };
+    queues.set(resourceId, queue);
+
+    if (step.retryAfterSeconds !== undefined) {
+      res.setHeader('retry-after', String(step.retryAfterSeconds));
+    }
+    res.setHeader('content-type', 'application/json');
+    res.statusCode = step.status;
+    res.end(step.body ?? JSON.stringify({ status: step.status < 400 ? 'accepted' : 'error' }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  const address = server.address() as AddressInfo;
+
+  return {
+    url: `http://127.0.0.1:${address.port}/api/usageEvent`,
+    close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  };
+}
+
+async function reserveDeadEndpointUrl(): Promise<string> {
+  const server = createServer((_req, res) => {
+    res.statusCode = 204;
+    res.end();
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  const port = (server.address() as AddressInfo).port;
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return `http://127.0.0.1:${port}/api/usageEvent`;
+}
+
+function createMeteringHarness(endpoint: string): {
+  clock: FakeClock;
+  repository: InMemoryUsageEventRepository;
+  service: MeteringService;
+  worker: MeteringOutboxWorker;
+} {
   const clock = new FakeClock();
+  const config = createDrillConfig({ MARKETPLACE_METERING_ENDPOINT: endpoint });
   const repository = new InMemoryUsageEventRepository(clock);
-  const client = new SequenceMarketplaceClient();
   const service = new MeteringService(config, repository, clock);
-  const worker = new MeteringOutboxWorker(config, repository, client, clock, () => 0);
+  const worker = new MeteringOutboxWorker(
+    config,
+    repository,
+    new HttpMarketplaceMeteringClient(config.metering.marketplaceEndpoint, config.metering.marketplaceApiKey),
+    clock,
+    () => 0
+  );
+
+  return { clock, repository, service, worker };
+}
+
+async function ingestDrillEvent(
+  service: MeteringService,
+  clock: FakeClock,
+  eventId: string,
+  subscriptionId: string,
+  quantity: number
+): Promise<void> {
+  await service.ingestEvent('tenant-drill', {
+    eventId,
+    subscriptionId,
+    planId: 'plan-growth',
+    dimensionId: 'api_calls',
+    quantity,
+    timestamp: clock.now().toISOString()
+  });
+}
+
+async function runSimulatedMeteringDrills(): Promise<DrillResult[]> {
   const results: DrillResult[] = [];
 
   try {
-    client.queue('evt-429', [
-      { type: 'error', error: new MarketplaceMeteringError(429, 'rate limited', 2) },
-      { type: 'ok' }
-    ]);
-    await service.ingestEvent('tenant-drill', {
-      eventId: 'evt-429',
-      subscriptionId: 'sub-429',
-      planId: 'plan-growth',
-      dimensionId: 'api_calls',
-      quantity: 10,
-      timestamp: clock.now().toISOString()
-    });
+    const deadEndpointUrl = await reserveDeadEndpointUrl();
+    const { clock, repository, service, worker } = createMeteringHarness(deadEndpointUrl);
+    await ingestDrillEvent(service, clock, 'evt-dead-endpoint', 'sub-dead-endpoint', 7);
 
     const first = await worker.runNextBatch();
-    assert(first.retried === 1, `expected one retry after 429, received ${first.retried}`);
-    clock.advanceMs(2000);
-    const second = await worker.runNextBatch();
-    assert(second.submitted === 1, `expected retried 429 event to submit successfully, received ${second.submitted}`);
-    results.push({ name: 'metering 429 retry', status: 'passed', details: '429 response scheduled a retry and the next attempt submitted successfully.' });
-  } catch (error) {
-    results.push({ name: 'metering 429 retry', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
-  }
-
-  try {
-    client.queue('evt-503', [
-      { type: 'error', error: new MarketplaceMeteringError(503, 'upstream unavailable') },
-      { type: 'ok' }
-    ]);
-    await service.ingestEvent('tenant-drill', {
-      eventId: 'evt-503',
-      subscriptionId: 'sub-503',
-      planId: 'plan-growth',
-      dimensionId: 'api_calls',
-      quantity: 5,
-      timestamp: clock.now().toISOString()
-    });
-
-    const first = await worker.runNextBatch();
-    assert(first.retried >= 1, 'expected 5xx response to schedule a retry');
+    assert(first.retried === 1, `expected first dead-endpoint attempt to schedule a retry, received ${first.retried}`);
     clock.advanceMs(1000);
     const second = await worker.runNextBatch();
-    assert(second.submitted >= 1, 'expected retried 5xx event to submit successfully');
-    results.push({ name: 'metering 5xx retry', status: 'passed', details: '503 response retried and then submitted successfully.' });
-  } catch (error) {
-    results.push({ name: 'metering 5xx retry', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
-  }
-
-  try {
-    client.queue('evt-timeout', [
-      { type: 'error', error: new MarketplaceMeteringError(504, 'gateway timeout') },
-      { type: 'error', error: new MarketplaceMeteringError(504, 'gateway timeout') },
-      { type: 'error', error: new MarketplaceMeteringError(504, 'gateway timeout') }
-    ]);
-    await service.ingestEvent('tenant-drill', {
-      eventId: 'evt-timeout',
-      subscriptionId: 'sub-timeout',
-      planId: 'plan-growth',
-      dimensionId: 'api_calls',
-      quantity: 7,
-      timestamp: clock.now().toISOString()
-    });
-
-    await worker.runNextBatch();
-    clock.advanceMs(1000);
-    await worker.runNextBatch();
+    assert(second.retried === 1, `expected second dead-endpoint attempt to schedule a retry, received ${second.retried}`);
     clock.advanceMs(2000);
-    const final = await worker.runNextBatch();
-    assert(final.deadLettered === 1, `expected timeout scenario to dead-letter after retry exhaustion, received ${final.deadLettered}`);
-    const deadLetters = await repository.listDeadLetters('tenant-drill');
-    assert(deadLetters.some((entry) => entry.eventId === 'evt-timeout'), 'expected timeout event to be written to the dead-letter queue');
-    results.push({ name: 'metering timeout dead-letter', status: 'passed', details: 'Repeated timeout failures exhausted retries and moved the event to the dead-letter queue.' });
+    const third = await worker.runNextBatch();
+    assert(third.deadLettered === 1, `expected dead-endpoint drill to dead-letter after retry exhaustion, received ${third.deadLettered}`);
+
+    const event = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-dead-endpoint');
+    const deadLetter = (await repository.listDeadLetters('tenant-drill')).find((entry) => entry.eventId === 'evt-dead-endpoint');
+    assert(event?.status === 'dead_letter', `expected dead-endpoint event status to be dead_letter, received ${event?.status}`);
+    assert(deadLetter?.retryCount === 2, `expected dead letter retry count to be 2, received ${deadLetter?.retryCount}`);
+    results.push({ name: 'metering dead endpoint dlq', status: 'passed', details: 'A refused Marketplace endpoint triggered real worker retries and then dead-lettered the event.' });
   } catch (error) {
-    results.push({ name: 'metering timeout dead-letter', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+    results.push({ name: 'metering dead endpoint dlq', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
   }
 
+  let stub: MeteringStubHandle | undefined;
   try {
-    client.queue('evt-batch-bad', [
-      { type: 'error', error: new MarketplaceMeteringError(503, 'batch failure') },
-      { type: 'error', error: new MarketplaceMeteringError(503, 'batch failure') },
-      { type: 'error', error: new MarketplaceMeteringError(503, 'batch failure') }
-    ]);
-    client.queue('evt-batch-good', [{ type: 'ok' }]);
-    await service.ingestEvent('tenant-drill', {
-      eventId: 'evt-batch-bad',
-      subscriptionId: 'sub-batch-bad',
-      planId: 'plan-growth',
-      dimensionId: 'api_calls',
-      quantity: 3,
-      timestamp: clock.now().toISOString()
+    stub = await startMeteringStub({
+      'sub-batch-429': [
+        { status: 429, body: JSON.stringify({ error: 'rate limited' }), retryAfterSeconds: 2 },
+        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
+      ],
+      'sub-batch-503': [
+        { status: 503, body: JSON.stringify({ error: 'upstream unavailable' }) },
+        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
+      ],
+      'sub-batch-ok': [{ status: 200, body: JSON.stringify({ status: 'accepted' }) }]
     });
-    await service.ingestEvent('tenant-drill', {
-      eventId: 'evt-batch-good',
-      subscriptionId: 'sub-batch-good',
-      planId: 'plan-growth',
-      dimensionId: 'api_calls',
-      quantity: 9,
-      timestamp: clock.now().toISOString()
-    });
+    const { clock, repository, service, worker } = createMeteringHarness(stub.url);
+    await ingestDrillEvent(service, clock, 'evt-batch-429', 'sub-batch-429', 10);
+    await ingestDrillEvent(service, clock, 'evt-batch-503', 'sub-batch-503', 5);
+    await ingestDrillEvent(service, clock, 'evt-batch-ok', 'sub-batch-ok', 2);
 
     const first = await worker.runNextBatch();
-    assert(first.submitted >= 1 && first.retried >= 1, 'expected mixed batch to submit one event and retry one event');
+    assert(first.attempted === 3, `expected batch worker to attempt 3 events, received ${first.attempted}`);
+    assert(first.submitted === 1, `expected exactly one event to submit on the first batch, received ${first.submitted}`);
+    assert(first.retried === 2, `expected exactly two events to retry on the first batch, received ${first.retried}`);
+
+    const firstState = await repository.listByTenant('tenant-drill');
+    const healthy = firstState.find((record) => record.eventId === 'evt-batch-ok');
+    const rateLimited = firstState.find((record) => record.eventId === 'evt-batch-429');
+    const unavailable = firstState.find((record) => record.eventId === 'evt-batch-503');
+
+    assert(healthy?.status === 'submitted', `expected healthy event to submit immediately, received ${healthy?.status}`);
+    assert(rateLimited?.status === 'retry_scheduled' && rateLimited.lastHttpStatus === 429, 'expected 429 event to be retry_scheduled with HTTP 429');
+    assert(unavailable?.status === 'retry_scheduled' && unavailable.lastHttpStatus === 503, 'expected 503 event to be retry_scheduled with HTTP 503');
+    assert(rateLimited.nextAttemptAt !== null, 'expected 429 event to have a next_attempt_at value');
+    assert(unavailable.nextAttemptAt !== null, 'expected 503 event to have a next_attempt_at value');
+    assert(new Date(rateLimited.nextAttemptAt).getTime() - clock.now().getTime() === 2000, 'expected 429 retry-after delay to be 2000 ms');
+    assert(new Date(unavailable.nextAttemptAt).getTime() - clock.now().getTime() === 1000, 'expected 503 exponential retry delay to be 1000 ms');
+
     clock.advanceMs(1000);
-    await worker.runNextBatch();
-    clock.advanceMs(2000);
-    await worker.runNextBatch();
-    const events = await repository.listByTenant('tenant-drill');
-    const submitted = events.find((event) => event.eventId === 'evt-batch-good');
-    const failed = events.find((event) => event.eventId === 'evt-batch-bad');
-    assert(submitted?.status === 'submitted', `expected healthy batch event to stay submitted, received ${submitted?.status}`);
-    assert(failed?.status === 'dead_letter', `expected failing batch event to dead-letter, received ${failed?.status}`);
-    results.push({ name: 'metering batch isolation', status: 'passed', details: 'Healthy events submitted while the failing event retried and dead-lettered independently.' });
+    const second = await worker.runNextBatch();
+    assert(second.attempted === 1 && second.submitted === 1, `expected only the 503 event to retry after 1 second, received attempted=${second.attempted} submitted=${second.submitted}`);
+    clock.advanceMs(1000);
+    const third = await worker.runNextBatch();
+    assert(third.attempted === 1 && third.submitted === 1, `expected only the 429 event to retry after retry-after elapsed, received attempted=${third.attempted} submitted=${third.submitted}`);
+    results.push({ name: 'metering batch retry patterns', status: 'passed', details: 'A mixed batch honored Retry-After for 429, exponential backoff for 503, and still submitted the healthy event.' });
   } catch (error) {
-    results.push({ name: 'metering batch isolation', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+    results.push({ name: 'metering batch retry patterns', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+  } finally {
+    if (stub) {
+      await stub.close();
+    }
   }
 
   return results;
+}
+
+async function postSignedWebhook(url: string, bodyText: string, secret: string, timestamp = new Date().toISOString(), signature?: string): Promise<Response> {
+  const body = Buffer.from(bodyText);
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-ms-marketplace-timestamp': timestamp,
+      'x-ms-marketplace-signature': signature ?? createSignature(secret, timestamp, body)
+    },
+    body: bodyText
+  });
 }
 
 async function runStagingWebhookDrills(): Promise<DrillResult[]> {
@@ -409,35 +474,47 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
 
   const action = process.env.WEBHOOK_ACTION ?? 'Suspend';
   const timeoutMs = Number(process.env.WEBHOOK_TIMEOUT_MS ?? '1500');
-  const bodyText = JSON.stringify({
-    action,
-    marketplaceSubscriptionId: subscriptionId,
-    requestId: `evt-${randomUUID()}`
-  });
-  const body = Buffer.from(bodyText);
-  const timestamp = new Date().toISOString();
-  const signature = createSignature(secret, timestamp, body);
+  const expectedWebhookUrl = process.env.WEBHOOK_EXPECTED_ENDPOINT_URL ?? new URL('/api/webhooks/marketplace', baseUrl).toString();
+  const registeredWebhookUrl = process.env.WEBHOOK_REGISTERED_ENDPOINT_URL;
   const results: DrillResult[] = [];
 
+  if (!registeredWebhookUrl) {
+    results.push({
+      name: 'staging webhook registration check',
+      status: 'failed',
+      details: 'Set WEBHOOK_REGISTERED_ENDPOINT_URL to the URL currently registered in Marketplace before running staging mode.'
+    });
+  } else if (registeredWebhookUrl !== expectedWebhookUrl) {
+    results.push({
+      name: 'staging webhook registration check',
+      status: 'failed',
+      details: `Marketplace is pointed at ${registeredWebhookUrl}; expected ${expectedWebhookUrl}. Update the technical configuration and rerun the drill.`
+    });
+  } else {
+    try {
+      const registrationResponse = await postSignedWebhook(
+        registeredWebhookUrl,
+        buildWebhookPayload(subscriptionId, action, `evt-registration-${randomUUID()}`),
+        secret
+      );
+
+      assert(registrationResponse.status === 202 || registrationResponse.status === 200, `expected Marketplace-registered endpoint to return 202 or 200, received ${registrationResponse.status}`);
+      results.push({
+        name: 'staging webhook registration check',
+        status: 'passed',
+        details: `Marketplace-registered endpoint ${registeredWebhookUrl} accepted the signed probe with HTTP ${registrationResponse.status}.`
+      });
+    } catch (error) {
+      results.push({ name: 'staging webhook registration check', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+    }
+  }
+
   try {
-    const first = await fetch(new URL('/api/webhooks/marketplace', baseUrl), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-ms-marketplace-timestamp': timestamp,
-        'x-ms-marketplace-signature': signature
-      },
-      body: bodyText
-    });
-    const second = await fetch(new URL('/api/webhooks/marketplace', baseUrl), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-ms-marketplace-timestamp': timestamp,
-        'x-ms-marketplace-signature': signature
-      },
-      body: bodyText
-    });
+    const requestId = `evt-${randomUUID()}`;
+    const bodyText = buildWebhookPayload(subscriptionId, action, requestId);
+    const timestamp = new Date().toISOString();
+    const first = await postSignedWebhook(expectedWebhookUrl, bodyText, secret, timestamp);
+    const second = await postSignedWebhook(expectedWebhookUrl, bodyText, secret, timestamp);
 
     assert(first.status === 202 || first.status === 200, `expected first staging delivery to return 202 or 200, received ${first.status}`);
     assert(second.status === 200, `expected duplicate staging delivery to return 200, received ${second.status}`);
@@ -447,16 +524,9 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
   }
 
   try {
+    const bodyText = buildWebhookPayload(subscriptionId, action, `evt-replay-${randomUUID()}`);
     const replayTimestamp = new Date(Date.now() - (6 * 60 * 1000)).toISOString();
-    const replay = await fetch(new URL('/api/webhooks/marketplace', baseUrl), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-ms-marketplace-timestamp': replayTimestamp,
-        'x-ms-marketplace-signature': createSignature(secret, replayTimestamp, body)
-      },
-      body: bodyText
-    });
+    const replay = await postSignedWebhook(expectedWebhookUrl, bodyText, secret, replayTimestamp);
 
     assert(replay.status === 401, `expected staging replay rejection to return 401, received ${replay.status}`);
     results.push({ name: 'staging webhook replay window', status: 'passed', details: 'Expired timestamp was rejected with HTTP 401.' });
@@ -465,15 +535,9 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
   }
 
   try {
-    const invalid = await fetch(new URL('/api/webhooks/marketplace', baseUrl), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-ms-marketplace-timestamp': timestamp,
-        'x-ms-marketplace-signature': 'sha256=deadbeef'
-      },
-      body: bodyText
-    });
+    const bodyText = buildWebhookPayload(subscriptionId, action, `evt-invalid-${randomUUID()}`);
+    const timestamp = new Date().toISOString();
+    const invalid = await postSignedWebhook(expectedWebhookUrl, bodyText, secret, timestamp, 'sha256=deadbeef');
 
     assert(invalid.status === 401, `expected staging invalid signature rejection to return 401, received ${invalid.status}`);
     results.push({ name: 'staging webhook invalid hmac', status: 'passed', details: 'Tampered signature was rejected with HTTP 401.' });
@@ -481,25 +545,15 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
     results.push({ name: 'staging webhook invalid hmac', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
   }
 
-  try {
-    const deadEndpointUrl = process.env.WEBHOOK_DEAD_ENDPOINT_URL ?? new URL('/api/webhooks/not-configured', baseUrl).toString();
-    const dead = await fetch(deadEndpointUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: bodyText
-    });
-
-    assert(dead.status >= 400, `expected dead endpoint probe to fail, received ${dead.status}`);
-    results.push({ name: 'staging webhook dead endpoint', status: 'passed', details: `Probe failed as expected with HTTP ${dead.status}.` });
-  } catch (error) {
-    results.push({ name: 'staging webhook dead endpoint', status: 'passed', details: `Endpoint was unreachable as expected: ${error instanceof Error ? error.message : 'network failure'}` });
-  }
-
   const timeoutUrl = process.env.WEBHOOK_TIMEOUT_URL;
   if (!timeoutUrl) {
     results.push({ name: 'staging webhook timeout handling', status: 'skipped', details: 'Set WEBHOOK_TIMEOUT_URL to run the live timeout probe.' });
   } else {
     try {
+      const bodyText = buildWebhookPayload(subscriptionId, action, `evt-timeout-${randomUUID()}`);
+      const body = Buffer.from(bodyText);
+      const timestamp = new Date().toISOString();
+      const signature = createSignature(secret, timestamp, body);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let timedOut = false;
@@ -529,9 +583,9 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
   }
 
   results.push({
-    name: 'staging metering retry note',
+    name: 'staging metering recovery',
     status: 'skipped',
-    details: 'Use simulate mode for deterministic metering retry/DLQ coverage, or point staging MARKETPLACE_METERING_ENDPOINT at a drill stub before replaying these cases.'
+    details: 'Follow docs/runbooks/webhook-metering-validation.md to drive the real staging metering retry and DLQ drill with a controlled Marketplace stub and SQL/log verification.'
   });
 
   return results;

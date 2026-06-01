@@ -53,6 +53,15 @@ function buildActorContext(req: ApiRequest) {
   };
 }
 
+function getRouteParam(req: ApiRequest, key: string): string {
+  const value = req.params[key];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw AppError.badRequest(`${key} route param is required`);
+  }
+
+  return value;
+}
+
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
   const router = Router();
 
@@ -75,7 +84,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.get('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
-      const subscription = await subscriptionService.getSubscriptionForTenant(req.params.subscriptionId, actor.tenantId);
+      const subscription = await subscriptionService.getSubscriptionForTenant(getRouteParam(req, 'subscriptionId'), actor.tenantId);
       res.status(200).json({
         status: 'success',
         data: subscription,
@@ -112,7 +121,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.activateSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getRouteParam(req, 'subscriptionId'),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -133,7 +142,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.suspendSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getRouteParam(req, 'subscriptionId'),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -154,7 +163,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.unsubscribeSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getRouteParam(req, 'subscriptionId'),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
