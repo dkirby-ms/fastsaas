@@ -19,6 +19,33 @@ export interface CreateSubscriptionInput {
   auditEntry: SubscriptionAuditEntry;
 }
 
+export interface CreateManagedSubscriptionInput {
+  tenantId: string;
+  marketplaceSubscriptionId: string;
+  planId: string;
+  seats: number;
+  status: SubscriptionStatus;
+  offerId?: string;
+  purchaserTenantId?: string;
+  beneficiaryTenantId?: string;
+  correlationId: string;
+  metadata: Record<string, unknown>;
+  auditEntry: SubscriptionAuditEntry;
+}
+
+export interface UpdateManagedSubscriptionInput {
+  subscriptionId: string;
+  planId: string;
+  seats: number;
+  status: SubscriptionStatus;
+  offerId?: string;
+  purchaserTenantId?: string;
+  beneficiaryTenantId?: string;
+  correlationId: string;
+  metadata: Record<string, unknown>;
+  auditEntry?: SubscriptionAuditEntry;
+}
+
 export interface TransitionSubscriptionInput {
   subscriptionId: string;
   tenantId: string;
@@ -42,10 +69,13 @@ export interface RecordedWebhookEvent {
 
 export interface SubscriptionRepository {
   createSubscription(input: CreateSubscriptionInput): Promise<Subscription>;
+  createManagedSubscription(input: CreateManagedSubscriptionInput): Promise<Subscription>;
+  updateManagedSubscription(input: UpdateManagedSubscriptionInput): Promise<Subscription>;
   findById(subscriptionId: string): Promise<Subscription | null>;
   findByMarketplaceSubscriptionId(marketplaceSubscriptionId: string): Promise<Subscription | null>;
   findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null>;
   listByTenant(tenantId: string): Promise<Subscription[]>;
+  listAll(): Promise<Subscription[]>;
   transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription>;
   recordWebhookEvent(event: RecordedWebhookEvent): Promise<void>;
   disconnect?(): Promise<void>;
@@ -140,6 +170,10 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
   private readonly webhookEvents = new Map<string, RecordedWebhookEvent>();
 
   async createSubscription(input: CreateSubscriptionInput): Promise<Subscription> {
+    return this.createManagedSubscription({ ...input, status: 'PendingActivation' });
+  }
+
+  async createManagedSubscription(input: CreateManagedSubscriptionInput): Promise<Subscription> {
     const createdAt = input.auditEntry.createdAt;
     const subscription: Subscription = {
       id: randomUUID(),
@@ -147,7 +181,7 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
       marketplaceSubscriptionId: input.marketplaceSubscriptionId,
       planId: input.planId,
       seats: input.seats,
-      status: 'PendingActivation',
+      status: input.status,
       offerId: input.offerId,
       purchaserTenantId: input.purchaserTenantId,
       beneficiaryTenantId: input.beneficiaryTenantId,
@@ -166,6 +200,34 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
     return clone(subscription);
   }
 
+  async updateManagedSubscription(input: UpdateManagedSubscriptionInput): Promise<Subscription> {
+    const existing = this.subscriptions.get(input.subscriptionId);
+    if (!existing) {
+      throw new Error(`Subscription ${input.subscriptionId} not found`);
+    }
+
+    const updatedAt = input.auditEntry?.createdAt ?? new Date().toISOString();
+    const updatedAuditLog = input.auditEntry
+      ? [...existing.auditLog, { ...input.auditEntry, subscriptionId: existing.id }]
+      : [...existing.auditLog];
+    const updated: Subscription = {
+      ...clone(existing),
+      planId: input.planId,
+      seats: input.seats,
+      status: input.status,
+      offerId: input.offerId,
+      purchaserTenantId: input.purchaserTenantId,
+      beneficiaryTenantId: input.beneficiaryTenantId,
+      correlationId: input.correlationId,
+      metadata: clone(input.metadata),
+      updatedAt,
+      auditLog: updatedAuditLog
+    };
+
+    this.subscriptions.set(updated.id, clone(updated));
+    return clone(updated);
+  }
+
   async findById(subscriptionId: string): Promise<Subscription | null> {
     return clone(this.subscriptions.get(subscriptionId) ?? null);
   }
@@ -182,6 +244,12 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
   async listByTenant(tenantId: string): Promise<Subscription[]> {
     return [...this.subscriptions.values()]
       .filter((subscription) => subscription.tenantId === tenantId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((subscription) => clone(subscription));
+  }
+
+  async listAll(): Promise<Subscription[]> {
+    return [...this.subscriptions.values()]
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .map((subscription) => clone(subscription));
   }
@@ -217,6 +285,10 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   constructor(private readonly db: Kysely<Database>) {}
 
   async createSubscription(input: CreateSubscriptionInput): Promise<Subscription> {
+    return this.createManagedSubscription({ ...input, status: 'PendingActivation' });
+  }
+
+  async createManagedSubscription(input: CreateManagedSubscriptionInput): Promise<Subscription> {
     return withDatabaseRlsContext(this.db, async (trx) => {
       const createdAt = new Date(input.auditEntry.createdAt);
       const created = await trx
@@ -226,7 +298,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
           marketplace_subscription_id: input.marketplaceSubscriptionId,
           plan_id: input.planId,
           seats: input.seats,
-          status: 'PendingActivation',
+          status: input.status,
           offer_id: input.offerId ?? null,
           purchaser_tenant_id: input.purchaserTenantId ?? null,
           beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
@@ -259,6 +331,59 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
     });
   }
 
+  async updateManagedSubscription(input: UpdateManagedSubscriptionInput): Promise<Subscription> {
+    return withDatabaseRlsContext(this.db, async (trx) => {
+      const existing = await trx
+        .selectFrom('subscriptions')
+        .select(['id', 'tenant_id'])
+        .where('id', '=', input.subscriptionId)
+        .executeTakeFirst();
+
+      if (!existing) {
+        throw new Error(`Subscription ${input.subscriptionId} not found`);
+      }
+
+      const updatedAt = new Date(input.auditEntry?.createdAt ?? new Date().toISOString());
+
+      await trx
+        .updateTable('subscriptions')
+        .set({
+          plan_id: input.planId,
+          seats: input.seats,
+          status: input.status,
+          offer_id: input.offerId ?? null,
+          purchaser_tenant_id: input.purchaserTenantId ?? null,
+          beneficiary_tenant_id: input.beneficiaryTenantId ?? null,
+          correlation_id: input.correlationId,
+          metadata: input.metadata,
+          updated_at: updatedAt
+        })
+        .where('id', '=', input.subscriptionId)
+        .executeTakeFirst();
+
+      if (input.auditEntry) {
+        await trx
+          .insertInto('subscription_audit_logs')
+          .values({
+            id: input.auditEntry.id,
+            subscription_id: input.subscriptionId,
+            tenant_id: existing.tenant_id,
+            event_type: input.auditEntry.eventType,
+            source: input.auditEntry.source,
+            from_status: input.auditEntry.fromStatus,
+            to_status: input.auditEntry.toStatus,
+            correlation_id: input.auditEntry.correlationId,
+            request_id: input.auditEntry.requestId,
+            details: input.auditEntry.details,
+            created_at: updatedAt
+          })
+          .execute();
+      }
+
+      return this.getSubscriptionOrThrow(trx, input.subscriptionId);
+    });
+  }
+
   async findById(subscriptionId: string): Promise<Subscription | null> {
     return this.findSubscriptionBy('id', subscriptionId);
   }
@@ -278,6 +403,17 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
 
       return this.hydrateSubscriptions(trx, rows);
     });
+  }
+
+  async listAll(): Promise<Subscription[]> {
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const rows = await trx.selectFrom('subscriptions').selectAll().orderBy('created_at', 'desc').execute();
+        return this.hydrateSubscriptions(trx, rows);
+      },
+      { bypassRls: true, scope: 'system' }
+    );
   }
 
   async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
@@ -398,11 +534,7 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
   }
 
   private async getSubscriptionOrThrow(executor: DatabaseExecutor, subscriptionId: string): Promise<Subscription> {
-    const row = await executor
-      .selectFrom('subscriptions')
-      .selectAll()
-      .where('id', '=', subscriptionId)
-      .executeTakeFirst();
+    const row = await executor.selectFrom('subscriptions').selectAll().where('id', '=', subscriptionId).executeTakeFirst();
 
     if (!row) {
       throw new Error(`Subscription ${subscriptionId} not found`);

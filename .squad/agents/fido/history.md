@@ -82,3 +82,22 @@ FIDO reassigned to resolve PR #64 merge conflicts and fresh-DB migration failure
 
 ### Decisions
 - Kranz: Merge conflicts and fresh-DB migration guards are FIDO-scoped engineering fixes; no architectural changes
+## Learnings
+
+- **2026-05-31T19:45:42.525+00:00:** Publisher workflows now live under `packages/portal/app/(portal)/publisher/` with role-aware navigation in `packages/portal/components/sidebar-nav.tsx` and shared guards in `packages/portal/lib/route-access.ts`.
+- **2026-05-31T19:45:42.525+00:00:** Portal auth now derives roles from JWT claims in `packages/portal/auth.ts`, so UI RBAC and API error handling can rely on `session.roles` without extra client-side decoding.
+- **2026-05-31T19:45:42.525+00:00:** Publisher data flows through `packages/portal/lib/api-client.ts`, using `/v1/auth/context` and `/v1/subscriptions` for live read models while `packages/portal/lib/mock-api.ts` keeps plan and tenant mutations unblocked until dedicated publisher routes exist.
+
+## 2026-05-31T19:45Z — Publisher Portal #43 Complete
+
+FIDO delivered publisher portal basic workflows (issue #43):
+- Pages: `/publisher`, `/publisher/plans`, `/publisher/tenants`, `/publisher/tenants/[id]`
+- RBAC role-based gating with 403 handling
+- Read-only API integration via `/v1/auth/context` and `/v1/subscriptions`
+- Typecheck and build validated; PR #59 merged
+- Next: Await EECOM publisher-management API routes for mutations
+
+## Learnings
+
+- **2026-06-01T00:04:54.260+00:00:** Publisher portal workflows should never reuse tenant-scoped `/v1/subscriptions` routes for admin experiences; the frontend now targets explicit `/v1/publisher/*` contracts and falls back to the mock adapter until those routes are enabled.
+- **2026-06-01T00:04:54.260+00:00:** Publisher screens surface their current integration mode in `packages/portal/components/publisher-integration-banner.tsx`, so operators can tell whether they are on live admin APIs or the mock adapter while preserving the same React Query workflow wiring.

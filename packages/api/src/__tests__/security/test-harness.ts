@@ -10,9 +10,11 @@ import { createApp } from '../../app';
 import { createConfig, type ApiConfig } from '../../config';
 import { logger } from '../../lib/logger';
 import type { MarketplaceFulfillmentClient } from '../../lib/marketplace-fulfillment';
-import { InMemoryUsageEventRepository } from '../../metering/repository';
 import { SystemClock } from '../../metering/clock';
+import { InMemoryUsageEventRepository } from '../../metering/repository';
+import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-plan-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
+import { PublisherService } from '../../services/publisher-service';
 import { SubscriptionService } from '../../services/subscription-service';
 
 export interface TokenOptions {
@@ -92,7 +94,7 @@ function buildUsageEvent(body: Partial<UsageEventIngestRequest> = {}): UsageEven
 
 export async function createSecurityHarness(): Promise<SecurityHarness> {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
-  const jwk = await exportJWK(publicKey) as JWK;
+  const jwk = (await exportJWK(publicKey)) as JWK;
 
   jwk.alg = 'RS256';
   jwk.kid = 'security-suite-key-1';
@@ -129,10 +131,17 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
 
   const meteringRepository = new InMemoryUsageEventRepository(new SystemClock());
   const subscriptionRepository = new InMemorySubscriptionRepository();
+  const publisherPlanRepository = new InMemoryPublisherPlanRepository();
   const subscriptionService = new SubscriptionService(subscriptionRepository, createFulfillmentClient(), logger);
+  const publisherService = new PublisherService(
+    subscriptionRepository,
+    publisherPlanRepository,
+    logger.child({ component: 'publisher-test' })
+  );
   const app = createApp(config, {
     repository: meteringRepository,
-    subscriptionService
+    subscriptionService,
+    publisherService
   });
 
   async function createToken(options: TokenOptions = {}): Promise<string> {
@@ -176,14 +185,16 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     return token.sign(privateKey as KeyLike);
   }
 
-  async function createSubscriptionFixture(options: {
-    tenantId?: string;
-    marketplaceToken?: string;
-    planId?: string;
-    seats?: number;
-    scopes?: string[];
-    roles?: string[];
-  } = {}): Promise<Subscription> {
+  async function createSubscriptionFixture(
+    options: {
+      tenantId?: string;
+      marketplaceToken?: string;
+      planId?: string;
+      seats?: number;
+      scopes?: string[];
+      roles?: string[];
+    } = {}
+  ): Promise<Subscription> {
     const token = await createToken({
       tenantId: options.tenantId,
       scopes: options.scopes,
@@ -218,7 +229,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     const token = await createToken({
       tenantId: options.tenantId,
       scopes: options.scopes ?? [config.metering.writeScope],
-      roles: options.roles
+      roles: options.roles ?? ['Admin']
     });
 
     return request(app)
@@ -242,7 +253,6 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
             reject(error);
             return;
           }
-
           resolve();
         });
       });

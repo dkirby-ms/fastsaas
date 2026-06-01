@@ -94,6 +94,14 @@ Assigned to EECOM:
   - **Issue #3 (Metering Ingestion):** PR #9 — Usage ingestion API, idempotency, outbox worker, retry with exponential backoff, DLQ, SLA dashboard. Ready for review.
 - **2026-05-31:** `packages/api`, `packages/portal`, and `packages/shared` are aligned on `0.1.0` semantic versions, and the repo now documents using `npm version` plus the root changelog for future bumps.
 
+## 2026-05-31T19:45Z — Publisher Portal Awaiting API Routes
+
+FIDO completed publisher portal pages (issue #43). Portal is now gating access and reading `/v1/auth/context` + `/v1/subscriptions`. Portal mutations for plan/tenant management are on mock adapter pending EECOM publisher-management API routes:
+- `POST /api/v1/publisher/plans` — Create plan
+- `PUT /api/v1/publisher/plans/{id}` — Update plan
+- `POST /api/v1/publisher/tenants/{id}` — Configure tenant
+
+No blocker; FIDO and EECOM can work in parallel. API routes will replace mock adapter when ready.
 ## Learnings
 
 - **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.
@@ -146,3 +154,5 @@ Team reworked Phase 1.5 tenant-isolation PRs for publication-path compliance and
 - EECOM PR #62 fix: enforce Admin/Owner checks post-tenant-confirmation
 - EECOM PR #64 fix: run migrations at startup; fail on unmet prerequisites
 - Publisher type exports blocking PR #59 v2 approval
+- **2026-06-01T00:43:05.936+00:00:** Publisher portal backend now lives under `packages/api/src/routes/v1/publisher.ts` with Kysely-backed `publisher_plans`, default catalog overlays for `starter/growth/scale`, and publisher tenant management persisted through subscription metadata plus audit log entries so the portal can drop its mock-backed plan/tenant mutations.
+- **2026-06-01T12:15:53.994+00:00:** Publisher subscription reads must stay inside request-scoped tenant RLS by loading data through `SubscriptionRepository.listByTenant(actor.tenantId)`; publisher-managed tenant records are stored under the publisher tenant and identify the managed customer via `beneficiaryTenantId`/`metadata.managedTenantId` in `packages/api/src/services/publisher-service.ts`.

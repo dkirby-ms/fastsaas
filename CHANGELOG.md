@@ -1,3 +1,14 @@
+## [0.3.0](https://github.com/dkirby-ms/fastsaas/compare/v0.2.0...v0.3.0) (2026-06-01)
+
+### Features
+
+* **api:** add publisher management routes ([#43](https://github.com/dkirby-ms/fastsaas/issues/43)) ([63d6b1b](https://github.com/dkirby-ms/fastsaas/commit/63d6b1b8f8829d022d0ec64fbe4b6f6093376e8d))
+
+### Bug Fixes
+
+* **portal:** harden publisher workflow adapters ([3e78edc](https://github.com/dkirby-ms/fastsaas/commit/3e78edc3d7010df12c8f4f9fc4b574780099c0d4))
+* scope publisher service queries through tenant RLS context ([7be292b](https://github.com/dkirby-ms/fastsaas/commit/7be292b0220d5442b87bef90330cd882402e3f52))
+
 ## [0.2.0](https://github.com/dkirby-ms/fastsaas/compare/v0.1.1...v0.2.0) (2026-06-01)
 
 ### Features
