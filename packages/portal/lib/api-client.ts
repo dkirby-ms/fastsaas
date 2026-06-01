@@ -10,6 +10,7 @@ import type {
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
   SettingsData,
+  Subscription,
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
@@ -29,6 +30,10 @@ function shouldUseMockApi() {
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+function encodePathSegment(value: string) {
+  return encodeURIComponent(value);
 }
 
 async function getPortalSession() {
@@ -99,7 +104,7 @@ async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: Requ
   const body = (await response.json().catch(() => null)) as {
     message?: string;
     code?: string;
-    error?: { code?: string; message?: string };
+    error?: { code?: string; message?: string; details?: Record<string, unknown> };
   } | null;
 
   if (!response.ok) {
@@ -108,6 +113,7 @@ async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: Requ
       response.status,
       body?.error?.code ?? body?.code,
       body?.error?.message ?? body?.message ?? 'Something went wrong while contacting the FastSaaS API.',
+      body?.error?.details,
     );
   }
 
@@ -270,4 +276,43 @@ export const portalApi = {
         method: 'POST',
       },
     ),
+  createMarketplaceSubscription: async (marketplaceToken: string) => {
+    await assertAreaAccess('customer');
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>('/v1/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({ marketplaceToken }),
+      });
+    }
+
+    return requestApiResponse<Subscription>('/v1/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({ marketplaceToken }),
+    });
+  },
+  getSubscription: async (subscriptionId: string) => {
+    await assertAreaAccess('customer');
+    const encodedSubscriptionId = encodePathSegment(subscriptionId);
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
+    }
+
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
+  },
+  activateSubscription: async (subscriptionId: string) => {
+    await assertAreaAccess('customer');
+    const encodedSubscriptionId = encodePathSegment(subscriptionId);
+
+    if (shouldUseMockApi()) {
+      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
+        method: 'POST',
+      });
+    }
+
+    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
+      method: 'POST',
+    });
+  },
 };

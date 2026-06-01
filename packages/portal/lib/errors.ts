@@ -1,5 +1,11 @@
 export class ApiError extends Error {
-  constructor(message: string, public status = 500, public code?: string, public userMessage = message) {
+  constructor(
+    message: string,
+    public status = 500,
+    public code?: string,
+    public userMessage = message,
+    public details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
