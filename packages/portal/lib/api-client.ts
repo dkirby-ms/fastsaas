@@ -15,6 +15,7 @@ import type {
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
+import { customerApiPaths, publisherAdminMockPaths } from '@/lib/api-paths';
 import {
   getPublisherApiBaseUrl,
   isPublisherAdminApiEnabled,
@@ -30,10 +31,6 @@ function shouldUseMockApi() {
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-}
-
-function encodePathSegment(value: string) {
-  return encodeURIComponent(value);
 }
 
 async function getPortalSession() {
@@ -212,7 +209,7 @@ export const portalApi = {
   },
   runAction: async (actionId: string) => {
     await assertAreaAccess('customer');
-    return requestPortal<DashboardData>(`/portal/actions/${actionId}`, {
+    return requestPortal<DashboardData>(customerApiPaths.action(actionId), {
       method: 'POST',
     });
   },
@@ -234,27 +231,27 @@ export const portalApi = {
   getPublisherPlans: async () =>
     requestPublisherResource<PublisherPlansResponse>('/publisher/plans', publisherAdminPaths.plans),
   updatePublisherPlan: async (planId: string, payload: PublisherPlanUpdateInput) =>
-    requestPublisherResource<PublisherPlansResponse>(`/publisher/plans/${planId}`, publisherAdminPaths.plan(planId), {
+    requestPublisherResource<PublisherPlansResponse>(publisherAdminMockPaths.plan(planId), publisherAdminPaths.plan(planId), {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
   getPublisherTenants: async () =>
     requestPublisherResource<PublisherTenantsResponse>('/publisher/tenants', publisherAdminPaths.tenants),
   getPublisherTenant: async (tenantId: string) =>
-    requestPublisherResource<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`, publisherAdminPaths.tenant(tenantId)),
+    requestPublisherResource<PublisherTenantDetail>(publisherAdminMockPaths.tenant(tenantId), publisherAdminPaths.tenant(tenantId)),
   createPublisherTenant: async (payload: PublisherTenantUpsertInput) =>
     requestPublisherResource<PublisherTenantDetail>('/publisher/tenants', publisherAdminPaths.tenants, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
   updatePublisherTenant: async (tenantId: string, payload: PublisherTenantUpsertInput) =>
-    requestPublisherResource<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`, publisherAdminPaths.tenant(tenantId), {
+    requestPublisherResource<PublisherTenantDetail>(publisherAdminMockPaths.tenant(tenantId), publisherAdminPaths.tenant(tenantId), {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
   activatePublisherTenant: async (subscriptionId: string) =>
     requestPublisherResource<PublisherTenantDetail>(
-      `/publisher/tenants/${subscriptionId}/activate`,
+      publisherAdminMockPaths.tenantAction(subscriptionId, 'activate'),
       publisherAdminPaths.tenantAction(subscriptionId, 'activate'),
       {
         method: 'POST',
@@ -262,7 +259,7 @@ export const portalApi = {
     ),
   suspendPublisherTenant: async (subscriptionId: string) =>
     requestPublisherResource<PublisherTenantDetail>(
-      `/publisher/tenants/${subscriptionId}/suspend`,
+      publisherAdminMockPaths.tenantAction(subscriptionId, 'suspend'),
       publisherAdminPaths.tenantAction(subscriptionId, 'suspend'),
       {
         method: 'POST',
@@ -270,7 +267,7 @@ export const portalApi = {
     ),
   cancelPublisherTenant: async (subscriptionId: string) =>
     requestPublisherResource<PublisherTenantDetail>(
-      `/publisher/tenants/${subscriptionId}/cancel`,
+      publisherAdminMockPaths.tenantAction(subscriptionId, 'cancel'),
       publisherAdminPaths.tenantAction(subscriptionId, 'cancel'),
       {
         method: 'POST',
@@ -293,25 +290,25 @@ export const portalApi = {
   },
   getSubscription: async (subscriptionId: string) => {
     await assertAreaAccess('customer');
-    const encodedSubscriptionId = encodePathSegment(subscriptionId);
+    const subscriptionPath = customerApiPaths.subscription(subscriptionId);
 
     if (shouldUseMockApi()) {
-      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
+      return mockRequest<Subscription>(subscriptionPath);
     }
 
-    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}`);
+    return requestApiResponse<Subscription>(subscriptionPath);
   },
   activateSubscription: async (subscriptionId: string) => {
     await assertAreaAccess('customer');
-    const encodedSubscriptionId = encodePathSegment(subscriptionId);
+    const subscriptionActivatePath = customerApiPaths.activateSubscription(subscriptionId);
 
     if (shouldUseMockApi()) {
-      return mockRequest<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
+      return mockRequest<Subscription>(subscriptionActivatePath, {
         method: 'POST',
       });
     }
 
-    return requestApiResponse<Subscription>(`/v1/subscriptions/${encodedSubscriptionId}/activate`, {
+    return requestApiResponse<Subscription>(subscriptionActivatePath, {
       method: 'POST',
     });
   },

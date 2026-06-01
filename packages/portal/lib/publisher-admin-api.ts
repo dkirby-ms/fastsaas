@@ -1,11 +1,6 @@
-export const publisherAdminPaths = {
-  dashboard: '/v1/publisher/dashboard',
-  plans: '/v1/publisher/plans',
-  plan: (planId: string) => `/v1/publisher/plans/${planId}`,
-  tenants: '/v1/publisher/tenants',
-  tenant: (tenantId: string) => `/v1/publisher/tenants/${tenantId}`,
-  tenantAction: (tenantId: string, action: 'activate' | 'suspend' | 'cancel') => `/v1/publisher/tenants/${tenantId}/${action}`,
-} as const;
+import { publisherAdminPaths } from '@/lib/api-paths';
+
+export { publisherAdminPaths };
 
 export const publisherAdminContracts = [
   { method: 'GET', path: publisherAdminPaths.dashboard, label: 'Overview metrics' },

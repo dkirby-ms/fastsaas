@@ -107,6 +107,10 @@ const defaultState = (): MockPortalState => ({
 const isBrowser = () => typeof window !== 'undefined';
 const wait = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function decodePathSegment(value: string | undefined) {
+  return value ? decodeURIComponent(value) : value;
+}
+
 function parseMoney(value: string): number {
   const parsed = Number(value.replace(/[^\d.]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -326,7 +330,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/portal/actions/') && method === 'POST') {
-    const actionId = path.split('/').pop();
+    const actionId = decodePathSegment(path.split('/').pop());
     if (actionId === 'resume') state.dashboard.subscription.state = 'active';
     else if (actionId === 'suspend') state.dashboard.subscription.state = 'suspended';
     else if (actionId === 'cancel') state.dashboard.subscription.state = 'canceled';
@@ -350,7 +354,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/v1/subscriptions/') && method === 'GET') {
-    const subscriptionId = path.split('/')[3];
+    const subscriptionId = decodePathSegment(path.split('/')[3]);
     const subscription = state.subscriptions.find((entry) => entry.id === subscriptionId);
 
     if (!subscription) {
@@ -361,7 +365,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/v1/subscriptions/') && method === 'POST' && isTenantAction(path, 'activate')) {
-    const subscriptionId = path.split('/')[3];
+    const subscriptionId = decodePathSegment(path.split('/')[3]);
     const subscriptionIndex = state.subscriptions.findIndex((entry) => entry.id === subscriptionId);
 
     if (subscriptionIndex === -1) {
@@ -419,7 +423,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/publisher/plans/') && method === 'PUT') {
-    const planId = path.split('/').pop();
+    const planId = decodePathSegment(path.split('/').pop());
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as Partial<PublisherPlanUpdateInput>;
     const planIndex = state.publisher.plans.findIndex((plan) => plan.id === planId);
     if (planIndex === -1 || !planId) throw new ApiError('The selected plan could not be found.', 404, 'publisher_plan_not_found');
@@ -462,14 +466,14 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/publisher/tenants/') && method === 'GET') {
-    const tenantId = path.split('/')[3];
+    const tenantId = decodePathSegment(path.split('/')[3]);
     const tenant = state.publisher.tenants.find((item) => item.id === tenantId || item.subscriptionId === tenantId);
     if (!tenant) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
     return tenant as T;
   }
 
   if (path.startsWith('/publisher/tenants/') && method === 'PUT') {
-    const tenantId = path.split('/')[3];
+    const tenantId = decodePathSegment(path.split('/')[3]);
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as PublisherTenantUpsertInput;
     const tenantIndex = state.publisher.tenants.findIndex((item) => item.id === tenantId || item.subscriptionId === tenantId);
     if (tenantIndex === -1) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
@@ -482,7 +486,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   }
 
   if (path.startsWith('/publisher/tenants/') && method === 'POST') {
-    const tenantKey = path.split('/')[3];
+    const tenantKey = decodePathSegment(path.split('/')[3]);
     const tenantIndex = state.publisher.tenants.findIndex((item) => item.id === tenantKey || item.subscriptionId === tenantKey);
     if (tenantIndex === -1) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
     const current = state.publisher.tenants[tenantIndex];
