@@ -1,6 +1,6 @@
 # Webhook and metering validation runbook
 
-**Last updated:** 2026-06-01T00:04:54.260+00:00
+**Last updated:** 2026-06-01T00:43:05.936+00:00
 **Owners:** GNC (operations), EECOM (backend escalation)
 
 ## Purpose
@@ -53,8 +53,9 @@ The local drill now covers:
 - replay-window rejection
 - invalid HMAC rejection
 - client timeout handling
-- dead Marketplace endpoint leading to retry exhaustion and DLQ
-- mixed metering batch with `429`, `503`, and healthy submissions in the same worker batch
+- metering `429` recovery that waits for `Retry-After` before retrying
+- metering transient `5xx` recovery that uses worker backoff and returns to `submitted`
+- dead Marketplace endpoint routing to DLQ plus replay recovery with fresh identifiers
 
 ### Staging webhook drill
 
@@ -81,8 +82,9 @@ Optional staging-only overrides:
 | Duplicate delivery | Send the same signed payload twice | First call accepted, second call handled as duplicate | HTTP `202` then `200`, `marketplace_webhook_events` row preserved |
 | Replay attack | Send a valid signature with an expired timestamp | Request rejected with `401` and replay-window details | HTTP `401`, auth error body |
 | Invalid HMAC | Send the same payload with a bad signature | Request rejected with `401` | HTTP `401`, auth error body |
-| Dead Marketplace endpoint | Point `MARKETPLACE_METERING_ENDPOINT` at a refused / dead stub URL | Event moves from `retry_scheduled` to `dead_letter` after retry exhaustion | worker logs, `usage_events`, `usage_event_dead_letters` |
-| Metering 429 + 5xx mixed batch | Point `MARKETPLACE_METERING_ENDPOINT` at a stub that returns `429` with `Retry-After`, `503`, and `200` | Healthy event submits immediately, failures retry with the correct delay | worker logs, `usage_events.next_attempt_at`, SQL inspection |
+| Metering 429 recovery | Point `MARKETPLACE_METERING_ENDPOINT` at a stub that returns `429` with `Retry-After: 2`, then `200` | Event moves to `retry_scheduled`, waits for the retry window, then returns to `submitted` | worker logs, `usage_events.next_attempt_at`, metering dashboard / SQL inspection |
+| Metering transient 5xx recovery | Point `MARKETPLACE_METERING_ENDPOINT` at a stub that returns `503`, then `200` | Event uses worker backoff, retries on the next batch, and returns to `submitted` | worker logs, `usage_events.next_attempt_at`, metering dashboard / SQL inspection |
+| Dead Marketplace endpoint / DLQ replay | Point `MARKETPLACE_METERING_ENDPOINT` at a refused / dead stub URL, then restore it to `200` | Original event moves to `dead_letter`, DLQ row is preserved, replayed event with fresh identifiers reaches `submitted` | worker logs, `usage_events`, `usage_event_dead_letters`, metering dashboard |
 
 ## Investigating webhook failures in staging
 
@@ -181,6 +183,8 @@ az containerapp show \
 
 ### 3. Metering retry / DLQ recovery using a controlled Marketplace stub
 
+> Azure Marketplace reference: [Marketplace metering service APIs](https://learn.microsoft.com/partner-center/marketplace-offers/marketplace-metering-service-apis) and [Marketplace metering API FAQ](https://learn.microsoft.com/partner-center/marketplace-offers/marketplace-metering-service-apis-faq). Microsoft expects publishers to honor `Retry-After`, keep retrying transient failures, and submit usage within 24 hours of the usage hour.
+
 Use a stub that accepts the same JSON body the API sends to Marketplace:
 
 ```json
@@ -198,7 +202,7 @@ Required stub behaviors:
 - `429` with `Retry-After: 2`
 - `503` or `500` with a response body
 - a dead / refused endpoint for DLQ verification
-- `200` for the healthy event in the mixed batch
+- `200` after the transient fault is removed
 
 Point staging at the stub before enqueuing drill traffic:
 
@@ -209,11 +213,17 @@ az containerapp update \
   --set-env-vars MARKETPLACE_METERING_ENDPOINT="https://<metering-stub>/api/usageEvent"
 ```
 
-Inject drill events through the real API path:
+Export a staging token that can write and read metering data:
 
 ```bash
-export STAGING_API_BEARER_TOKEN="<token-with-metering-write>"
+export STAGING_API_BEARER_TOKEN="<token-with-metering-write-and-metering-read>"
+```
 
+#### A. Validate live `429` and `5xx` retry behavior
+
+Inject one throttled event and one transient failure event through the real API path:
+
+```bash
 curl --fail --show-error --silent \
   -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
   -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
@@ -224,7 +234,8 @@ curl --fail --show-error --silent \
     "planId":"plan-growth",
     "dimensionId":"api_calls",
     "quantity":10,
-    "timestamp":"2026-06-01T00:00:00.000Z"
+    "timestamp":"2026-06-01T00:00:00.000Z",
+    "idempotencyKey":"drill-429"
   }'
 
 curl --fail --show-error --silent \
@@ -237,45 +248,113 @@ curl --fail --show-error --silent \
     "planId":"plan-growth",
     "dimensionId":"api_calls",
     "quantity":5,
-    "timestamp":"2026-06-01T00:00:00.000Z"
+    "timestamp":"2026-06-01T00:00:00.000Z",
+    "idempotencyKey":"drill-503"
   }'
+```
 
+Verify the worker scheduled retries instead of dropping the events:
+
+```bash
+curl --fail --show-error --silent \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  "$STAGING_API_BASE_URL/v1/metering/dashboard" | jq '{pendingCount,retryScheduledCount,submittedCount,deadLetterCount}'
+```
+
+```sql
+SELECT event_id,
+       status,
+       retry_count,
+       next_attempt_at,
+       last_http_status,
+       last_error_message
+FROM usage_events
+WHERE event_id IN ('drill-429', 'drill-503')
+ORDER BY event_id;
+```
+
+Expected evidence:
+
+- `drill-429` is `retry_scheduled`, `last_http_status = 429`, and `next_attempt_at` is about two seconds ahead because the worker honored `Retry-After`.
+- `drill-503` is `retry_scheduled`, `last_http_status = 503`, and `next_attempt_at` is one worker backoff interval ahead.
+- dashboard `retryScheduledCount` increases and `deadLetterCount` does not.
+
+Return the stub to `200 OK`, wait one worker interval plus the 429 retry window, then verify recovery:
+
+```sql
+SELECT event_id,
+       status,
+       retry_count,
+       submitted_at,
+       marketplace_request_id,
+       last_http_status
+FROM usage_events
+WHERE event_id IN ('drill-429', 'drill-503')
+ORDER BY event_id;
+```
+
+```bash
+curl --fail --show-error --silent \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  "$STAGING_API_BASE_URL/v1/metering/dashboard" | jq '{retryScheduledCount,submittedCount,deadLetterCount}'
+```
+
+Recovery is complete only when both rows are `submitted`, both have `marketplace_request_id`, and dashboard `retryScheduledCount` returns to baseline.
+
+#### B. Validate dead-endpoint-to-DLQ behavior and replay recovery
+
+Re-point the stub to a dead endpoint or refused listener, then inject the event that should fall into the DLQ:
+
+```bash
 curl --fail --show-error --silent \
   -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
   -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-    "eventId":"drill-ok",
-    "subscriptionId":"sub-drill-ok",
+    "eventId":"drill-dead-endpoint",
+    "subscriptionId":"sub-dead-endpoint",
     "planId":"plan-growth",
     "dimensionId":"api_calls",
-    "quantity":1,
-    "timestamp":"2026-06-01T00:00:00.000Z"
+    "quantity":7,
+    "timestamp":"2026-06-01T00:00:00.000Z",
+    "idempotencyKey":"drill-dead-endpoint"
   }'
 ```
 
-Inspect the actual outbox state:
+Verify that retries exhaust and the original event is preserved in the DLQ:
 
 ```sql
-SELECT event_id, status, retry_count, next_attempt_at, last_http_status, last_error_message
+SELECT event_id,
+       status,
+       retry_count,
+       next_attempt_at,
+       last_http_status,
+       last_error_message
 FROM usage_events
-WHERE event_id IN ('drill-429', 'drill-503', 'drill-ok', 'drill-dead-endpoint')
-ORDER BY created_at DESC;
+WHERE event_id = 'drill-dead-endpoint';
 
-SELECT event_id, http_status, retry_count, failed_at
+SELECT event_id,
+       http_status,
+       retry_count,
+       failed_at
 FROM usage_event_dead_letters
-WHERE event_id IN ('drill-dead-endpoint', 'drill-503')
+WHERE event_id = 'drill-dead-endpoint'
 ORDER BY failed_at DESC;
 ```
 
-Interpretation:
+```bash
+curl --fail --show-error --silent \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  "$STAGING_API_BASE_URL/v1/metering/dashboard" | jq '{submittedCount,deadLetterCount}'
+```
 
-- `drill-ok` should become `submitted` immediately.
-- `drill-429` should move to `retry_scheduled` with a `next_attempt_at` approximately 2 seconds ahead of the worker run.
-- `drill-503` should move to `retry_scheduled` with exponential backoff if there is no `Retry-After`.
-- `drill-dead-endpoint` should eventually move to `dead_letter` and create a `usage_event_dead_letters` row.
+Expected evidence:
 
-Restore the real Marketplace endpoint after the drill and verify the queue drains:
+- `usage_events.status = 'dead_letter'`
+- exactly one `usage_event_dead_letters` row exists for `drill-dead-endpoint`
+- dashboard `deadLetterCount` increases by one
+
+Restore the real Marketplace endpoint after the drill:
 
 ```bash
 az containerapp update \
@@ -284,14 +363,52 @@ az containerapp update \
   --set-env-vars MARKETPLACE_METERING_ENDPOINT="https://<real-marketplace-endpoint>"
 ```
 
-Then confirm recovery:
+Recover the failed usage by replaying the payload through the public API with a fresh `eventId` and a fresh `idempotencyKey`. Do **not** update the original `usage_events` row directly.
+
+```bash
+curl --fail --show-error --silent \
+  -X POST "$STAGING_API_BASE_URL/v1/metering/events" \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "eventId":"drill-dead-endpoint-replay",
+    "subscriptionId":"sub-dead-endpoint",
+    "planId":"plan-growth",
+    "dimensionId":"api_calls",
+    "quantity":7,
+    "timestamp":"2026-06-01T00:00:00.000Z",
+    "idempotencyKey":"drill-dead-endpoint-replay"
+  }'
+```
+
+Confirm the replayed event succeeds while the original DLQ evidence remains:
 
 ```sql
-SELECT status, count(*)
+SELECT event_id,
+       status,
+       retry_count,
+       submitted_at,
+       marketplace_request_id
 FROM usage_events
-GROUP BY status
-ORDER BY status;
+WHERE event_id IN ('drill-dead-endpoint', 'drill-dead-endpoint-replay')
+ORDER BY event_id;
+
+SELECT event_id,
+       http_status,
+       retry_count,
+       failed_at
+FROM usage_event_dead_letters
+WHERE event_id = 'drill-dead-endpoint'
+ORDER BY failed_at DESC;
 ```
+
+```bash
+curl --fail --show-error --silent \
+  -H "Authorization: Bearer $STAGING_API_BEARER_TOKEN" \
+  "$STAGING_API_BASE_URL/v1/metering/dashboard" | jq '{submittedCount,deadLetterCount}'
+```
+
+Recovery is complete only when `drill-dead-endpoint` stays `dead_letter` as the audit trail, `drill-dead-endpoint-replay` reaches `submitted`, and `deadLetterCount` stops growing. If the replay still fails, preserve the DLQ row plus Marketplace headers such as `x-ms-requestid` / `Retry-After` and escalate instead of mutating database state.
 
 ## Escalation guidance
 

@@ -328,15 +328,17 @@ async function reserveDeadEndpointUrl(): Promise<string> {
   return `http://127.0.0.1:${port}/api/usageEvent`;
 }
 
-function createMeteringHarness(endpoint: string): {
+function createMeteringHarness(
+  endpoint: string,
+  clock = new FakeClock(),
+  repository = new InMemoryUsageEventRepository(clock)
+): {
   clock: FakeClock;
   repository: InMemoryUsageEventRepository;
   service: MeteringService;
   worker: MeteringOutboxWorker;
 } {
-  const clock = new FakeClock();
   const config = createDrillConfig({ MARKETPLACE_METERING_ENDPOINT: endpoint });
-  const repository = new InMemoryUsageEventRepository(clock);
   const service = new MeteringService(config, repository, clock);
   const worker = new MeteringOutboxWorker(
     config,
@@ -352,27 +354,136 @@ function createMeteringHarness(endpoint: string): {
 async function ingestDrillEvent(
   service: MeteringService,
   clock: FakeClock,
-  eventId: string,
-  subscriptionId: string,
-  quantity: number
+  event: {
+    eventId: string;
+    subscriptionId: string;
+    quantity: number;
+    timestamp?: string;
+    idempotencyKey?: string;
+  }
 ): Promise<void> {
   await service.ingestEvent('tenant-drill', {
-    eventId,
-    subscriptionId,
+    eventId: event.eventId,
+    subscriptionId: event.subscriptionId,
     planId: 'plan-growth',
     dimensionId: 'api_calls',
-    quantity,
-    timestamp: clock.now().toISOString()
+    quantity: event.quantity,
+    timestamp: event.timestamp ?? clock.now().toISOString(),
+    ...(event.idempotencyKey ? { idempotencyKey: event.idempotencyKey } : {})
   });
 }
 
 async function runSimulatedMeteringDrills(): Promise<DrillResult[]> {
   const results: DrillResult[] = [];
 
+  let throttlingStub: MeteringStubHandle | undefined;
+  try {
+    throttlingStub = await startMeteringStub({
+      'sub-retry-429': [
+        { status: 429, body: JSON.stringify({ error: 'rate limited' }), retryAfterSeconds: 2 },
+        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
+      ]
+    });
+    const { clock, repository, service, worker } = createMeteringHarness(throttlingStub.url);
+    await ingestDrillEvent(service, clock, {
+      eventId: 'evt-retry-429',
+      subscriptionId: 'sub-retry-429',
+      quantity: 10,
+      idempotencyKey: 'tenant-drill:evt-retry-429'
+    });
+
+    const first = await worker.runNextBatch();
+    assert(first.attempted === 1 && first.retried === 1, `expected first 429 attempt to schedule one retry, received attempted=${first.attempted} retried=${first.retried}`);
+
+    const retryScheduled = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-retry-429');
+    assert(retryScheduled?.status === 'retry_scheduled', `expected 429 event status retry_scheduled, received ${retryScheduled?.status}`);
+    assert(retryScheduled.lastHttpStatus === 429, `expected 429 event last_http_status 429, received ${retryScheduled?.lastHttpStatus}`);
+    assert(retryScheduled.nextAttemptAt !== null, 'expected 429 event to have next_attempt_at set');
+    assert(new Date(retryScheduled.nextAttemptAt).getTime() - clock.now().getTime() === 2000, 'expected 429 retry-after delay to be 2000 ms');
+
+    let summary = await service.getDashboardSummary('tenant-drill');
+    assert(summary.retryScheduledCount === 1 && summary.submittedCount === 0, `expected dashboard retryScheduled=1 submitted=0 after 429, received retryScheduled=${summary.retryScheduledCount} submitted=${summary.submittedCount}`);
+
+    clock.advanceMs(1000);
+    const tooEarly = await worker.runNextBatch();
+    assert(tooEarly.attempted === 0, `expected no retry before Retry-After elapsed, received attempted=${tooEarly.attempted}`);
+
+    clock.advanceMs(1000);
+    const recovered = await worker.runNextBatch();
+    assert(recovered.attempted === 1 && recovered.submitted === 1, `expected 429 event to submit after Retry-After elapsed, received attempted=${recovered.attempted} submitted=${recovered.submitted}`);
+
+    const submitted = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-retry-429');
+    assert(submitted?.status === 'submitted', `expected 429 replayed event status submitted, received ${submitted?.status}`);
+
+    summary = await service.getDashboardSummary('tenant-drill');
+    assert(summary.retryScheduledCount === 0 && summary.submittedCount === 1, `expected dashboard retryScheduled=0 submitted=1 after 429 recovery, received retryScheduled=${summary.retryScheduledCount} submitted=${summary.submittedCount}`);
+
+    results.push({ name: 'metering 429 retry recovery', status: 'passed', details: 'A simulated 429 honored Retry-After, stayed queued until the retry window elapsed, and then submitted successfully.' });
+  } catch (error) {
+    results.push({ name: 'metering 429 retry recovery', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+  } finally {
+    if (throttlingStub) {
+      await throttlingStub.close();
+    }
+  }
+
+  let transientStub: MeteringStubHandle | undefined;
+  try {
+    transientStub = await startMeteringStub({
+      'sub-retry-503': [
+        { status: 503, body: JSON.stringify({ error: 'upstream unavailable' }) },
+        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
+      ]
+    });
+    const { clock, repository, service, worker } = createMeteringHarness(transientStub.url);
+    await ingestDrillEvent(service, clock, {
+      eventId: 'evt-retry-503',
+      subscriptionId: 'sub-retry-503',
+      quantity: 5,
+      idempotencyKey: 'tenant-drill:evt-retry-503'
+    });
+
+    const first = await worker.runNextBatch();
+    assert(first.attempted === 1 && first.retried === 1, `expected first 503 attempt to schedule one retry, received attempted=${first.attempted} retried=${first.retried}`);
+
+    const retryScheduled = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-retry-503');
+    assert(retryScheduled?.status === 'retry_scheduled', `expected 503 event status retry_scheduled, received ${retryScheduled?.status}`);
+    assert(retryScheduled.lastHttpStatus === 503, `expected 503 event last_http_status 503, received ${retryScheduled?.lastHttpStatus}`);
+    assert(retryScheduled.nextAttemptAt !== null, 'expected 503 event to have next_attempt_at set');
+    assert(new Date(retryScheduled.nextAttemptAt).getTime() - clock.now().getTime() === 1000, 'expected 503 retry delay to be 1000 ms');
+
+    let summary = await service.getDashboardSummary('tenant-drill');
+    assert(summary.retryScheduledCount === 1 && summary.submittedCount === 0, `expected dashboard retryScheduled=1 submitted=0 after 503, received retryScheduled=${summary.retryScheduledCount} submitted=${summary.submittedCount}`);
+
+    clock.advanceMs(1000);
+    const recovered = await worker.runNextBatch();
+    assert(recovered.attempted === 1 && recovered.submitted === 1, `expected 503 event to submit on retry, received attempted=${recovered.attempted} submitted=${recovered.submitted}`);
+
+    const submitted = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-retry-503');
+    assert(submitted?.status === 'submitted', `expected 503 replayed event status submitted, received ${submitted?.status}`);
+
+    summary = await service.getDashboardSummary('tenant-drill');
+    assert(summary.retryScheduledCount === 0 && summary.submittedCount === 1, `expected dashboard retryScheduled=0 submitted=1 after 503 recovery, received retryScheduled=${summary.retryScheduledCount} submitted=${summary.submittedCount}`);
+
+    results.push({ name: 'metering 5xx retry recovery', status: 'passed', details: 'A simulated 503 used worker backoff, retried on the next batch, and returned to submitted without entering the DLQ.' });
+  } catch (error) {
+    results.push({ name: 'metering 5xx retry recovery', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+  } finally {
+    if (transientStub) {
+      await transientStub.close();
+    }
+  }
+
+  let recoveryStub: MeteringStubHandle | undefined;
   try {
     const deadEndpointUrl = await reserveDeadEndpointUrl();
     const { clock, repository, service, worker } = createMeteringHarness(deadEndpointUrl);
-    await ingestDrillEvent(service, clock, 'evt-dead-endpoint', 'sub-dead-endpoint', 7);
+    await ingestDrillEvent(service, clock, {
+      eventId: 'evt-dead-endpoint',
+      subscriptionId: 'sub-dead-endpoint',
+      quantity: 7,
+      idempotencyKey: 'tenant-drill:evt-dead-endpoint'
+    });
 
     const first = await worker.runNextBatch();
     assert(first.retried === 1, `expected first dead-endpoint attempt to schedule a retry, received ${first.retried}`);
@@ -383,63 +494,44 @@ async function runSimulatedMeteringDrills(): Promise<DrillResult[]> {
     const third = await worker.runNextBatch();
     assert(third.deadLettered === 1, `expected dead-endpoint drill to dead-letter after retry exhaustion, received ${third.deadLettered}`);
 
-    const event = (await repository.listByTenant('tenant-drill')).find((record) => record.eventId === 'evt-dead-endpoint');
+    const deadLetterState = await repository.listByTenant('tenant-drill');
+    const deadEvent = deadLetterState.find((record) => record.eventId === 'evt-dead-endpoint');
     const deadLetter = (await repository.listDeadLetters('tenant-drill')).find((entry) => entry.eventId === 'evt-dead-endpoint');
-    assert(event?.status === 'dead_letter', `expected dead-endpoint event status to be dead_letter, received ${event?.status}`);
+    assert(deadEvent?.status === 'dead_letter', `expected dead-endpoint event status to be dead_letter, received ${deadEvent?.status}`);
     assert(deadLetter?.retryCount === 2, `expected dead letter retry count to be 2, received ${deadLetter?.retryCount}`);
-    results.push({ name: 'metering dead endpoint dlq', status: 'passed', details: 'A refused Marketplace endpoint triggered real worker retries and then dead-lettered the event.' });
-  } catch (error) {
-    results.push({ name: 'metering dead endpoint dlq', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
-  }
 
-  let stub: MeteringStubHandle | undefined;
-  try {
-    stub = await startMeteringStub({
-      'sub-batch-429': [
-        { status: 429, body: JSON.stringify({ error: 'rate limited' }), retryAfterSeconds: 2 },
-        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
-      ],
-      'sub-batch-503': [
-        { status: 503, body: JSON.stringify({ error: 'upstream unavailable' }) },
-        { status: 200, body: JSON.stringify({ status: 'accepted' }) }
-      ],
-      'sub-batch-ok': [{ status: 200, body: JSON.stringify({ status: 'accepted' }) }]
+    let summary = await service.getDashboardSummary('tenant-drill');
+    assert(summary.deadLetterCount === 1 && summary.submittedCount === 0, `expected dashboard deadLetter=1 submitted=0 after dead endpoint, received deadLetter=${summary.deadLetterCount} submitted=${summary.submittedCount}`);
+
+    recoveryStub = await startMeteringStub({
+      'sub-dead-endpoint': [{ status: 200, body: JSON.stringify({ status: 'accepted' }) }]
     });
-    const { clock, repository, service, worker } = createMeteringHarness(stub.url);
-    await ingestDrillEvent(service, clock, 'evt-batch-429', 'sub-batch-429', 10);
-    await ingestDrillEvent(service, clock, 'evt-batch-503', 'sub-batch-503', 5);
-    await ingestDrillEvent(service, clock, 'evt-batch-ok', 'sub-batch-ok', 2);
+    const replayHarness = createMeteringHarness(recoveryStub.url, clock, repository);
+    await ingestDrillEvent(replayHarness.service, replayHarness.clock, {
+      eventId: 'evt-dead-endpoint-replay',
+      subscriptionId: 'sub-dead-endpoint',
+      quantity: 7,
+      timestamp: deadEvent?.timestamp,
+      idempotencyKey: 'tenant-drill:evt-dead-endpoint-replay'
+    });
 
-    const first = await worker.runNextBatch();
-    assert(first.attempted === 3, `expected batch worker to attempt 3 events, received ${first.attempted}`);
-    assert(first.submitted === 1, `expected exactly one event to submit on the first batch, received ${first.submitted}`);
-    assert(first.retried === 2, `expected exactly two events to retry on the first batch, received ${first.retried}`);
+    const replay = await replayHarness.worker.runNextBatch();
+    assert(replay.attempted === 1 && replay.submitted === 1, `expected replayed dead-letter event to submit once endpoint recovered, received attempted=${replay.attempted} submitted=${replay.submitted}`);
 
-    const firstState = await repository.listByTenant('tenant-drill');
-    const healthy = firstState.find((record) => record.eventId === 'evt-batch-ok');
-    const rateLimited = firstState.find((record) => record.eventId === 'evt-batch-429');
-    const unavailable = firstState.find((record) => record.eventId === 'evt-batch-503');
+    const replayState = await repository.listByTenant('tenant-drill');
+    const replayedEvent = replayState.find((record) => record.eventId === 'evt-dead-endpoint-replay');
+    assert(replayedEvent?.status === 'submitted', `expected replayed dead-letter event status submitted, received ${replayedEvent?.status}`);
+    assert((await repository.listDeadLetters('tenant-drill')).length === 1, 'expected original dead-letter record to remain for audit evidence');
 
-    assert(healthy?.status === 'submitted', `expected healthy event to submit immediately, received ${healthy?.status}`);
-    assert(rateLimited?.status === 'retry_scheduled' && rateLimited.lastHttpStatus === 429, 'expected 429 event to be retry_scheduled with HTTP 429');
-    assert(unavailable?.status === 'retry_scheduled' && unavailable.lastHttpStatus === 503, 'expected 503 event to be retry_scheduled with HTTP 503');
-    assert(rateLimited.nextAttemptAt !== null, 'expected 429 event to have a next_attempt_at value');
-    assert(unavailable.nextAttemptAt !== null, 'expected 503 event to have a next_attempt_at value');
-    assert(new Date(rateLimited.nextAttemptAt).getTime() - clock.now().getTime() === 2000, 'expected 429 retry-after delay to be 2000 ms');
-    assert(new Date(unavailable.nextAttemptAt).getTime() - clock.now().getTime() === 1000, 'expected 503 exponential retry delay to be 1000 ms');
+    summary = await replayHarness.service.getDashboardSummary('tenant-drill');
+    assert(summary.deadLetterCount === 1 && summary.submittedCount === 1, `expected dashboard deadLetter=1 submitted=1 after replay, received deadLetter=${summary.deadLetterCount} submitted=${summary.submittedCount}`);
 
-    clock.advanceMs(1000);
-    const second = await worker.runNextBatch();
-    assert(second.attempted === 1 && second.submitted === 1, `expected only the 503 event to retry after 1 second, received attempted=${second.attempted} submitted=${second.submitted}`);
-    clock.advanceMs(1000);
-    const third = await worker.runNextBatch();
-    assert(third.attempted === 1 && third.submitted === 1, `expected only the 429 event to retry after retry-after elapsed, received attempted=${third.attempted} submitted=${third.submitted}`);
-    results.push({ name: 'metering batch retry patterns', status: 'passed', details: 'A mixed batch honored Retry-After for 429, exponential backoff for 503, and still submitted the healthy event.' });
+    results.push({ name: 'metering dead endpoint dlq recovery', status: 'passed', details: 'A dead endpoint exhausted retries into the DLQ, and a replay with new identifiers succeeded once the endpoint recovered.' });
   } catch (error) {
-    results.push({ name: 'metering batch retry patterns', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
+    results.push({ name: 'metering dead endpoint dlq recovery', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
   } finally {
-    if (stub) {
-      await stub.close();
+    if (recoveryStub) {
+      await recoveryStub.close();
     }
   }
 
@@ -581,12 +673,6 @@ async function runStagingWebhookDrills(): Promise<DrillResult[]> {
       results.push({ name: 'staging webhook timeout handling', status: 'failed', details: error instanceof Error ? error.message : 'Unknown failure' });
     }
   }
-
-  results.push({
-    name: 'staging metering recovery',
-    status: 'skipped',
-    details: 'Follow docs/runbooks/webhook-metering-validation.md to drive the real staging metering retry and DLQ drill with a controlled Marketplace stub and SQL/log verification.'
-  });
 
   return results;
 }
