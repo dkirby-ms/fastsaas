@@ -62,3 +62,8 @@ FIDO delivered publisher portal basic workflows (issue #43):
 - Read-only API integration via `/v1/auth/context` and `/v1/subscriptions`
 - Typecheck and build validated; PR #59 merged
 - Next: Await EECOM publisher-management API routes for mutations
+
+## Learnings
+
+- **2026-06-01T00:04:54.260+00:00:** Publisher portal workflows should never reuse tenant-scoped `/v1/subscriptions` routes for admin experiences; the frontend now targets explicit `/v1/publisher/*` contracts and falls back to the mock adapter until those routes are enabled.
+- **2026-06-01T00:04:54.260+00:00:** Publisher screens surface their current integration mode in `packages/portal/components/publisher-integration-banner.tsx`, so operators can tell whether they are on live admin APIs or the mock adapter while preserving the same React Query workflow wiring.

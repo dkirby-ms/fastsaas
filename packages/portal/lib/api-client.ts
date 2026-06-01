@@ -10,18 +10,25 @@ import type {
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
   SettingsData,
-  Subscription,
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
-import { buildPublisherDashboard, buildPublisherPlans, buildPublisherTenantDetail, buildPublisherTenants } from '@/lib/publisher-mappers';
 import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
+import {
+  getPublisherApiBaseUrl,
+  isPublisherAdminApiEnabled,
+  publisherAdminPaths,
+} from '@/lib/publisher-admin-api';
 import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 
 export { ApiError } from '@/lib/errors';
 
 function shouldUseMockApi() {
   return process.env.NEXT_PUBLIC_USE_MOCK_API !== 'false' || !process.env.NEXT_PUBLIC_API_BASE_URL;
+}
+
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 }
 
 async function getPortalSession() {
@@ -67,7 +74,7 @@ async function assertAreaAccess(area: 'customer' | 'publisher') {
   }
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestJsonWithBase<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Content-Type', 'application/json');
   headers.set('Authorization', `Bearer ${await getAccessToken()}`);
@@ -75,7 +82,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
 
   try {
-    response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}${path}`, {
+    response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
       ...init,
       headers,
       cache: 'no-store',
@@ -107,8 +114,23 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-async function requestApiResponse<T>(path: string, init?: RequestInit): Promise<T> {
-  const body = await requestJson<ApiResponse<T>>(path, init);
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!baseUrl) {
+    throw new ApiError(
+      'The FastSaaS API base URL is not configured.',
+      500,
+      'API_BASE_URL_MISSING',
+      'Set NEXT_PUBLIC_API_BASE_URL to call the live customer portal API.',
+    );
+  }
+
+  return requestJsonWithBase<T>(baseUrl, path, init);
+}
+
+async function requestApiResponseWithBase<T>(baseUrl: string, path: string, init?: RequestInit): Promise<T> {
+  const body = await requestJsonWithBase<ApiResponse<T>>(baseUrl, path, init);
 
   if (body.status === 'success' && body.data !== undefined) {
     return body.data;
@@ -122,6 +144,21 @@ async function requestApiResponse<T>(path: string, init?: RequestInit): Promise<
   );
 }
 
+async function requestApiResponse<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!baseUrl) {
+    throw new ApiError(
+      'The FastSaaS API base URL is not configured.',
+      500,
+      'API_BASE_URL_MISSING',
+      'Set NEXT_PUBLIC_API_BASE_URL to call the live customer portal API.',
+    );
+  }
+
+  return requestApiResponseWithBase<T>(baseUrl, path, init);
+}
+
 async function requestPortal<T>(path: string, init?: RequestInit): Promise<T> {
   if (shouldUseMockApi()) {
     return mockRequest<T>(path, init);
@@ -130,13 +167,14 @@ async function requestPortal<T>(path: string, init?: RequestInit): Promise<T> {
   return requestJson<T>(path, init);
 }
 
-function mutationUnavailable(message: string): never {
-  throw new ApiError(message, 501, 'PUBLISHER_API_PENDING', message);
-}
-
-async function getLiveSubscriptions() {
+async function requestPublisherResource<T>(mockPath: string, livePath: string, init?: RequestInit): Promise<T> {
   await assertAreaAccess('publisher');
-  return requestApiResponse<Subscription[]>('/v1/subscriptions');
+
+  if (shouldUseMockApi() || !isPublisherAdminApiEnabled()) {
+    return mockRequest<T>(mockPath, init);
+  }
+
+  return requestApiResponseWithBase<T>(getPublisherApiBaseUrl(), livePath, init);
 }
 
 export const portalApi = {
@@ -185,114 +223,51 @@ export const portalApi = {
 
     return requestApiResponse<AuthContextData>('/v1/auth/context');
   },
-  getPublisherDashboard: async () => {
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherDashboardData>('/publisher/dashboard');
-    }
-
-    return buildPublisherDashboard(await getLiveSubscriptions());
-  },
-  getPublisherPlans: async () => {
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherPlansResponse>('/publisher/plans');
-    }
-
-    return buildPublisherPlans(await getLiveSubscriptions());
-  },
-  updatePublisherPlan: async (planId: string, payload: PublisherPlanUpdateInput) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherPlansResponse>(`/publisher/plans/${planId}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-    }
-
-    mutationUnavailable('Publisher plan editing is scaffolded in the portal, but a dedicated API route is still required.');
-  },
-  getPublisherTenants: async () => {
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantsResponse>('/publisher/tenants');
-    }
-
-    return buildPublisherTenants(await getLiveSubscriptions());
-  },
-  getPublisherTenant: async (tenantId: string) => {
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`);
-    }
-
-    await assertAreaAccess('publisher');
-    return buildPublisherTenantDetail(await requestApiResponse<Subscription>(`/v1/subscriptions/${tenantId}`));
-  },
-  createPublisherTenant: async (payload: PublisherTenantUpsertInput) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>('/publisher/tenants', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    }
-
-    mutationUnavailable('Publisher tenant creation is scaffolded in the portal, but a dedicated API route is still required.');
-  },
-  updatePublisherTenant: async (tenantId: string, payload: PublisherTenantUpsertInput) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-    }
-
-    mutationUnavailable('Publisher tenant editing is scaffolded in the portal, but a dedicated API route is still required.');
-  },
-  activatePublisherTenant: async (subscriptionId: string) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>(`/publisher/tenants/${subscriptionId}/activate`, {
-        method: 'POST',
-      });
-    }
-
-    await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}/activate`, {
+  getPublisherDashboard: async () =>
+    requestPublisherResource<PublisherDashboardData>('/publisher/dashboard', publisherAdminPaths.dashboard),
+  getPublisherPlans: async () =>
+    requestPublisherResource<PublisherPlansResponse>('/publisher/plans', publisherAdminPaths.plans),
+  updatePublisherPlan: async (planId: string, payload: PublisherPlanUpdateInput) =>
+    requestPublisherResource<PublisherPlansResponse>(`/publisher/plans/${planId}`, publisherAdminPaths.plan(planId), {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  getPublisherTenants: async () =>
+    requestPublisherResource<PublisherTenantsResponse>('/publisher/tenants', publisherAdminPaths.tenants),
+  getPublisherTenant: async (tenantId: string) =>
+    requestPublisherResource<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`, publisherAdminPaths.tenant(tenantId)),
+  createPublisherTenant: async (payload: PublisherTenantUpsertInput) =>
+    requestPublisherResource<PublisherTenantDetail>('/publisher/tenants', publisherAdminPaths.tenants, {
       method: 'POST',
-    });
-
-    return buildPublisherTenantDetail(await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`));
-  },
-  suspendPublisherTenant: async (subscriptionId: string) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>(`/publisher/tenants/${subscriptionId}/suspend`, {
+      body: JSON.stringify(payload),
+    }),
+  updatePublisherTenant: async (tenantId: string, payload: PublisherTenantUpsertInput) =>
+    requestPublisherResource<PublisherTenantDetail>(`/publisher/tenants/${tenantId}`, publisherAdminPaths.tenant(tenantId), {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  activatePublisherTenant: async (subscriptionId: string) =>
+    requestPublisherResource<PublisherTenantDetail>(
+      `/publisher/tenants/${subscriptionId}/activate`,
+      publisherAdminPaths.tenantAction(subscriptionId, 'activate'),
+      {
         method: 'POST',
-      });
-    }
-
-    await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}/suspend`, {
-      method: 'POST',
-    });
-
-    return buildPublisherTenantDetail(await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`));
-  },
-  cancelPublisherTenant: async (subscriptionId: string) => {
-    await assertAreaAccess('publisher');
-
-    if (shouldUseMockApi()) {
-      return mockRequest<PublisherTenantDetail>(`/publisher/tenants/${subscriptionId}/cancel`, {
+      },
+    ),
+  suspendPublisherTenant: async (subscriptionId: string) =>
+    requestPublisherResource<PublisherTenantDetail>(
+      `/publisher/tenants/${subscriptionId}/suspend`,
+      publisherAdminPaths.tenantAction(subscriptionId, 'suspend'),
+      {
         method: 'POST',
-      });
-    }
-
-    await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`, {
-      method: 'DELETE',
-    });
-
-    return buildPublisherTenantDetail(await requestApiResponse<Subscription>(`/v1/subscriptions/${subscriptionId}`));
-  },
+      },
+    ),
+  cancelPublisherTenant: async (subscriptionId: string) =>
+    requestPublisherResource<PublisherTenantDetail>(
+      `/publisher/tenants/${subscriptionId}/cancel`,
+      publisherAdminPaths.tenantAction(subscriptionId, 'cancel'),
+      {
+        method: 'POST',
+      },
+    ),
 };
