@@ -68,6 +68,7 @@ export interface SubscriptionsTable {
 export interface SubscriptionAuditLogsTable {
   id: GeneratedUuid;
   subscription_id: string;
+  tenant_id: string;
   event_type: string;
   source: string;
   from_status: SubscriptionStatus | null;
@@ -82,6 +83,7 @@ export interface MarketplaceWebhookEventsTable {
   id: GeneratedUuid;
   idempotency_key: string;
   marketplace_subscription_id: string;
+  tenant_id: string | null;
   action: string;
   correlation_id: string;
   request_id: string;

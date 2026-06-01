@@ -293,3 +293,85 @@ Created squad routing labels for future issue triaging:
 - **Context:** Issue #36 requests lightweight semantic versioning for API and portal workspaces.
 - **Decision:** Use plain semantic versions in `packages/api`, `packages/portal`, `packages/shared`; bump with `npm version patch|minor|major --workspace=<workspace>`; track releases in `CHANGELOG.md` (Keep a Changelog format).
 - **Why:** Small team, workspaces start at 0.1.0, `npm version` keeps workflow simple while ensuring consistent package metadata and release notes.
+### EECOM Semantic Versioning Decision
+- **Date:** 2026-05-31
+- **Owner:** EECOM
+- **Context:** Issue #36 asks for a lightweight semantic versioning approach for the API and portal workspaces without adding release automation.
+- **Decision:** Keep package versions in `packages/api`, `packages/portal`, and `packages/shared` on plain semantic versions and use `npm version patch|minor|major --workspace=<workspace>` for bumps. Track notable release notes in the root `CHANGELOG.md` using the Keep a Changelog structure.
+- **Why:** The team is small, the workspace packages already start at `0.1.0`, and `npm version` keeps the workflow simple while still giving consistent package metadata and release notes.
+
+### EECOM Tenant RLS Rollout Decision
+- **Date:** 2026-05-31T21:35:32.766+00:00
+- **Owner:** EECOM
+- **Context:** Issue #45 requires tenant middleware enforcement plus PostgreSQL row-level security for tenant-scoped backend data in `packages/api/`.
+- **Decision:** Standardize tenant isolation on request-scoped execution context stored in `src/db/execution-context.ts`, propagating JWT-derived tenant IDs into PostgreSQL session settings (`app.current_tenant`, `app.bypass_rls`) before Kysely or raw SQL repository work. Enable RLS policies for tenant-scoped tables through reusable helpers in `src/db/rls.ts` and the Kysely migration `src/db/migrations/20260531T213532_tenant_rls.ts`.
+- **Why:** This keeps API middleware and database enforcement aligned across both Kysely-backed subscription flows and raw-SQL metering flows, while preserving explicit system-bypass paths for webhook processing and the metering worker.
+- **Validation:** `cd packages/api && npm run typecheck && npm run test && npm run build`
+
+### Decision: Semantic-Release Version Baseline (PR #61)
+**Date:** 2026-05-31T20:29:23.499+00:00  
+**Owner:** EECOM  
+**Status:** Applied  
+
+#### Problem
+
+PR #61 (GNC's semantic-release config) was rejected by Kranz because:
+- `release.config.js` is configured but no git tag establishes the baseline version
+- semantic-release defaults to v1.0.0 on first run if no tag exists
+- The repo is pre-1.0 (`package.json` at v0.1.0), so the initial release would cut v1.0.0 instead of v0.1.0
+
+#### Solution
+
+Created git tag `v0.1.0` on the merge-base commit (`d450a34`) — the point where the branch diverged from main before GNC's changes.
+
+```bash
+git tag v0.1.0 $(git merge-base HEAD main)
+git push origin v0.1.0
+```
+
+#### Why This Works
+
+- semantic-release scans git history for tags to determine the current version
+- With `v0.1.0` tagged on the baseline commit, semantic-release recognizes 0.1.0 as the current version
+- Future releases will compute the next version (0.1.1, 0.2.0, 1.0.0, etc.) from 0.1.0 using conventional commit analysis
+- The config's `tagFormat: 'v${version}'` and `branches: ['main']` remain correct
+
+#### Outcome
+
+PR #61 is now unblocked for Kranz's re-review. GNC can merge after approval.
+
+#### Pattern for Future Releases
+
+When adding semantic-release to a monorepo:
+1. Finalize `release.config.js` and set all `package.json` versions to the intended baseline (e.g., 0.1.0)
+2. Create the baseline tag on the last commit before release config changes
+3. Merge release config changes after the tag is pushed
+
+### GNC Health Check Degradation Decision
+- **Date:** 2026-05-31
+- **Owner:** GNC
+- **Context:** Issue #41 tracked the staging `deploy-app` failure at the `Verify health checks` step after the Prisma → Kysely migration and API image changes.
+- **Decision:** Keep the `/health` endpoint startup-safe by allowing the API process to boot in degraded mode when `DATABASE_URL` is missing during Container App revision rollout, and give the deploy workflow a longer bounded retry window while new revisions warm up.
+- **Why:** Container App environment updates can create a new revision that is not immediately ready. Health verification should measure whether the process eventually binds and serves `/health`, not fail on transient rollout delay or optional database initialization.
+
+### GNC Semantic Release Decision
+- **Date:** 2026-05-31T20:19:20.148+00:00
+- **Owner:** GNC
+- **Context:** Issue #60 requires strict semver.org automation for the FastSaaS monorepo while the npm workspaces remain private application packages.
+- **Decision:** Manage releases from the repository root with `semantic-release` on `main`, treat the monorepo as a single release stream, and use conventional commits plus `commitlint` to drive version calculation, changelog generation, GitHub releases, and version bumps in the root manifests only.
+- **Why:** The API, portal, and shared workspaces ship together as one product, so a repository-wide release process keeps tags, changelog entries, and deployment automation aligned without pretending the private workspaces are independently published npm packages.
+
+### Kranz PR #61 Approval Decision
+- **Date:** 2026-05-31T20:43:26.273+00:00
+- **Owner:** Kranz
+- **Context:** PR #61 (`chore: configure semantic-release`) was previously blocked only because the repository lacked the `v0.1.0` baseline tag required to keep semantic-release on the intended 0.x line.
+- **Decision:** Accept the PR as technically approved now that `v0.1.0` exists on merge-base commit `d450a34` and the release automation diff remains clean.
+- **Why:** With the baseline tag in place, the semantic-release configuration will calculate the next version from the correct starting point instead of incorrectly jumping to `1.0.0`, and no new correctness or workflow-safety issues were found in the re-review.
+- **Note:** GitHub would not accept a formal approval from the current authenticated account because it is the PR author, so the approval outcome was recorded in a PR comment.
+
+### Kranz PR #61 Review Decision
+- **Date:** 2026-05-31T20:25:00.184+00:00
+- **Owner:** Kranz
+- **Context:** PR #61 introduces semantic-release, commitlint, and a release workflow for the FastSaaS monorepo.
+- **Decision:** Do not enable semantic-release on `main` until the repository release baseline is made explicit in git tags. Either create and push `v0.1.0` for the already-documented baseline commit, or intentionally reset the project to start at `1.0.0` and update `package.json`/`CHANGELOG.md` to match before merge.
+- **Why:** semantic-release uses git tags, not the checked-in `package.json` version, as the release source of truth. With no existing release tag, the first automated release becomes `1.0.0`, which would skip over the repo's current `0.1.0` baseline and break the team's strict semver history.

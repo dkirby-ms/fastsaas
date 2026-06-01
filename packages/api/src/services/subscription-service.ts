@@ -257,6 +257,7 @@ export class SubscriptionService {
     if (subscription.status === targetStatus) {
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
+        tenantId: subscription.tenantId,
         payload: {
           ...webhookEventBase.payload,
           duplicate: true,
@@ -297,7 +298,10 @@ export class SubscriptionService {
           });
       }
 
-      await this.repository.recordWebhookEvent(webhookEventBase);
+      await this.repository.recordWebhookEvent({
+        ...webhookEventBase,
+        tenantId: subscription.tenantId
+      });
       return {
         subscription: updatedSubscription,
         duplicate: false
@@ -305,6 +309,7 @@ export class SubscriptionService {
     } catch (error) {
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
+        tenantId: subscription.tenantId,
         status: 'failed',
         errorMessage: error instanceof Error ? error.message : 'Unknown webhook processing error'
       });
@@ -343,6 +348,7 @@ export class SubscriptionService {
 
     const updatedSubscription = await this.repository.transitionSubscription({
       subscriptionId: subscription.id,
+      tenantId: subscription.tenantId,
       toStatus: nextStatus,
       correlationId: context.correlationId,
       auditEntry

@@ -36,9 +36,10 @@ describe('publisher administration routes', () => {
     expect(memberResponse.body.error.details.resource).toBe('publisher');
   });
 
-  it('lists cross-tenant subscriptions and overlays publisher plan updates', async () => {
-    await harness.createSubscriptionFixture({ tenantId: 'customer-tenant-a', marketplaceToken: 'publisher-fixture-a', planId: 'starter' });
-    await harness.createSubscriptionFixture({ tenantId: 'customer-tenant-b', marketplaceToken: 'publisher-fixture-b', planId: 'growth' });
+  it('scopes publisher subscriptions to the actor tenant and overlays publisher plan updates', async () => {
+    await harness.createSubscriptionFixture({ tenantId: 'publisher-admin', marketplaceToken: 'publisher-fixture-a', planId: 'starter' });
+    await harness.createSubscriptionFixture({ tenantId: 'publisher-admin', marketplaceToken: 'publisher-fixture-b', planId: 'growth' });
+    await harness.createSubscriptionFixture({ tenantId: 'customer-tenant-a', marketplaceToken: 'publisher-fixture-hidden', planId: 'scale' });
 
     const adminToken = await harness.createToken({
       tenantId: 'publisher-admin',
@@ -52,6 +53,7 @@ describe('publisher administration routes', () => {
 
     expect(subscriptionsResponse.status).toBe(200);
     expect(subscriptionsResponse.body.data).toHaveLength(2);
+    expect(subscriptionsResponse.body.data.every((subscription: { tenantId: string }) => subscription.tenantId === 'publisher-admin')).toBe(true);
 
     const updatePlanResponse = await request(harness.app)
       .put('/v1/publisher/plans/growth')
@@ -71,7 +73,7 @@ describe('publisher administration routes', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(dashboardResponse.status).toBe(200);
-    expect(dashboardResponse.body.data.subscriptionCount).toBeGreaterThanOrEqual(2);
+    expect(dashboardResponse.body.data.subscriptionCount).toBe(2);
     expect(dashboardResponse.body.data.plans.some((plan: { planName: string }) => plan.planName === 'Growth Plus')).toBe(true);
   });
 
@@ -96,6 +98,7 @@ describe('publisher administration routes', () => {
     expect(createResponse.status).toBe(201);
     expect(createResponse.body.data.displayName).toBe('Contoso Ltd');
     expect(createResponse.body.data.status).toBe('trialing');
+    expect(createResponse.body.data.subscriptionId).toBeDefined();
 
     const tenantId = createResponse.body.data.id as string;
     const updateResponse = await request(harness.app)
@@ -140,5 +143,6 @@ describe('publisher administration routes', () => {
 
     expect(detailResponse.status).toBe(200);
     expect(detailResponse.body.data.audit.length).toBeGreaterThanOrEqual(4);
+    expect(detailResponse.body.data.subscriptionId).toBe(tenantId);
   });
 });

@@ -46,6 +46,7 @@ export const PERMISSIONS_MATRIX: PermissionMatrix = {
 };
 
 const RBAC_ROLE_SET = new Set<string>(RBAC_ROLES);
+const RBAC_ROLE_LOOKUP = new Map<string, RbacRole>(RBAC_ROLES.map((role) => [role.toLowerCase(), role]));
 
 export interface AuthorizeRouteOptions {
   resource: RbacResource;
@@ -54,8 +55,12 @@ export interface AuthorizeRouteOptions {
   metadata?: (req: ApiRequest) => Record<string, unknown>;
 }
 
+export function normalizeRbacRole(role: string): RbacRole | null {
+  return RBAC_ROLE_LOOKUP.get(role.trim().toLowerCase()) ?? null;
+}
+
 export function isRbacRole(role: string): role is RbacRole {
-  return RBAC_ROLE_SET.has(role);
+  return RBAC_ROLE_SET.has(role) || normalizeRbacRole(role) !== null;
 }
 
 export function getGrantedPermissions(role: RbacRole): readonly RbacPermission[] {
@@ -64,7 +69,9 @@ export function getGrantedPermissions(role: RbacRole): readonly RbacPermission[]
 
 export function isActionAllowed(roles: readonly string[], resource: RbacResource, action: RbacAction): boolean {
   const permission = toPermission(resource, action);
-  return roles.filter(isRbacRole).some((role) => getGrantedPermissions(role).includes(permission));
+  return roles
+    .map((role) => normalizeRbacRole(role))
+    .some((role): role is RbacRole => role !== null && getGrantedPermissions(role).includes(permission));
 }
 
 function buildAuditContext(req: ApiRequest, options: AuthorizeRouteOptions): RequestAuditContext {
@@ -94,7 +101,9 @@ export function authorizeRoute(options: AuthorizeRouteOptions): RequestHandler {
       AppError.forbidden('You do not have permission to perform this action', {
         resource: options.resource,
         action: options.action,
-        roles: req.context.roles.filter(isRbacRole)
+        roles: req.context.roles
+          .map((role) => normalizeRbacRole(role))
+          .filter((role): role is RbacRole => Boolean(role))
       })
     );
   };

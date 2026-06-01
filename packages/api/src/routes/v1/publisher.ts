@@ -294,7 +294,8 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
     authorizeRoute({ resource: 'publisher', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription[]>>, next) => {
       try {
-        const subscriptions = await publisherService.listSubscriptions();
+        const actor = buildActorContext(req);
+        const subscriptions = await publisherService.listSubscriptions(actor.tenantId);
         res.status(200).json({ status: 'success', data: subscriptions, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);

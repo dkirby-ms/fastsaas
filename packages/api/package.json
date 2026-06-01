@@ -6,10 +6,12 @@
   "types": "dist/server.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "migrate": "tsx src/db/migrate.ts",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "migrate": "tsx src/db/migrate.ts",
     "test": "vitest run",
+    "test:rls": "vitest run src/__tests__/tenant-rls.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

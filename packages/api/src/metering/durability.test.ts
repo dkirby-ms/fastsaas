@@ -71,7 +71,16 @@ class FakePostgresClient implements PostgresUsageEventSqlClient {
       return 1;
     }
 
-    if (normalized.startsWith('CREATE TABLE') || normalized.startsWith('CREATE INDEX') || normalized.startsWith('ALTER TABLE') || normalized.startsWith('DROP INDEX')) {
+    if (
+      normalized.startsWith("SELECT set_config('app.current_tenant'") ||
+      normalized.startsWith("SELECT set_config('app.bypass_rls'") ||
+      normalized.startsWith('CREATE TABLE') ||
+      normalized.startsWith('CREATE INDEX') ||
+      normalized.startsWith('ALTER TABLE') ||
+      normalized.startsWith('DROP INDEX') ||
+      normalized.startsWith('DROP POLICY') ||
+      normalized.startsWith('CREATE POLICY')
+    ) {
       return 0;
     }
 
@@ -80,6 +89,10 @@ class FakePostgresClient implements PostgresUsageEventSqlClient {
 
   async $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T> {
     const normalized = normalize(query);
+
+    if (normalized.startsWith('SELECT EXISTS') && normalized.includes('FROM pg_policies')) {
+      return [{ policyConfigured: false }] as T;
+    }
 
     if (normalized.startsWith('SELECT') && normalized.includes('FROM usage_events') && normalized.includes('created_at >= $2::timestamptz')) {
       const [tenantId, createdAfter, idempotencyKey, eventId, eventTimestamp] = values;

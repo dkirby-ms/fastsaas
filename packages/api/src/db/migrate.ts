@@ -5,12 +5,13 @@ import { migrateToLatest } from './migrator';
 
 async function main(): Promise<void> {
   const config = createConfig();
+  const databaseUrl = config.databaseUrl ?? config.database.url?.trim();
 
-  if (!config.databaseUrl) {
+  if (!databaseUrl) {
     throw new Error('DATABASE_URL must be configured before running migrations');
   }
 
-  const database = createDatabase(config.databaseUrl);
+  const database = createDatabase(databaseUrl);
 
   try {
     await migrateToLatest(database, logger.child({ component: 'db-migrate' }));

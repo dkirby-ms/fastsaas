@@ -212,6 +212,7 @@ function mapSubscriptionToTenantSummary(
     id: subscription.id,
     displayName:
       getMetadataValue(subscription.metadata, 'displayName', 'tenantName', 'company') ??
+      getMetadataValue(subscription.metadata, 'managedTenantId') ??
       subscription.beneficiaryTenantId ??
       subscription.tenantId,
     primaryDomain:
@@ -330,8 +331,8 @@ export class PublisherService {
     return this.listPlans(actor.tenantId);
   }
 
-  async listSubscriptions(): Promise<Subscription[]> {
-    return this.subscriptionRepository.listAll();
+  async listSubscriptions(publisherTenantId: string): Promise<Subscription[]> {
+    return this.subscriptionRepository.listByTenant(publisherTenantId);
   }
 
   async listTenants(publisherTenantId: string): Promise<PublisherTenantsResponse> {
@@ -351,26 +352,25 @@ export class PublisherService {
     await this.getPlan(actor.tenantId, normalized.planId);
 
     const subscriptionStatus = toSubscriptionStatus(normalized.status);
-    const tenantSlug = slugify(normalized.primaryDomain) || randomUUID();
-    const tenantId = `tenant-${tenantSlug}`;
+    const managedTenantId = `tenant-${slugify(normalized.primaryDomain) || randomUUID()}`;
     const auditEntry = this.buildSubscriptionAuditEntry('TenantCreated', null, subscriptionStatus, actor);
-    const metadata = this.buildTenantMetadata(normalized, normalized.status);
+    const metadata = this.buildTenantMetadata(normalized, normalized.status, managedTenantId);
 
     const created = await this.subscriptionRepository.createManagedSubscription({
-      tenantId,
+      tenantId: actor.tenantId,
       marketplaceSubscriptionId: `publisher-${randomUUID()}`,
       planId: normalized.planId,
       seats: normalized.seats,
       status: subscriptionStatus,
       correlationId: actor.correlationId,
       purchaserTenantId: `purchaser-${randomUUID()}`,
-      beneficiaryTenantId: tenantId,
+      beneficiaryTenantId: managedTenantId,
       metadata,
       auditEntry
     } satisfies CreateManagedSubscriptionInput);
 
     this.logger.info(
-      { subscriptionId: created.id, tenantId, actorTenantId: actor.tenantId, requestId: actor.requestId },
+      { subscriptionId: created.id, managedTenantId, actorTenantId: actor.tenantId, requestId: actor.requestId },
       'Publisher tenant created'
     );
 
@@ -403,7 +403,11 @@ export class PublisherService {
       correlationId: actor.correlationId,
       metadata: {
         ...subscription.metadata,
-        ...this.buildTenantMetadata(normalized, normalized.status)
+        ...this.buildTenantMetadata(
+          normalized,
+          normalized.status,
+          getMetadataValue(subscription.metadata, 'managedTenantId') ?? subscription.beneficiaryTenantId
+        )
       },
       auditEntry
     } satisfies UpdateManagedSubscriptionInput);
@@ -457,7 +461,7 @@ export class PublisherService {
     publisherTenantId: string
   ): Promise<[Subscription[], Map<string, Omit<PublisherPlan, 'activeSubscriptions'>>]> {
     const [subscriptions, storedPlans] = await Promise.all([
-      this.subscriptionRepository.listAll(),
+      this.subscriptionRepository.listByTenant(publisherTenantId),
       this.publisherPlanRepository.listByTenant(publisherTenantId)
     ]);
 
@@ -479,7 +483,12 @@ export class PublisherService {
     tenantKey: string
   ): Promise<[Subscription, Map<string, Omit<PublisherPlan, 'activeSubscriptions'>>]> {
     const [subscriptions, definitions] = await this.loadPublisherState(publisherTenantId);
-    const subscription = subscriptions.find((entry) => entry.id === tenantKey || entry.tenantId === tenantKey);
+    const subscription = subscriptions.find(
+      (entry) =>
+        entry.id === tenantKey ||
+        entry.beneficiaryTenantId === tenantKey ||
+        getMetadataValue(entry.metadata, 'managedTenantId') === tenantKey
+    );
 
     if (!subscription) {
       throw AppError.notFound('The selected tenant could not be found', { tenantKey });
@@ -543,9 +552,14 @@ export class PublisherService {
     };
   }
 
-  private buildTenantMetadata(input: PublisherTenantUpsertInput, status: PublisherTenantStatus): Record<string, unknown> {
+  private buildTenantMetadata(
+    input: PublisherTenantUpsertInput,
+    status: PublisherTenantStatus,
+    managedTenantId?: string
+  ): Record<string, unknown> {
     return {
       managedByPublisher: true,
+      managedTenantId,
       displayName: input.displayName,
       primaryDomain: input.primaryDomain,
       publisherStatusOverride: status === 'past_due' ? 'past_due' : undefined
