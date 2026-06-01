@@ -1,27 +1,26 @@
 import { createConfig } from '../config';
 import { createDatabase } from './database';
-import { runDatabaseMigrations } from './migrator';
+import { migrateToLatest } from './migrator';
 
 async function main(): Promise<void> {
   const config = createConfig();
+  const databaseUrl = config.database.url?.trim();
 
-  if (!config.databaseUrl) {
-    throw new Error('DATABASE_URL is required to run database migrations');
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required to run migrations');
   }
 
-  const database = createDatabase(config.databaseUrl);
+  const db = createDatabase(databaseUrl);
 
   try {
-    const results = await runDatabaseMigrations(database);
-    const executed = results.filter((result) => result.status === 'Success').map((result) => result.migrationName);
+    const result = await migrateToLatest(db);
 
-    if (executed.length > 0) {
-      console.info(`Applied migrations: ${executed.join(', ')}`);
-    } else {
-      console.info('Database migrations are already up to date');
+    for (const migration of result.results ?? []) {
+      const status = migration.status === 'Success' ? 'applied' : migration.status.toLowerCase();
+      console.info(`${status}: ${migration.migrationName}`);
     }
   } finally {
-    await database.destroy();
+    await db.destroy();
   }
 }
 

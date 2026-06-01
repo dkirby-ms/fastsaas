@@ -95,6 +95,7 @@ _No learnings recorded yet._
 ## Learnings
 
 - **2026-05-31T21:35:32.766+00:00:** Tenant enforcement in `packages/api/` now flows from `src/middleware/tenant-context.ts` into database session settings via `src/db/execution-context.ts`, with shared RLS policy helpers in `src/db/rls.ts`, a Kysely migration in `src/db/migrations/20260531T213532_tenant_rls.ts`, and cross-tenant isolation coverage in `src/__tests__/tenant-rls.integration.test.ts`.
+- **2026-06-01T00:04:54.260+00:00:** The tenant RLS migration is now executable via `packages/api/src/db/migrator.ts`, runs on API startup and `npm run migrate`, and the Docker-backed RLS integration suite must connect as a non-superuser app role because PostgreSQL superusers bypass RLS policies.
 
 ## Cross-Team Updates — 2026-05-31T21:35:32.766Z
 

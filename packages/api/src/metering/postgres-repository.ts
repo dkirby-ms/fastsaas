@@ -481,6 +481,17 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
   }
 
   private async initializeSchema(): Promise<void> {
+    const [policyState] = await this.db.$queryRawUnsafe<Array<{ policyConfigured: boolean }>>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'usage_events'
+          AND policyname = 'usage_events_tenant_isolation'
+      ) AS "policyConfigured"
+    `);
+    const policyConfigured = policyState?.policyConfigured ?? false;
+
     await this.db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS usage_events (
         id TEXT PRIMARY KEY,
@@ -507,20 +518,24 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await this.db.$executeRawUnsafe(`
-      ALTER TABLE usage_events
-      ALTER COLUMN id TYPE TEXT USING id::text,
-      ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text,
-      ALTER COLUMN subscription_id TYPE TEXT USING subscription_id::text,
-      ALTER COLUMN dimension_id TYPE TEXT USING dimension_id::text,
-      ALTER COLUMN idempotency_key TYPE TEXT USING idempotency_key::text
-    `);
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS plan_id TEXT');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_token TEXT');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_expires_at TIMESTAMPTZ NULL');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_idempotency_key_key');
-    await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_tenant_event_ts_key');
+
+    if (!policyConfigured) {
+      await this.db.$executeRawUnsafe(`
+        ALTER TABLE usage_events
+        ALTER COLUMN id TYPE TEXT USING id::text,
+        ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text,
+        ALTER COLUMN subscription_id TYPE TEXT USING subscription_id::text,
+        ALTER COLUMN dimension_id TYPE TEXT USING dimension_id::text,
+        ALTER COLUMN idempotency_key TYPE TEXT USING idempotency_key::text
+      `);
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS plan_id TEXT');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_token TEXT');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ NULL');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS claim_expires_at TIMESTAMPTZ NULL');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_idempotency_key_key');
+      await this.db.$executeRawUnsafe('ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_tenant_event_ts_key');
+    }
+
     await this.db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS usage_event_dead_letters (
         id TEXT PRIMARY KEY,
@@ -534,17 +549,25 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
         failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    await this.db.$executeRawUnsafe(`
-      ALTER TABLE usage_event_dead_letters
-      ALTER COLUMN id TYPE TEXT USING id::text,
-      ALTER COLUMN usage_event_id TYPE TEXT USING usage_event_id::text,
-      ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text
-    `);
+
+    if (!policyConfigured) {
+      await this.db.$executeRawUnsafe(`
+        ALTER TABLE usage_event_dead_letters
+        ALTER COLUMN id TYPE TEXT USING id::text,
+        ALTER COLUMN usage_event_id TYPE TEXT USING usage_event_id::text,
+        ALTER COLUMN tenant_id TYPE TEXT USING tenant_id::text
+      `);
+    }
+
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_due ON usage_events (status, next_attempt_at, claim_expires_at, event_timestamp, created_at)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_tenant_created_at ON usage_events (tenant_id, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_dedupe_lookup ON usage_events (tenant_id, idempotency_key, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_events_event_lookup ON usage_events (tenant_id, event_id, event_timestamp, created_at DESC)');
     await this.db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_usage_event_dead_letters_tenant_failed_at ON usage_event_dead_letters (tenant_id, failed_at DESC)');
+
+    if (policyConfigured) {
+      return;
+    }
 
     for (const statement of buildEnableTenantRlsStatements('usage_events')) {
       await this.db.$executeRawUnsafe(statement);

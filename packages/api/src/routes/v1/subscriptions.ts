@@ -53,6 +53,12 @@ function buildActorContext(req: ApiRequest) {
   };
 }
 
+function getSubscriptionIdParam(req: ApiRequest): string {
+  const { subscriptionId } = req.params;
+
+  return Array.isArray(subscriptionId) ? subscriptionId[0] : subscriptionId;
+}
+
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
   const router = Router();
 
@@ -75,7 +81,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.get('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
-      const subscription = await subscriptionService.getSubscriptionForTenant(req.params.subscriptionId, actor.tenantId);
+      const subscription = await subscriptionService.getSubscriptionForTenant(getSubscriptionIdParam(req), actor.tenantId);
       res.status(200).json({
         status: 'success',
         data: subscription,
@@ -112,7 +118,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.activateSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getSubscriptionIdParam(req),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -133,7 +139,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.suspendSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getSubscriptionIdParam(req),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -154,7 +160,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
     try {
       const actor = buildActorContext(req);
       const subscription = await subscriptionService.unsubscribeSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId: getSubscriptionIdParam(req),
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,

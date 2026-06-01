@@ -5,7 +5,7 @@ import { createApp } from './app';
 import { createConfig } from './config';
 import { createDatabase, createPool, type Database } from './db/database';
 import { runWithSystemExecutionContext } from './db/execution-context';
-import { runDatabaseMigrations } from './db/migrator';
+import { migrateToLatest } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
@@ -21,19 +21,25 @@ function createSubscriptionRepository(database?: Kysely<Database>): Subscription
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
 }
 
-function initializeDatabaseDependencies(databaseUrl?: string): {
+async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
   database?: Kysely<Database>;
   meteringPool?: Pool;
   meteringSqlClient?: PgPoolSqlClient;
-} {
+}> {
   if (!databaseUrl) {
     logger.warn('DATABASE_URL is not configured; starting API in degraded mode');
     return {};
   }
 
+  const database = createDatabase(databaseUrl);
+  const meteringPool = createPool(databaseUrl);
+
   try {
-    const database = createDatabase(databaseUrl);
-    const meteringPool = createPool(databaseUrl);
+    const result = await migrateToLatest(database);
+
+    for (const migration of result.results ?? []) {
+      logger.info({ migration: migration.migrationName, status: migration.status }, 'Database migration result');
+    }
 
     return {
       database,
@@ -41,32 +47,15 @@ function initializeDatabaseDependencies(databaseUrl?: string): {
       meteringSqlClient: new PgPoolSqlClient(meteringPool)
     };
   } catch (error) {
-    logger.error({ err: error }, 'Failed to initialize database clients; starting API in degraded mode');
-    return {};
+    await Promise.allSettled([database.destroy(), meteringPool.end()]);
+    logger.error({ err: error }, 'Failed to initialize database clients or run migrations');
+    throw error;
   }
 }
 
-async function main(): Promise<void> {
+async function bootstrap(): Promise<void> {
   const config = createConfig();
-  const { database, meteringPool, meteringSqlClient } = initializeDatabaseDependencies(config.databaseUrl);
-
-  try {
-    if (database) {
-      const migrationResults = await runDatabaseMigrations(database);
-      const executedMigrations = migrationResults
-        .filter((result) => result.status === 'Success')
-        .map((result) => result.migrationName);
-
-      if (executedMigrations.length > 0) {
-        logger.info({ migrations: executedMigrations }, 'Applied database migrations');
-      }
-    }
-  } catch (error) {
-    await Promise.allSettled([database?.destroy(), meteringPool?.end()].filter((task): task is Promise<void> => Boolean(task)));
-    logger.fatal({ err: error }, 'Failed to apply database migrations');
-    throw error;
-  }
-
+  const { database, meteringPool, meteringSqlClient } = await initializeDatabaseDependencies(config.databaseUrl);
   const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
   const subscriptionRepository = createSubscriptionRepository(database);
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
@@ -89,9 +78,10 @@ async function main(): Promise<void> {
     }
   }
 
-  setInterval(() => {
+  const meteringWorkerInterval = setInterval(() => {
     void runMeteringWorker();
-  }, config.metering.workerIntervalMs).unref();
+  }, config.metering.workerIntervalMs);
+  meteringWorkerInterval.unref();
 
   const server = app.listen(config.port, () => {
     logger.info({ port: config.port }, 'API server listening');
@@ -105,6 +95,7 @@ async function main(): Promise<void> {
     }
 
     shuttingDown = true;
+    clearInterval(meteringWorkerInterval);
     logger.info({ signal }, 'Shutdown signal received');
     server.close(async () => {
       const cleanupTasks = [database?.destroy(), meteringPool?.end()].filter(
@@ -125,7 +116,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-void main().catch((error) => {
-  logger.fatal({ err: error }, 'API server failed to start');
+void bootstrap().catch((error) => {
+  logger.error({ err: error }, 'API server failed to start');
   process.exitCode = 1;
 });

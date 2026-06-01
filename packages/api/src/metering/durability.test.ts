@@ -90,6 +90,10 @@ class FakePostgresClient implements PostgresUsageEventSqlClient {
   async $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T> {
     const normalized = normalize(query);
 
+    if (normalized.startsWith('SELECT EXISTS') && normalized.includes('FROM pg_policies')) {
+      return [{ policyConfigured: false }] as T;
+    }
+
     if (normalized.startsWith('SELECT') && normalized.includes('FROM usage_events') && normalized.includes('created_at >= $2::timestamptz')) {
       const [tenantId, createdAfter, idempotencyKey, eventId, eventTimestamp] = values;
       const row = [...this.store.usageEvents.values()]
