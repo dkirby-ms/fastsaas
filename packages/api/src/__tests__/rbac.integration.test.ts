@@ -10,11 +10,10 @@ import { createConfig, type ApiConfig } from '../config';
 import { authenticateRequest, requireScopes } from '../middleware/auth';
 import {
   authorizeRoute,
-  RBAC_PERMISSIONS,
+  RBAC_PERMISSION_DESCRIPTORS,
   RBAC_ROLES,
+  toPermission,
   type RbacAction,
-  type RbacPermission,
-  type RbacResource,
   type RbacRole
 } from '../middleware/rbac';
 import { requestLogger } from '../middleware/request-logger';
@@ -22,7 +21,7 @@ import { injectTenantContext } from '../middleware/tenant-context';
 import { RBAC_MATRIX_FIXTURE } from './rbac-matrix.fixture';
 
 const ACTION_METHODS: Record<RbacAction, 'get' | 'post'> = {
-  read: 'get',
+  view: 'get',
   manage: 'post',
   export: 'get'
 };
@@ -104,22 +103,23 @@ function buildFixtureApp(executedHandlers: string[]) {
 
   const baseMiddleware = [authenticateRequest(config), injectTenantContext(config), requireScopes([config.auth.requiredScope])] as const;
 
-  for (const permission of RBAC_PERMISSIONS) {
-    const [resource, action] = permission.split(':') as [RbacResource, RbacAction];
-    const path = `/fixtures/${resource}/${action}`;
-    const handler = (req: express.Request, res: express.Response) => {
-      executedHandlers.push(permission);
-      res.status(200).json({ permission, resource, action, resourceId: req.params.resourceId ?? `${resource}-1` });
+  for (const permission of RBAC_PERMISSION_DESCRIPTORS) {
+    const path = `/fixtures/${permission.resource}/${permission.action}`;
+    const key = toPermission(permission.resource, permission.action);
+    const handler = (_req: express.Request, res: express.Response) => {
+      executedHandlers.push(key);
+      res.status(200).json({ permission: key, label: permission.label });
     };
-    const middleware = authorizeRoute({ permission, resource, action, resourceId: () => `${resource}-1` });
+    const middleware = authorizeRoute({
+      resource: permission.resource,
+      action: permission.action,
+      resourceId: () => `${permission.resource}-1`
+    });
 
-    switch (ACTION_METHODS[action]) {
-      case 'get':
-        app.get(path, ...baseMiddleware, middleware, handler);
-        break;
-      case 'post':
-        app.post(path, ...baseMiddleware, middleware, handler);
-        break;
+    if (ACTION_METHODS[permission.action] === 'get') {
+      app.get(path, ...baseMiddleware, middleware, handler);
+    } else {
+      app.post(path, ...baseMiddleware, middleware, handler);
     }
   }
 
@@ -127,19 +127,22 @@ function buildFixtureApp(executedHandlers: string[]) {
 }
 
 describe('RBAC permissions matrix', () => {
-  it.each(RBAC_ROLES)('enforces the full matrix for %s', async (role) => {
+  it.each(RBAC_ROLES)('enforces the approved role model for %s', async (role) => {
     const executedHandlers: string[] = [];
     const app = buildFixtureApp(executedHandlers);
     const token = await createToken(role);
 
-    for (const permission of RBAC_PERMISSIONS) {
-      const [resource, action] = permission.split(':') as [RbacResource, RbacAction];
-      const expectedAllowed = RBAC_MATRIX_FIXTURE[role][permission as RbacPermission];
-      const method = ACTION_METHODS[action];
-      const response = await request(app)[method](`/fixtures/${resource}/${action}`).set('Authorization', 'Bearer ' + token);
+    for (const permission of RBAC_PERMISSION_DESCRIPTORS) {
+      const permissionKey = toPermission(permission.resource, permission.action);
+      const expectedAllowed = RBAC_MATRIX_FIXTURE[role][permissionKey];
+      const method = ACTION_METHODS[permission.action];
+      const response = await request(app)[method](`/fixtures/${permission.resource}/${permission.action}`).set(
+        'Authorization',
+        `Bearer ${token}`
+      );
 
-      expect(response.status, `${role} ${permission}`).toBe(expectedAllowed ? 200 : 403);
-      expect(executedHandlers.filter((entry) => entry === permission)).toHaveLength(expectedAllowed ? 1 : 0);
+      expect(response.status, `${role} ${permissionKey}`).toBe(expectedAllowed ? 200 : 403);
+      expect(executedHandlers.filter((entry) => entry === permissionKey)).toHaveLength(expectedAllowed ? 1 : 0);
     }
   });
 });

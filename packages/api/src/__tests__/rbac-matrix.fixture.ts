@@ -1,52 +1,44 @@
 import type { RbacPermission, RbacRole } from '../middleware/rbac';
 
 export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolean>> = {
-  admin: {
-    'auth:read': true,
-    'subscriptions:read': true,
+  Admin: {
+    'subscriptions:view': true,
     'subscriptions:manage': true,
     'billing:manage': true,
     'users:manage': true,
-    'metering:read': true,
-    'metering:manage': true,
-    'metering:export': true,
-    'audit_logs:read': true,
+    'metering:view': true,
+    'billing:export': true,
+    'audit_logs:view': true,
     'webhooks:manage': true
   },
-  owner: {
-    'auth:read': true,
-    'subscriptions:read': true,
+  Owner: {
+    'subscriptions:view': true,
     'subscriptions:manage': true,
     'billing:manage': true,
     'users:manage': true,
-    'metering:read': true,
-    'metering:manage': true,
-    'metering:export': true,
-    'audit_logs:read': true,
+    'metering:view': true,
+    'billing:export': true,
+    'audit_logs:view': true,
     'webhooks:manage': true
   },
-  member: {
-    'auth:read': true,
-    'subscriptions:read': true,
+  Member: {
+    'subscriptions:view': true,
     'subscriptions:manage': false,
     'billing:manage': false,
     'users:manage': false,
-    'metering:read': true,
-    'metering:manage': true,
-    'metering:export': false,
-    'audit_logs:read': false,
+    'metering:view': true,
+    'billing:export': false,
+    'audit_logs:view': false,
     'webhooks:manage': false
   },
-  viewer: {
-    'auth:read': true,
-    'subscriptions:read': true,
+  Viewer: {
+    'subscriptions:view': true,
     'subscriptions:manage': false,
     'billing:manage': false,
     'users:manage': false,
-    'metering:read': true,
-    'metering:manage': false,
-    'metering:export': false,
-    'audit_logs:read': false,
+    'metering:view': true,
+    'billing:export': false,
+    'audit_logs:view': false,
     'webhooks:manage': false
   }
 };

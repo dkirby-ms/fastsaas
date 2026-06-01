@@ -12,19 +12,20 @@ import { createSubscriptionsRouter } from './subscriptions';
 export function createV1Router(
   config: ApiConfig,
   meteringService: MeteringService,
-  dependencies: { subscriptionService?: SubscriptionService; auditService?: AuditService } = {}
+  subscriptionService?: SubscriptionService,
+  auditService?: AuditService
 ) {
   const router = Router();
 
   router.use('/auth', createAuthRouter(config));
   router.use('/metering', createMeteringRouter(config, meteringService));
 
-  if (dependencies.subscriptionService) {
-    router.use('/subscriptions', createSubscriptionsRouter(config, dependencies.subscriptionService));
+  if (subscriptionService) {
+    router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService));
   }
 
-  if (dependencies.auditService) {
-    router.use('/audit-logs', createAuditLogsRouter(config, dependencies.auditService));
+  if (auditService) {
+    router.use('/audit-logs', createAuditLogsRouter(config, auditService));
   }
 
   return router;

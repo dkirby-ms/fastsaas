@@ -14,19 +14,12 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
     authenticateRequest(config),
     injectTenantContext(config),
     requireScopes([config.metering.writeScope]),
-    authorizeRoute({
-      permission: 'metering:manage',
-      resource: 'metering',
-      action: 'manage',
-      resourceId: (req) => (typeof req.body?.eventId === 'string' ? req.body.eventId : undefined),
-      metadata: (req) => ({ subscriptionId: typeof req.body?.subscriptionId === 'string' ? req.body.subscriptionId : undefined })
-    })
   ];
   const authorizeRead = [
     authenticateRequest(config),
     injectTenantContext(config),
     requireScopes([config.metering.readScope]),
-    authorizeRoute({ permission: 'metering:read', resource: 'metering', action: 'read' })
+    authorizeRoute({ resource: 'metering', action: 'view' })
   ];
 
   /**

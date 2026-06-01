@@ -1,4 +1,4 @@
-import type { Server as HttpServer } from 'node:http';
+import type { Server } from 'node:http';
 
 import type { Kysely } from 'kysely';
 import type { Pool } from 'pg';
@@ -6,7 +6,7 @@ import type { Pool } from 'pg';
 import { createApp } from './app';
 import { createConfig } from './config';
 import { createDatabase, createPool, type Database } from './db/database';
-import { runMigrations } from './db/migrator';
+import { migrateToLatest } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
@@ -45,7 +45,7 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
   const database = createDatabase(databaseUrl);
 
   try {
-    await runMigrations(database);
+    await migrateToLatest(database, logger.child({ component: 'db-migrate' }));
     const meteringPool = createPool(databaseUrl);
 
     return {
@@ -55,12 +55,12 @@ async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
     };
   } catch (error) {
     await database.destroy().catch(() => undefined);
-    logger.error({ err: error }, 'Failed to initialize database clients or apply migrations');
+    logger.error({ err: error }, 'Failed to initialize database clients');
     throw error;
   }
 }
 
-async function main(): Promise<void> {
+async function bootstrap(): Promise<void> {
   const config = createConfig();
   const { database, meteringPool, meteringSqlClient } = await initializeDatabaseDependencies(config.databaseUrl);
   const meteringRuntime = createMeteringRuntime(config, meteringSqlClient ? { sqlClient: meteringSqlClient } : {});
@@ -95,10 +95,10 @@ async function main(): Promise<void> {
     logger.info({ port: config.port }, 'API server listening');
   });
 
-  registerShutdown(server, database, meteringPool);
+  registerShutdownHandlers(server, database, meteringPool);
 }
 
-function registerShutdown(server: HttpServer, database?: Kysely<Database>, meteringPool?: Pool): void {
+function registerShutdownHandlers(server: Server, database?: Kysely<Database>, meteringPool?: Pool): void {
   let shuttingDown = false;
 
   const shutdown = (signal: string) => {
@@ -127,7 +127,7 @@ function registerShutdown(server: HttpServer, database?: Kysely<Database>, meter
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-void main().catch((error: unknown) => {
-  logger.error({ err: error }, 'API server startup failed');
-  process.exitCode = 1;
+void bootstrap().catch((error) => {
+  logger.error({ err: error }, 'Failed to start API server');
+  process.exit(1);
 });

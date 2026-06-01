@@ -69,7 +69,7 @@ async function createToken(options?: { scope?: string; tenantId?: string; omitTe
   const payload: Record<string, unknown> = {
     scp: options?.scope ?? config.auth.requiredScope,
     oid: 'user-123',
-    roles: ['viewer']
+    roles: ['Viewer']
   };
 
   if (!options?.omitTenantId) {
@@ -127,7 +127,7 @@ describe('API foundation and auth baseline', () => {
       tenantId: config.auth.azureTenantId,
       userId: 'user-123',
       scopes: [config.auth.requiredScope],
-      roles: ['viewer']
+      roles: ['Viewer']
     });
   });
 
