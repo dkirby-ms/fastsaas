@@ -1,3 +1,9 @@
+## [0.4.2](https://github.com/dkirby-ms/fastsaas/compare/v0.4.1...v0.4.2) (2026-06-01)
+
+### Bug Fixes
+
+* add AUTH_TRUST_HOST=true to portal staging env ([c6a03e1](https://github.com/dkirby-ms/fastsaas/commit/c6a03e1cce5d53c1f8d8fa6478755c952827c09e))
+
 ## [0.4.1](https://github.com/dkirby-ms/fastsaas/compare/v0.4.0...v0.4.1) (2026-06-01)
 
 ### Bug Fixes
