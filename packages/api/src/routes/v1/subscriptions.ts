@@ -5,7 +5,7 @@ import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
-import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { authenticateRequest, getRoles, requireScopes } from '../../middleware/auth';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { SubscriptionService } from '../../services/subscription-service';
 
@@ -53,6 +53,30 @@ function buildActorContext(req: ApiRequest) {
   };
 }
 
+function getSubscriptionId(req: ApiRequest): string {
+  const { subscriptionId } = req.params;
+
+  if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+    throw AppError.badRequest('subscriptionId path parameter is required');
+  }
+
+  return subscriptionId;
+}
+
+function assertLifecycleAccess(req: ApiRequest): void {
+  const tokenRoles = req.context?.roles ?? getRoles(req.auth);
+  const normalizedTokenRoles = tokenRoles.map((role) => role.trim().toLowerCase());
+
+  if (normalizedTokenRoles.includes('admin') || normalizedTokenRoles.includes('owner')) {
+    return;
+  }
+
+  throw AppError.forbidden('The access token does not grant the required role', {
+    requiredRoles: ['Admin', 'Owner'],
+    tokenRoles
+  });
+}
+
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService) {
   const router = Router();
 
@@ -75,7 +99,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.get('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
-      const subscription = await subscriptionService.getSubscriptionForTenant(req.params.subscriptionId, actor.tenantId);
+      const subscription = await subscriptionService.getSubscriptionForTenant(getSubscriptionId(req), actor.tenantId);
       res.status(200).json({
         status: 'success',
         data: subscription,
@@ -111,8 +135,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.post('/:subscriptionId/activate', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
+      const subscriptionId = getSubscriptionId(req);
+      await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+      assertLifecycleAccess(req);
       const subscription = await subscriptionService.activateSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId,
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -132,8 +159,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.post('/:subscriptionId/suspend', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
+      const subscriptionId = getSubscriptionId(req);
+      await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+      assertLifecycleAccess(req);
       const subscription = await subscriptionService.suspendSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId,
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
@@ -153,8 +183,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   router.delete('/:subscriptionId', async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
     try {
       const actor = buildActorContext(req);
+      const subscriptionId = getSubscriptionId(req);
+      await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
+      assertLifecycleAccess(req);
       const subscription = await subscriptionService.unsubscribeSubscription({
-        subscriptionId: req.params.subscriptionId,
+        subscriptionId,
         tenantId: actor.tenantId,
         requestId: actor.requestId,
         correlationId: actor.correlationId,
