@@ -152,11 +152,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.post(
     '/:subscriptionId/activate',
-    authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: getSubscriptionId }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
         const subscriptionId = getSubscriptionId(req);
+        req.audit = { action: 'manage', resource: 'subscriptions', resourceId: subscriptionId };
         await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
         assertLifecycleAccess(req);
         const subscription = await subscriptionService.activateSubscription({
@@ -180,11 +180,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.post(
     '/:subscriptionId/suspend',
-    authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: getSubscriptionId }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
         const subscriptionId = getSubscriptionId(req);
+        req.audit = { action: 'manage', resource: 'subscriptions', resourceId: subscriptionId };
         await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
         assertLifecycleAccess(req);
         const subscription = await subscriptionService.suspendSubscription({
@@ -208,11 +208,11 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
 
   router.delete(
     '/:subscriptionId',
-    authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: getSubscriptionId }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription>>, next) => {
       try {
         const actor = buildActorContext(req);
         const subscriptionId = getSubscriptionId(req);
+        req.audit = { action: 'manage', resource: 'subscriptions', resourceId: subscriptionId };
         await subscriptionService.getSubscriptionForTenant(subscriptionId, actor.tenantId);
         assertLifecycleAccess(req);
         const subscription = await subscriptionService.unsubscribeSubscription({

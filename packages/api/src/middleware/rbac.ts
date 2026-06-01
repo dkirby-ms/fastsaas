@@ -5,7 +5,7 @@ import type { ApiRequest } from '../http';
 import type { RequestAuditContext } from '../services/audit-service';
 
 export const RBAC_ROLES = ['Admin', 'Owner', 'Member', 'Viewer'] as const;
-export const RBAC_RESOURCES = ['subscriptions', 'billing', 'users', 'metering', 'audit_logs', 'webhooks'] as const;
+export const RBAC_RESOURCES = ['subscriptions', 'billing', 'users', 'metering', 'audit_logs', 'webhooks', 'publisher'] as const;
 export const RBAC_ACTIONS = ['view', 'manage', 'export'] as const;
 
 export type RbacRole = (typeof RBAC_ROLES)[number];
@@ -27,7 +27,9 @@ export const RBAC_PERMISSION_DESCRIPTORS: readonly RbacPermissionDescriptor[] = 
   { label: 'View metering analytics', resource: 'metering', action: 'view' },
   { label: 'Export usage and billing CSV', resource: 'billing', action: 'export' },
   { label: 'View audit logs (tenant-scoped)', resource: 'audit_logs', action: 'view' },
-  { label: 'Configure webhooks', resource: 'webhooks', action: 'manage' }
+  { label: 'Configure webhooks', resource: 'webhooks', action: 'manage' },
+  { label: 'View publisher administration data', resource: 'publisher', action: 'view' },
+  { label: 'Manage publisher administration data', resource: 'publisher', action: 'manage' }
 ] as const;
 
 type PermissionMatrix = Record<RbacRole, readonly RbacPermission[]>;

@@ -3,9 +3,11 @@ import type { Logger } from 'pino';
 
 import type { Database } from './database';
 import * as auditLogsMigration from './migrations/20260531T213532_audit_logs';
+import * as publisherPlansMigration from './migrations/20260601T004305_publisher_plans';
 
 const MIGRATIONS: Record<string, Migration> = {
-  '20260531T213532_audit_logs': auditLogsMigration
+  '20260531T213532_audit_logs': auditLogsMigration,
+  '20260601T004305_publisher_plans': publisherPlansMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {
