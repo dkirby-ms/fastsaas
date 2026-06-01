@@ -103,7 +103,7 @@ function buildDevAuthClaims(config: ApiConfig): AuthClaims {
     oid: config.auth.devUserId,
     tid: config.auth.devTenantId,
     scp: config.auth.requiredScope,
-    roles: ['developer']
+    roles: ['Admin']
   };
 }
 

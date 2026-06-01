@@ -2,12 +2,19 @@ import { Router } from 'express';
 
 import type { ApiConfig } from '../../config';
 import type { MeteringService } from '../../metering/service';
+import type { AuditService } from '../../services/audit-service';
 import type { SubscriptionService } from '../../services/subscription-service';
+import { createAuditLogsRouter } from './audit-logs';
 import { createAuthRouter } from './auth';
 import { createMeteringRouter } from './metering';
 import { createSubscriptionsRouter } from './subscriptions';
 
-export function createV1Router(config: ApiConfig, meteringService: MeteringService, subscriptionService?: SubscriptionService) {
+export function createV1Router(
+  config: ApiConfig,
+  meteringService: MeteringService,
+  subscriptionService?: SubscriptionService,
+  auditService?: AuditService
+) {
   const router = Router();
 
   router.use('/auth', createAuthRouter(config));
@@ -15,6 +22,10 @@ export function createV1Router(config: ApiConfig, meteringService: MeteringServi
 
   if (subscriptionService) {
     router.use('/subscriptions', createSubscriptionsRouter(config, subscriptionService));
+  }
+
+  if (auditService) {
+    router.use('/audit-logs', createAuditLogsRouter(config, auditService));
   }
 
   return router;

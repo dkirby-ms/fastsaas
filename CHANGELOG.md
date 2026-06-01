@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
-- Documented the semantic versioning workflow for the API and portal workspaces.
+- Documented that releases are now automated from `main` with `semantic-release` and conventional commits.
 
 ## [0.1.0] - 2026-05-31
 
