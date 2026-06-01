@@ -7,13 +7,14 @@ import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { AuditLogEntry } from '../../repositories/audit-log-repository';
 import type { AuditService } from '../../services/audit-service';
 
-export function createAuditLogsRouter(config: ApiConfig, auditService: AuditService) {
+export function createAuditLogsRouter(config: ApiConfig, auditService: AuditService, tenantMemberService?: TenantMemberService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), injectTenantContext(config), requireScopes([config.auth.requiredScope]));
+  router.use(authenticateRequest(config), injectTenantContext(config, tenantMemberService), requireScopes([config.auth.requiredScope]));
 
   router.get(
     '/',

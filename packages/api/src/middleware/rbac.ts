@@ -23,6 +23,7 @@ export const RBAC_PERMISSION_DESCRIPTORS: readonly RbacPermissionDescriptor[] = 
   { label: 'View subscriptions', resource: 'subscriptions', action: 'view' },
   { label: 'Change plan or quantity', resource: 'subscriptions', action: 'manage' },
   { label: 'Manage billing settings', resource: 'billing', action: 'manage' },
+  { label: 'View tenant members', resource: 'users', action: 'view' },
   { label: 'Invite or remove users', resource: 'users', action: 'manage' },
   { label: 'View metering analytics', resource: 'metering', action: 'view' },
   { label: 'Export usage and billing CSV', resource: 'billing', action: 'export' },
@@ -41,8 +42,8 @@ export function toPermission(resource: RbacResource, action: RbacAction): RbacPe
 export const PERMISSIONS_MATRIX: PermissionMatrix = {
   Admin: RBAC_PERMISSION_DESCRIPTORS.map(({ resource, action }) => toPermission(resource, action)),
   Owner: RBAC_PERMISSION_DESCRIPTORS.map(({ resource, action }) => toPermission(resource, action)),
-  Member: [toPermission('subscriptions', 'view'), toPermission('metering', 'view')],
-  Viewer: [toPermission('subscriptions', 'view'), toPermission('metering', 'view')]
+  Member: [toPermission('subscriptions', 'view'), toPermission('users', 'view'), toPermission('metering', 'view')],
+  Viewer: [toPermission('subscriptions', 'view'), toPermission('users', 'view'), toPermission('metering', 'view')]
 };
 
 const RBAC_ROLE_SET = new Set<string>(RBAC_ROLES);
@@ -67,11 +68,31 @@ export function getGrantedPermissions(role: RbacRole): readonly RbacPermission[]
   return PERMISSIONS_MATRIX[role];
 }
 
+export function getEffectiveRequestRoles(req: Pick<ApiRequest, 'context'>): readonly string[] {
+  return req.context?.roles ?? [];
+}
+
+export function getNormalizedRequestRoles(req: Pick<ApiRequest, 'context'>): RbacRole[] {
+  return getEffectiveRequestRoles(req)
+    .map((role) => normalizeRbacRole(role))
+    .filter((role): role is RbacRole => role !== null);
+}
+
 export function isActionAllowed(roles: readonly string[], resource: RbacResource, action: RbacAction): boolean {
   const permission = toPermission(resource, action);
   return roles
     .map((role) => normalizeRbacRole(role))
     .some((role): role is RbacRole => role !== null && getGrantedPermissions(role).includes(permission));
+}
+
+export function isRequestRoleAllowed(
+  req: Pick<ApiRequest, 'context'>,
+  allowedTenantRoles: readonly RbacRole[],
+  allowedJwtRoles = allowedTenantRoles
+): boolean {
+  const normalizedRoles = getNormalizedRequestRoles(req);
+  const allowedRoles = new Set((req.context?.roleSource === 'jwt' ? allowedJwtRoles : allowedTenantRoles).map((role) => role));
+  return normalizedRoles.some((role) => allowedRoles.has(role));
 }
 
 function buildAuditContext(req: ApiRequest, options: AuthorizeRouteOptions): RequestAuditContext {
@@ -92,7 +113,7 @@ export function authorizeRoute(options: AuthorizeRouteOptions): RequestHandler {
 
     req.audit = buildAuditContext(req, options);
 
-    if (isActionAllowed(req.context.roles, options.resource, options.action)) {
+    if (isActionAllowed(getEffectiveRequestRoles(req), options.resource, options.action)) {
       next();
       return;
     }
@@ -101,9 +122,8 @@ export function authorizeRoute(options: AuthorizeRouteOptions): RequestHandler {
       AppError.forbidden('You do not have permission to perform this action', {
         resource: options.resource,
         action: options.action,
-        roles: req.context.roles
-          .map((role) => normalizeRbacRole(role))
-          .filter((role): role is RbacRole => Boolean(role))
+        roleSource: req.context.roleSource ?? 'none',
+        roles: getNormalizedRequestRoles(req)
       })
     );
   };

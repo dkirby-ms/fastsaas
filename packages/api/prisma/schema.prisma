@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantMemberRole {
+  Owner
+  Admin
+  Member
+  Viewer
+}
+
+model TenantMember {
+  id        String           @id @default(uuid())
+  tenantId  String           @map("tenant_id")
+  userId    String           @map("user_id")
+  email     String?
+  role      TenantMemberRole
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId])
+  @@index([tenantId], map: "idx_tenant_members_tenant_id")
+  @@map("tenant_members")
+}

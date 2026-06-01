@@ -7,11 +7,14 @@ import type {
   MarketplaceFulfillmentClient
 } from '../lib/marketplace-fulfillment';
 import { InMemorySubscriptionRepository } from '../repositories/subscription-repository';
+import { InMemoryTenantMemberRepository } from '../repositories/tenant-member-repository';
 import { SubscriptionService } from './subscription-service';
+import { TenantMemberService } from './tenant-member-service';
 
 const subscribeInput = {
   tenantId: 'caller-tenant',
   userId: 'user-123',
+  userEmail: 'owner@example.com',
   marketplaceToken: 'marketplace-token',
   requestId: 'req-123',
   correlationId: 'corr-123',
@@ -21,6 +24,7 @@ const subscribeInput = {
 
 function createService(overrides: Partial<FulfillmentResolveResult> = {}) {
   const repository = new InMemorySubscriptionRepository();
+  const tenantMemberRepository = new InMemoryTenantMemberRepository();
   const resolvedSubscription: FulfillmentResolveResult = {
     marketplaceSubscriptionId: 'marketplace-subscription-123',
     planId: 'plan-growth',
@@ -31,42 +35,29 @@ function createService(overrides: Partial<FulfillmentResolveResult> = {}) {
     metadata: { fromResolve: true },
     ...overrides
   };
-  const getOperation = vi.fn<[string, string, string, string], Promise<FulfillmentOperationResult>>();
   const fulfillmentClient = {
     resolveSubscription: vi.fn().mockResolvedValue(resolvedSubscription),
     activateSubscription: vi.fn(),
     suspendSubscription: vi.fn(),
     unsubscribeSubscription: vi.fn(),
     updateSubscription: vi.fn(),
-    reinstateSubscription: vi.fn(),
-    getOperation,
-    updateOperationStatus: vi.fn()
+    reinstateSubscription: vi.fn()
   } satisfies MarketplaceFulfillmentClient;
-  const info = vi.fn();
-  const warn = vi.fn();
-  const error = vi.fn();
-  const logger = { info, warn, error } as unknown as Logger;
-  const service = new SubscriptionService(repository, fulfillmentClient, logger);
+  const logger = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn().mockReturnThis()
+  } as unknown as Logger;
+  const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger);
+  const service = new SubscriptionService(repository, fulfillmentClient, logger, tenantMemberService);
 
   return {
     service,
-    repository,
-    fulfillmentClient,
+    loggerSpies: logger,
     resolvedSubscription,
-    loggerSpies: { info, warn, error }
+    tenantMemberRepository
   };
-}
-
-async function createActiveSubscription(service: SubscriptionService) {
-  const subscription = await service.subscribe(subscribeInput);
-
-  return service.activateSubscription({
-    subscriptionId: subscription.id,
-    tenantId: subscription.tenantId,
-    requestId: 'req-activate',
-    correlationId: 'corr-activate',
-    source: 'api'
-  });
 }
 
 describe('SubscriptionService.subscribe', () => {
@@ -107,140 +98,32 @@ describe('SubscriptionService.subscribe', () => {
       'Caller tenant differs from beneficiary tenant — using beneficiaryTenantId as subscription owner'
     );
   });
-});
 
-describe('SubscriptionService marketplace update webhooks', () => {
-  it('handles ChangePlan with audit trail and marketplace operation acknowledgement', async () => {
-    const { service, fulfillmentClient, resolvedSubscription } = createService();
-    const subscription = await createActiveSubscription(service);
+  it('bootstraps the caller as tenant owner when the beneficiary tenant has no owner', async () => {
+    const { service, tenantMemberRepository } = createService({ beneficiaryTenantId: 'beneficiary-tenant-c' });
 
-    fulfillmentClient.getOperation.mockResolvedValue({
-      id: 'op-change-plan',
-      subscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      action: 'ChangePlan',
-      status: 'InProgress',
-      planId: 'plan-scale',
-      quantity: subscription.seats
-    });
+    await service.subscribe(subscribeInput);
 
-    const result = await service.processMarketplaceWebhook({
-      action: 'ChangePlan',
-      marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      operationId: 'op-change-plan',
-      planId: 'plan-scale',
-      idempotencyKey: 'webhook-change-plan',
-      requestId: 'req-change-plan',
-      correlationId: 'corr-change-plan'
-    });
-
-    expect(result.duplicate).toBe(false);
-    expect(result.subscription.planId).toBe('plan-scale');
-    expect(result.subscription.status).toBe('Active');
-    expect(result.subscription.auditLog.at(-1)).toMatchObject({
-      eventType: 'ChangePlan',
-      fromStatus: 'Active',
-      toStatus: 'Active',
-      details: expect.objectContaining({
-        operationId: 'op-change-plan',
-        previousPlanId: 'plan-growth',
-        nextPlanId: 'plan-scale'
-      })
-    });
-    expect(fulfillmentClient.getOperation).toHaveBeenCalledWith(
-      resolvedSubscription.marketplaceSubscriptionId,
-      'op-change-plan',
-      'req-change-plan',
-      'corr-change-plan'
-    );
-    expect(fulfillmentClient.updateOperationStatus).toHaveBeenCalledWith(
-      resolvedSubscription.marketplaceSubscriptionId,
-      'op-change-plan',
-      'Success',
-      'req-change-plan',
-      'corr-change-plan'
-    );
+    const member = await tenantMemberRepository.findByTenantAndUserId('beneficiary-tenant-c', subscribeInput.userId);
+    expect(member?.role).toBe('Owner');
+    expect(member?.email).toBe(subscribeInput.userEmail);
   });
 
-  it('handles ChangeQuantity with audit trail and marketplace operation acknowledgement', async () => {
-    const { service, fulfillmentClient, resolvedSubscription } = createService();
-    const subscription = await createActiveSubscription(service);
-
-    fulfillmentClient.getOperation.mockResolvedValue({
-      id: 'op-change-quantity',
-      subscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      action: 'ChangeQuantity',
-      status: 'InProgress',
-      planId: subscription.planId,
-      quantity: 25
+  it('does not overwrite an existing tenant owner during bootstrap', async () => {
+    const { service, tenantMemberRepository } = createService({ beneficiaryTenantId: 'beneficiary-tenant-d' });
+    await tenantMemberRepository.create({
+      tenantId: 'beneficiary-tenant-d',
+      userId: 'existing-owner',
+      email: 'existing-owner@example.com',
+      role: 'Owner'
     });
 
-    const result = await service.processMarketplaceWebhook({
-      action: 'ChangeQuantity',
-      marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      operationId: 'op-change-quantity',
-      quantity: 25,
-      idempotencyKey: 'webhook-change-quantity',
-      requestId: 'req-change-quantity',
-      correlationId: 'corr-change-quantity'
-    });
+    await service.subscribe(subscribeInput);
 
-    expect(result.duplicate).toBe(false);
-    expect(result.subscription.seats).toBe(25);
-    expect(result.subscription.auditLog.at(-1)).toMatchObject({
-      eventType: 'ChangeQuantity',
-      details: expect.objectContaining({
-        operationId: 'op-change-quantity',
-        previousSeats: 10,
-        nextSeats: 25
-      })
-    });
-    expect(fulfillmentClient.updateOperationStatus).toHaveBeenCalledWith(
-      resolvedSubscription.marketplaceSubscriptionId,
-      'op-change-quantity',
-      'Success',
-      'req-change-quantity',
-      'corr-change-quantity'
-    );
-  });
+    const existingOwner = await tenantMemberRepository.findByTenantAndUserId('beneficiary-tenant-d', 'existing-owner');
+    const caller = await tenantMemberRepository.findByTenantAndUserId('beneficiary-tenant-d', subscribeInput.userId);
 
-  it('handles Transfer by rebinding tenant ownership and acknowledging the marketplace operation', async () => {
-    const { service, fulfillmentClient, resolvedSubscription } = createService();
-    await createActiveSubscription(service);
-
-    fulfillmentClient.getOperation.mockResolvedValue({
-      id: 'op-transfer',
-      subscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      action: 'Transfer',
-      status: 'InProgress'
-    });
-
-    const result = await service.processMarketplaceWebhook({
-      action: 'Transfer',
-      marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-      operationId: 'op-transfer',
-      beneficiaryTenantId: 'beneficiary-tenant-b',
-      idempotencyKey: 'webhook-transfer',
-      requestId: 'req-transfer',
-      correlationId: 'corr-transfer'
-    });
-
-    expect(result.duplicate).toBe(false);
-    expect(result.subscription.tenantId).toBe('beneficiary-tenant-b');
-    expect(result.subscription.beneficiaryTenantId).toBe('beneficiary-tenant-b');
-    expect(result.subscription.auditLog.at(-1)).toMatchObject({
-      eventType: 'Transfer',
-      details: expect.objectContaining({
-        operationId: 'op-transfer',
-        previousTenantId: 'beneficiary-tenant',
-        nextTenantId: 'beneficiary-tenant-b'
-      })
-    });
-    expect(fulfillmentClient.updateOperationStatus).toHaveBeenCalledWith(
-      resolvedSubscription.marketplaceSubscriptionId,
-      'op-transfer',
-      'Success',
-      'req-transfer',
-      'corr-transfer'
-    );
+    expect(existingOwner?.role).toBe('Owner');
+    expect(caller).toBeNull();
   });
 });

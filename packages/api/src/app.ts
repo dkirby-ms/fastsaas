@@ -13,11 +13,13 @@ import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
 import type { PublisherService } from './services/publisher-service';
 import type { SubscriptionService } from './services/subscription-service';
+import type { TenantMemberService } from './services/tenant-member-service';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
   auditService?: AuditService;
   publisherService?: PublisherService;
+  tenantMemberService?: TenantMemberService;
 }
 
 export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
@@ -54,7 +56,8 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       meteringRuntime.service,
       dependencies.subscriptionService,
       dependencies.auditService,
-      dependencies.publisherService
+      dependencies.publisherService,
+      dependencies.tenantMemberService
     )
   );
   app.use(notFoundHandler);

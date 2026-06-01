@@ -30,6 +30,10 @@ const readBoundaryCases: BoundaryCase[] = [
   { role: 'Owner', resource: 'subscriptions', action: 'list', method: 'get', path: '/v1/subscriptions', scopes: ['api:read'], expectedStatus: 200 },
   { role: 'Member', resource: 'subscriptions', action: 'list', method: 'get', path: '/v1/subscriptions', scopes: ['api:read'], expectedStatus: 200 },
   { role: 'Viewer', resource: 'subscriptions', action: 'list', method: 'get', path: '/v1/subscriptions', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Admin', resource: 'members', action: 'list', method: 'get', path: '/v1/members', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Owner', resource: 'members', action: 'list', method: 'get', path: '/v1/members', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Member', resource: 'members', action: 'list', method: 'get', path: '/v1/members', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Viewer', resource: 'members', action: 'list', method: 'get', path: '/v1/members', scopes: ['api:read'], expectedStatus: 200 },
   { role: 'Admin', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Owner', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Member', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
@@ -177,6 +181,67 @@ describe('RBAC boundary security catalog', () => {
       expect(verificationResponse.body.data.status).toBe(expectedSubscriptionStatus);
     }
   );
+
+  it('blocks member role promotion when an external customer lacks app roles', async () => {
+    const tenantId = 'tenant-external-members';
+    await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'members-bootstrap' });
+
+    const ownerToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const inviteResponse = await request(harness.app)
+      .post('/v1/members/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: 'member-1', email: 'member-1@example.com', role: 'Member' });
+
+    expect(inviteResponse.status).toBe(201);
+
+    const memberToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      userId: 'member-1',
+      subject: 'subject-member-1',
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const promoteResponse = await request(harness.app)
+      .patch(`/v1/members/${inviteResponse.body.data.id}/role`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ role: 'Admin' });
+
+    expect(promoteResponse.status).toBe(403);
+  });
+
+  it('blocks viewer writes for tenant membership management', async () => {
+    const tenantId = 'tenant-viewer-members';
+    await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'viewer-bootstrap' });
+
+    const ownerToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const inviteResponse = await request(harness.app)
+      .post('/v1/members/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ userId: 'viewer-1', email: 'viewer-1@example.com', role: 'Viewer' });
+
+    expect(inviteResponse.status).toBe(201);
+
+    const viewerToken = await harness.createToken({
+      tenantId,
+      roles: [],
+      userId: 'viewer-1',
+      subject: 'subject-viewer-1',
+      scopes: [harness.config.auth.requiredScope]
+    });
+    const deleteResponse = await request(harness.app)
+      .delete(`/v1/members/${inviteResponse.body.data.id}`)
+      .set('Authorization', `Bearer ${viewerToken}`);
+
+    expect(deleteResponse.status).toBe(403);
+  });
 
   it.skip('TODO(#45): add staging-only RLS validation for audit-log and billing exports once tenant-scoped tables are deployed', async () => {
     expect(true).toBe(true);

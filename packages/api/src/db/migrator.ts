@@ -5,11 +5,13 @@ import type { Database } from './database';
 import * as auditLogsMigration from './migrations/20260531T213532_audit_logs';
 import * as tenantRlsMigration from './migrations/20260531T213532_tenant_rls';
 import * as publisherPlansMigration from './migrations/20260601T004305_publisher_plans';
+import * as tenantMembersMigration from './migrations/20260601T205004_tenant_members';
 
 const MIGRATIONS: Record<string, Migration> = {
   '20260531T213532_audit_logs': auditLogsMigration,
   '20260531T213532_tenant_rls': tenantRlsMigration,
-  '20260601T004305_publisher_plans': publisherPlansMigration
+  '20260601T004305_publisher_plans': publisherPlansMigration,
+  '20260601T205004_tenant_members': tenantMembersMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {

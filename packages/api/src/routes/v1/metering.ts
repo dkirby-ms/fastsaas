@@ -7,17 +7,18 @@ import type { MeteringService } from '../../metering/service';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 
-export function createMeteringRouter(config: ApiConfig, service: MeteringService) {
+export function createMeteringRouter(config: ApiConfig, service: MeteringService, tenantMemberService?: TenantMemberService) {
   const router = Router();
   const authorizeWrite = [
     authenticateRequest(config),
-    injectTenantContext(config),
+    injectTenantContext(config, tenantMemberService),
     requireScopes([config.metering.writeScope]),
   ];
   const authorizeRead = [
     authenticateRequest(config),
-    injectTenantContext(config),
+    injectTenantContext(config, tenantMemberService),
     requireScopes([config.metering.readScope]),
     authorizeRoute({ resource: 'metering', action: 'view' })
   ];

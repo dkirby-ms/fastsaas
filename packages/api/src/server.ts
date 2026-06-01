@@ -27,9 +27,15 @@ import {
   KyselySubscriptionRepository,
   type SubscriptionRepository
 } from './repositories/subscription-repository';
+import {
+  InMemoryTenantMemberRepository,
+  KyselyTenantMemberRepository,
+  type TenantMemberRepository
+} from './repositories/tenant-member-repository';
 import { AuditService } from './services/audit-service';
 import { PublisherService } from './services/publisher-service';
 import { SubscriptionService } from './services/subscription-service';
+import { TenantMemberService } from './services/tenant-member-service';
 
 function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
@@ -41,6 +47,10 @@ function createAuditLogRepository(database?: Kysely<Database>): AuditLogReposito
 
 function createPublisherPlanRepository(database?: Kysely<Database>): PublisherPlanRepository {
   return database ? new KyselyPublisherPlanRepository(database) : new InMemoryPublisherPlanRepository();
+}
+
+function createTenantMemberRepository(database?: Kysely<Database>): TenantMemberRepository {
+  return database ? new KyselyTenantMemberRepository(database) : new InMemoryTenantMemberRepository();
 }
 
 async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
@@ -80,20 +90,22 @@ async function bootstrap(): Promise<void> {
   const subscriptionRepository = createSubscriptionRepository(database);
   const auditLogRepository = createAuditLogRepository(database);
   const publisherPlanRepository = createPublisherPlanRepository(database);
+  const tenantMemberRepository = createTenantMemberRepository(database);
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
     authToken: config.marketplace.authToken,
     logger
   });
-  const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger);
+  const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members' }));
+  const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger, tenantMemberService);
   const auditService = new AuditService(auditLogRepository, logger.child({ component: 'audit' }));
   const publisherService = new PublisherService(
     subscriptionRepository,
     publisherPlanRepository,
     logger.child({ component: 'publisher' })
   );
-  const app = createApp(config, { ...meteringRuntime, subscriptionService, auditService, publisherService });
+  const app = createApp(config, { ...meteringRuntime, subscriptionService, auditService, publisherService, tenantMemberService });
 
   async function runMeteringWorker(): Promise<void> {
     try {

@@ -5,8 +5,9 @@ import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { TenantMemberService } from '../../services/tenant-member-service';
 
-export function createAuthRouter(config: ApiConfig) {
+export function createAuthRouter(config: ApiConfig, tenantMemberService?: TenantMemberService) {
   const router = Router();
 
   /**
@@ -29,7 +30,7 @@ export function createAuthRouter(config: ApiConfig) {
   router.get(
     '/context',
     authenticateRequest(config),
-    injectTenantContext(config),
+    injectTenantContext(config, tenantMemberService),
     requireScopes([config.auth.requiredScope]),
     (req: ApiRequest, res: Response<ApiResponse<{ tenantId: string; userId: string; scopes: string[]; roles: string[] }>>) => {
       const context = req.context!;
