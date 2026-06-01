@@ -77,7 +77,7 @@ function validateIssuer(payload: JWTPayload, config: ApiConfig): void {
 
   const tokenTenantId = typeof payload.tid === 'string' ? payload.tid : undefined;
 
-  if (config.auth.azureTenantId === 'common') {
+  if (config.auth.azureTenantId === 'common' || config.auth.azureTenantId === 'organizations') {
     const commonIssuerPattern = /^https:\/\/login\.microsoftonline\.com\/[^/]+\/v2\.0$/;
     if (!commonIssuerPattern.test(issuer)) {
       throw AppError.unauthorized('Bearer token issuer is invalid');

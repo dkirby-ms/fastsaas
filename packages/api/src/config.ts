@@ -56,6 +56,10 @@ function parseAudiences(rawAudience: string | undefined, clientId: string): stri
   return [clientId, `api://${clientId}`];
 }
 
+function isMultiTenantAuthority(tenantId: string): boolean {
+  return tenantId === 'common' || tenantId === 'organizations';
+}
+
 export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const nodeEnv = env.NODE_ENV ?? 'development';
   const bypassEnabled = env.AUTH_BYPASS_ENABLED === 'true';
@@ -66,21 +70,29 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     throw new Error('AUTH_BYPASS_ENABLED cannot be enabled in production');
   }
 
-  if (!bypassEnabled && (!azureTenantId || !azureClientId)) {
-    throw new Error('ENTRA_TENANT_ID and ENTRA_CLIENT_ID are required when auth bypass is disabled');
+  if (!bypassEnabled && !azureClientId) {
+    throw new Error('ENTRA_CLIENT_ID is required when auth bypass is disabled');
   }
 
   const resolvedTenantId = azureTenantId ?? 'common';
   const resolvedClientId = azureClientId ?? 'local-dev-client';
+  const multiTenantAuthority = isMultiTenantAuthority(resolvedTenantId);
 
   return {
     port: Number(env.API_PORT ?? 3000),
     apiVersion: env.API_VERSION ?? 'v1',
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
     auth: {
-      issuer: normalizeUrl(env.ENTRA_ISSUER ?? `https://login.microsoftonline.com/${resolvedTenantId}/v2.0`),
+      issuer: normalizeUrl(
+        env.ENTRA_ISSUER ??
+          (multiTenantAuthority
+            ? 'https://login.microsoftonline.com/{tenantId}/v2.0'
+            : `https://login.microsoftonline.com/${resolvedTenantId}/v2.0`)
+      ),
       audience: parseAudiences(env.ENTRA_AUDIENCE, resolvedClientId),
-      jwksUri: env.ENTRA_JWKS_URI ?? `https://login.microsoftonline.com/${resolvedTenantId}/discovery/v2.0/keys`,
+      jwksUri:
+        env.ENTRA_JWKS_URI ??
+        `https://login.microsoftonline.com/${multiTenantAuthority ? 'common' : resolvedTenantId}/discovery/v2.0/keys`,
       azureTenantId: resolvedTenantId,
       azureClientId: resolvedClientId,
       requiredScope: env.JWT_REQUIRED_SCOPE ?? 'api:read',
