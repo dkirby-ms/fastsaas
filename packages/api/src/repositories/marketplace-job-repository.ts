@@ -51,6 +51,7 @@ export interface MarketplaceJobRecord {
 export interface ListMarketplaceJobsOptions {
   limit: number;
   offset: number;
+  productId?: string;
 }
 
 export interface CreateMarketplaceJobInput {
@@ -81,7 +82,7 @@ export interface MarketplaceJobRepository {
   updateJob(input: UpdateMarketplaceJobInput, options?: { bypassRls?: boolean }): Promise<MarketplaceJobRecord>;
   findByJobId(publisherTenantId: string, jobId: string): Promise<MarketplaceJobRecord | null>;
   listByTenant(publisherTenantId: string, options: ListMarketplaceJobsOptions): Promise<MarketplaceJobRecord[]>;
-  countByTenant(publisherTenantId: string): Promise<number>;
+  countByTenant(publisherTenantId: string, productId?: string): Promise<number>;
   listActiveForPolling(limit: number): Promise<MarketplaceJobRecord[]>;
 }
 
@@ -195,14 +196,20 @@ export class InMemoryMarketplaceJobRepository implements MarketplaceJobRepositor
 
   async listByTenant(publisherTenantId: string, options: ListMarketplaceJobsOptions): Promise<MarketplaceJobRecord[]> {
     return [...this.jobs.values()]
-      .filter((entry) => entry.publisherTenantId === publisherTenantId)
+      .filter(
+        (entry) =>
+          entry.publisherTenantId === publisherTenantId &&
+          (options.productId === undefined || entry.productId === options.productId)
+      )
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
       .slice(options.offset, options.offset + options.limit)
       .map((entry) => clone(entry));
   }
-
-  async countByTenant(publisherTenantId: string): Promise<number> {
-    return [...this.jobs.values()].filter((entry) => entry.publisherTenantId === publisherTenantId).length;
+ 
+  async countByTenant(publisherTenantId: string, productId?: string): Promise<number> {
+    return [...this.jobs.values()].filter(
+      (entry) => entry.publisherTenantId === publisherTenantId && (productId === undefined || entry.productId === productId)
+    ).length;
   }
 
   async listActiveForPolling(limit: number): Promise<MarketplaceJobRecord[]> {
@@ -298,31 +305,33 @@ export class KyselyMarketplaceJobRepository implements MarketplaceJobRepository 
     return withDatabaseRlsContext(
       this.db,
       async (trx) => {
-        const rows = await trx
-          .selectFrom('marketplace_jobs')
-          .selectAll()
-          .where('publisher_tenant_id', '=', publisherTenantId)
-          .orderBy('created_at', 'desc')
-          .limit(options.limit)
-          .offset(options.offset)
-          .execute();
-
+        let query = trx.selectFrom('marketplace_jobs').selectAll().where('publisher_tenant_id', '=', publisherTenantId);
+        if (options.productId !== undefined) {
+          query = query.where('product_id', '=', options.productId);
+        }
+ 
+        const rows = await query.orderBy('created_at', 'desc').limit(options.limit).offset(options.offset).execute();
+ 
         return rows.map((row) => mapRow(row));
       },
       { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
     );
   }
-
-  async countByTenant(publisherTenantId: string): Promise<number> {
+ 
+  async countByTenant(publisherTenantId: string, productId?: string): Promise<number> {
     return withDatabaseRlsContext(
       this.db,
       async (trx) => {
-        const result = await trx
+        let query = trx
           .selectFrom('marketplace_jobs')
           .select((eb) => eb.fn.count<string>('id').as('count'))
-          .where('publisher_tenant_id', '=', publisherTenantId)
-          .executeTakeFirstOrThrow();
-
+          .where('publisher_tenant_id', '=', publisherTenantId);
+        if (productId !== undefined) {
+          query = query.where('product_id', '=', productId);
+        }
+ 
+        const result = await query.executeTakeFirstOrThrow();
+ 
         return Number(result.count);
       },
       { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }

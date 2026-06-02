@@ -193,6 +193,8 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return text.length > 0 ? text : undefined;
 }
 
+// TODO(issue #78): This tenant-scoped Partner Center auth flow is legacy compatibility.
+// Single-publisher deployments should prefer MarketplaceOAuthService.
 export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly graphBaseUrl: string;

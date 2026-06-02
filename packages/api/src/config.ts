@@ -18,7 +18,11 @@ export interface ApiConfig {
   marketplace: {
     baseUrl: string;
     apiVersion: string;
+    clientId: string;
+    tenantId: string;
     clientSecret: string;
+    tokenScope: string;
+    productIngestionBaseUrl: string;
     webhookSecret: string;
     webhookTimestampToleranceMs: number;
   };
@@ -75,8 +79,8 @@ function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   clientSecret: string;
   webhookSecret: string;
 } {
-  // Phase 1 uses MARKETPLACE_CLIENT_SECRET directly as the Bearer token.
-  // Phase 2 will replace this with an OAuth token exchange flow (issue #78).
+  // MARKETPLACE_CLIENT_SECRET is shared across marketplace integrations.
+  // Product Ingestion uses it as the OAuth client_secret while fulfillment keeps its direct bearer behavior.
   const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
   const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
 
@@ -151,7 +155,12 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     marketplace: {
       baseUrl: normalizeUrl(env.MARKETPLACE_BASE_URL ?? 'https://marketplaceapi.microsoft.com'),
       apiVersion: env.MARKETPLACE_API_VERSION ?? '2018-08-31',
+      clientId: env.MARKETPLACE_CLIENT_ID?.trim() || 'local-marketplace-client-id',
+      tenantId: env.MARKETPLACE_TENANT_ID?.trim() || 'local-marketplace-tenant-id',
       clientSecret: marketplaceSecrets.clientSecret,
+      tokenScope: env.MARKETPLACE_TOKEN_SCOPE?.trim() || 'https://graph.microsoft.com/.default',
+      productIngestionBaseUrl:
+        normalizeUrl(env.MARKETPLACE_PRODUCT_INGESTION_BASE_URL ?? 'https://graph.microsoft.com/rp/product-ingestion'),
       webhookSecret: marketplaceSecrets.webhookSecret,
       webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },

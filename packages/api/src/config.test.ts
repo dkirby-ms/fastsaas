@@ -48,10 +48,18 @@ describe('createConfig auth defaults', () => {
       ENTRA_CLIENT_ID: 'fastsaas-api-client'
     });
 
+    expect(developmentConfig.marketplace.clientId).toBe('local-marketplace-client-id');
+    expect(developmentConfig.marketplace.tenantId).toBe('local-marketplace-tenant-id');
     expect(developmentConfig.marketplace.clientSecret).toBe('local-marketplace-client-secret');
+    expect(developmentConfig.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
+    expect(developmentConfig.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(developmentConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
     expect(developmentConfig.metering.marketplaceEndpoint).toBeUndefined();
+    expect(testConfig.marketplace.clientId).toBe('local-marketplace-client-id');
+    expect(testConfig.marketplace.tenantId).toBe('local-marketplace-tenant-id');
     expect(testConfig.marketplace.clientSecret).toBe('local-marketplace-client-secret');
+    expect(testConfig.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
+    expect(testConfig.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(testConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
     expect(testConfig.metering.marketplaceEndpoint).toBeUndefined();
   });
@@ -60,12 +68,20 @@ describe('createConfig auth defaults', () => {
     const config = createConfig({
       NODE_ENV: 'production',
       ENTRA_CLIENT_ID: 'fastsaas-api-client',
+      MARKETPLACE_CLIENT_ID: 'shared-marketplace-client-id',
+      MARKETPLACE_TENANT_ID: 'shared-marketplace-tenant-id',
       MARKETPLACE_CLIENT_SECRET: 'shared-client-secret',
+      MARKETPLACE_TOKEN_SCOPE: 'https://graph.microsoft.com/.default',
+      MARKETPLACE_PRODUCT_INGESTION_BASE_URL: 'https://graph.microsoft.com/rp/product-ingestion',
       MARKETPLACE_WEBHOOK_SECRET: 'webhook-secret',
       MARKETPLACE_METERING_ENDPOINT: 'https://marketplace.example.test/api/usageEvent?api-version=2018-08-31'
     });
-
+ 
+    expect(config.marketplace.clientId).toBe('shared-marketplace-client-id');
+    expect(config.marketplace.tenantId).toBe('shared-marketplace-tenant-id');
     expect(config.marketplace.clientSecret).toBe('shared-client-secret');
+    expect(config.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
+    expect(config.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(config.metering.marketplaceEndpoint).toBe('https://marketplace.example.test/api/usageEvent?api-version=2018-08-31');
   });
 

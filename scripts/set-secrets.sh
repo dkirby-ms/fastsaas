@@ -69,11 +69,11 @@ echo -e "${BLUE}=== FastSaaS GitHub Secrets Setup ===${NC}\n"
 
 # SECTION 1: OIDC / Azure Authentication
 echo -e "${BLUE}--- OIDC / Azure Authentication ---${NC}"
-AZURE_OIDC_CLIENT_ID=$(prompt_value "AZURE_OIDC_CLIENT_ID (Federated credential client ID)")
-set_secret "AZURE_OIDC_CLIENT_ID" "$AZURE_OIDC_CLIENT_ID"
-
 AZURE_OIDC_TENANT_ID=$(prompt_value "AZURE_OIDC_TENANT_ID (Tenant ID)")
 set_secret "AZURE_OIDC_TENANT_ID" "$AZURE_OIDC_TENANT_ID"
+
+AZURE_OIDC_CLIENT_ID=$(prompt_value "AZURE_OIDC_CLIENT_ID (Federated credential client ID)")
+set_secret "AZURE_OIDC_CLIENT_ID" "$AZURE_OIDC_CLIENT_ID"
 
 AZURE_SUBSCRIPTION_ID=$(prompt_value "AZURE_SUBSCRIPTION_ID (Azure subscription ID)")
 set_secret "AZURE_SUBSCRIPTION_ID" "$AZURE_SUBSCRIPTION_ID"
@@ -113,10 +113,24 @@ echo ""
 
 # SECTION 4: Marketplace
 echo -e "${BLUE}--- Marketplace ---${NC}"
+MARKETPLACE_CLIENT_ID=$(prompt_value "MARKETPLACE_CLIENT_ID (Microsoft Marketplace app registration client ID)")
+set_secret "MARKETPLACE_CLIENT_ID" "$MARKETPLACE_CLIENT_ID"
+
+MARKETPLACE_TENANT_ID=$(prompt_value "MARKETPLACE_TENANT_ID (Microsoft Marketplace app registration tenant ID)")
+set_secret "MARKETPLACE_TENANT_ID" "$MARKETPLACE_TENANT_ID"
+
 MARKETPLACE_CLIENT_SECRET=$(prompt_secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)")
 set_secret "MARKETPLACE_CLIENT_SECRET" "$MARKETPLACE_CLIENT_SECRET"
 
-MARKETPLACE_WEBHOOK_SECRET=$(prompt_secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)")
+read -p "Auto-generate MARKETPLACE_WEBHOOK_SECRET? (y/n, default: y): " auto_gen_webhook
+auto_gen_webhook=${auto_gen_webhook:-y}
+
+if [[ "$auto_gen_webhook" =~ ^[Yy]$ ]]; then
+    MARKETPLACE_WEBHOOK_SECRET=$(openssl rand -base64 32)
+    echo -e "${GREEN}Generated MARKETPLACE_WEBHOOK_SECRET${NC}"
+else
+    MARKETPLACE_WEBHOOK_SECRET=$(prompt_secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)")
+fi
 set_secret "MARKETPLACE_WEBHOOK_SECRET" "$MARKETPLACE_WEBHOOK_SECRET"
 
 echo ""

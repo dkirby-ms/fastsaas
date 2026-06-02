@@ -20,6 +20,7 @@ import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-pl
 import { InMemoryProductCatalogRepository } from '../../repositories/product-catalog-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
 import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member-repository';
+import type { MarketplaceBearerTokenProvider } from '../../services/marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from '../../services/partner-center-auth';
 import { JobPollingService } from '../../services/job-polling-service';
 import { PartnerCenterService } from '../../services/partner-center-service';
@@ -51,7 +52,9 @@ export interface SecurityHarness {
   subscriptionRepository: InMemorySubscriptionRepository;
   tenantMemberRepository: InMemoryTenantMemberRepository;
   marketplaceJobRepository: InMemoryMarketplaceJobRepository;
+  productCatalogRepository: InMemoryProductCatalogRepository;
   createToken(options?: TokenOptions): Promise<string>;
+  setProductIngestionConfigureResponses(statuses: ProductIngestionConfigureStatus[]): void;
   setProductIngestionJobStatus(jobId: string, statuses: ProductIngestionConfigureStatus[]): void;
   setProductIngestionJobDetail(jobId: string, detail: ProductIngestionConfigureDetail): void;
   setProductIngestionCancelStatus(jobId: string, status: ProductIngestionConfigureStatus): void;
@@ -137,7 +140,17 @@ function createPartnerCenterAuthProvider(): PartnerCenterAuthProvider {
   };
 }
 
+function createMarketplaceTokenProvider(): MarketplaceBearerTokenProvider {
+  return {
+    async getAccessToken() {
+      return 'marketplace-oauth-test-token';
+    },
+    invalidate() {}
+  };
+}
+
 interface ProductIngestionFixtureState {
+  configureResponses: ProductIngestionConfigureStatus[];
   statuses: Map<string, ProductIngestionConfigureStatus[]>;
   details: Map<string, ProductIngestionConfigureDetail>;
   cancelStatuses: Map<string, ProductIngestionConfigureStatus>;
@@ -152,7 +165,15 @@ function createProductIngestionClient(state: ProductIngestionFixtureState): Prod
       throw new Error('getResourceTree should not be called in security tests');
     },
     async configure() {
-      throw new Error('configure should not be called in security tests');
+      if (state.configureResponses.length === 0) {
+        throw new Error('No Product Ingestion configure response fixture registered');
+      }
+
+      if (state.configureResponses.length > 1) {
+        return state.configureResponses.shift() as ProductIngestionConfigureStatus;
+      }
+
+      return state.configureResponses[0] as ProductIngestionConfigureStatus;
     },
     async getConfigureStatus(jobId: string) {
       const statuses = state.statuses.get(jobId);
@@ -229,6 +250,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const productCatalogRepository = new InMemoryProductCatalogRepository();
   const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
   const productIngestionState: ProductIngestionFixtureState = {
+    configureResponses: [],
     statuses: new Map(),
     details: new Map(),
     cancelStatuses: new Map()
@@ -246,6 +268,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     logger.child({ component: 'publisher-test' })
   );
   const partnerCenterAuthProvider = createPartnerCenterAuthProvider();
+  const marketplaceTokenProvider = createMarketplaceTokenProvider();
   const partnerCenterService = new PartnerCenterService(
     partnerCenterRepository,
     partnerCenterAuthProvider,
@@ -256,12 +279,13 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     partnerCenterRepository,
     partnerCenterAuthProvider,
     logger.child({ component: 'job-polling-test' }),
-    { clientFactory: () => createProductIngestionClient(productIngestionState), random: () => 0 }
+    { clientFactory: () => createProductIngestionClient(productIngestionState), random: () => 0, tokenProvider: marketplaceTokenProvider }
   );
   const productCatalogService = new ProductCatalogService({
     repository: productCatalogRepository,
     partnerCenterRepository,
     authProvider: partnerCenterAuthProvider,
+    tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'product-catalog-test' })
   });
   const app = createApp(config, {
@@ -387,7 +411,11 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     subscriptionRepository,
     tenantMemberRepository,
     marketplaceJobRepository,
+    productCatalogRepository,
     createToken,
+    setProductIngestionConfigureResponses(statuses) {
+      productIngestionState.configureResponses = [...statuses];
+    },
     setProductIngestionJobStatus(jobId, statuses) {
       productIngestionState.statuses.set(jobId, [...statuses]);
     },

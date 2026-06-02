@@ -70,11 +70,11 @@ Write-Host ""
 
 # SECTION 1: OIDC / Azure Authentication
 Write-Host "--- OIDC / Azure Authentication ---" -ForegroundColor $Blue
-$AZURE_OIDC_CLIENT_ID = Prompt-Value "AZURE_OIDC_CLIENT_ID (Federated credential client ID)"
-Set-Secret "AZURE_OIDC_CLIENT_ID" $AZURE_OIDC_CLIENT_ID
-
 $AZURE_OIDC_TENANT_ID = Prompt-Value "AZURE_OIDC_TENANT_ID (Tenant ID)"
 Set-Secret "AZURE_OIDC_TENANT_ID" $AZURE_OIDC_TENANT_ID
+
+$AZURE_OIDC_CLIENT_ID = Prompt-Value "AZURE_OIDC_CLIENT_ID (Federated credential client ID)"
+Set-Secret "AZURE_OIDC_CLIENT_ID" $AZURE_OIDC_CLIENT_ID
 
 $AZURE_SUBSCRIPTION_ID = Prompt-Value "AZURE_SUBSCRIPTION_ID (Azure subscription ID)"
 Set-Secret "AZURE_SUBSCRIPTION_ID" $AZURE_SUBSCRIPTION_ID
@@ -112,10 +112,23 @@ Write-Host ""
 
 # SECTION 4: Marketplace
 Write-Host "--- Marketplace ---" -ForegroundColor $Blue
+$MARKETPLACE_CLIENT_ID = Prompt-Value "MARKETPLACE_CLIENT_ID (Microsoft Marketplace app registration client ID)"
+Set-Secret "MARKETPLACE_CLIENT_ID" $MARKETPLACE_CLIENT_ID
+
+$MARKETPLACE_TENANT_ID = Prompt-Value "MARKETPLACE_TENANT_ID (Microsoft Marketplace app registration tenant ID)"
+Set-Secret "MARKETPLACE_TENANT_ID" $MARKETPLACE_TENANT_ID
+
 $MARKETPLACE_CLIENT_SECRET = Prompt-Secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)"
 Set-Secret "MARKETPLACE_CLIENT_SECRET" $MARKETPLACE_CLIENT_SECRET
 
-$MARKETPLACE_WEBHOOK_SECRET = Prompt-Secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)"
+$autoGenWebhookPrompt = Read-Host "Auto-generate MARKETPLACE_WEBHOOK_SECRET? (y/n, default: y)"
+if ([string]::IsNullOrEmpty($autoGenWebhookPrompt) -or $autoGenWebhookPrompt -match '^[Yy]$') {
+    $bytes = 1..32 | ForEach-Object { Get-Random -Maximum 256 }
+    $MARKETPLACE_WEBHOOK_SECRET = [Convert]::ToBase64String([byte[]]$bytes)
+    Write-Host "Generated MARKETPLACE_WEBHOOK_SECRET" -ForegroundColor $Green
+} else {
+    $MARKETPLACE_WEBHOOK_SECRET = Prompt-Secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)"
+}
 Set-Secret "MARKETPLACE_WEBHOOK_SECRET" $MARKETPLACE_WEBHOOK_SECRET
 
 Write-Host ""
