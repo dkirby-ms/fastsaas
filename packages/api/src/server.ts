@@ -56,6 +56,7 @@ import { PartnerCenterAuthService } from './services/partner-center-auth';
 import { PartnerCenterService } from './services/partner-center-service';
 import { ProductCatalogService } from './services/product-catalog-service';
 import { PublisherService } from './services/publisher-service';
+import { SubmissionMonitoringService } from './services/submission-monitoring-service';
 import { SubscriptionService } from './services/subscription-service';
 import { TenantMemberService } from './services/tenant-member-service';
 
@@ -183,6 +184,13 @@ async function bootstrap(): Promise<void> {
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'product-catalog' })
   });
+  const submissionMonitoringService = new SubmissionMonitoringService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthService,
+    tokenProvider: marketplaceOAuthService,
+    logger: logger.child({ component: 'submission-monitoring' })
+  });
   const app = createApp(config, {
     ...meteringRuntime,
     subscriptionRepository,
@@ -192,6 +200,7 @@ async function bootstrap(): Promise<void> {
     partnerCenterService,
     jobPollingService,
     productCatalogService,
+    submissionMonitoringService,
     tenantMemberService
   });
 

@@ -15,6 +15,7 @@ import type { PartnerCenterService } from './services/partner-center-service';
 import type { ProductCatalogService } from './services/product-catalog-service';
 import type { JobPollingService } from './services/job-polling-service';
 import type { PublisherService } from './services/publisher-service';
+import type { SubmissionMonitoringService } from './services/submission-monitoring-service';
 import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
 
@@ -25,6 +26,7 @@ export interface AppDependencies extends MeteringRuntimeDependencies {
   partnerCenterService?: PartnerCenterService;
   jobPollingService?: JobPollingService;
   productCatalogService?: ProductCatalogService;
+  submissionMonitoringService?: SubmissionMonitoringService;
   tenantMemberService?: TenantMemberService;
 }
 
@@ -66,6 +68,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.partnerCenterService,
       dependencies.jobPollingService,
       dependencies.productCatalogService,
+      dependencies.submissionMonitoringService,
       dependencies.tenantMemberService
     )
   );

@@ -11,7 +11,7 @@ import { createConfig, type ApiConfig } from '../../config';
 import { logger } from '../../lib/logger';
 import type { MarketplaceFulfillmentClient } from '../../lib/marketplace-fulfillment';
 import type { ProductIngestionClientLike } from '../../lib/product-ingestion-client';
-import type { ProductIngestionConfigureDetail, ProductIngestionConfigureStatus } from '../../lib/product-ingestion-types';
+import type { ProductIngestionConfigureDetail, ProductIngestionConfigureStatus, ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
 import { SystemClock } from '../../metering/clock';
 import { InMemoryUsageEventRepository } from '../../metering/repository';
 import { InMemoryMarketplaceJobRepository } from '../../repositories/marketplace-job-repository';
@@ -26,6 +26,7 @@ import { JobPollingService } from '../../services/job-polling-service';
 import { PartnerCenterService } from '../../services/partner-center-service';
 import { ProductCatalogService } from '../../services/product-catalog-service';
 import { PublisherService } from '../../services/publisher-service';
+import { SubmissionMonitoringService } from '../../services/submission-monitoring-service';
 import { normalizeRbacRole } from '../../middleware/rbac';
 import { SubscriptionService } from '../../services/subscription-service';
 import { TenantMemberService } from '../../services/tenant-member-service';
@@ -60,6 +61,11 @@ export interface SecurityHarness {
   setProductIngestionJobStatus(jobId: string, statuses: ProductIngestionConfigureStatus[]): void;
   setProductIngestionJobDetail(jobId: string, detail: ProductIngestionConfigureDetail): void;
   setProductIngestionCancelStatus(jobId: string, status: ProductIngestionConfigureStatus): void;
+  setProductIngestionResourceTree(
+    productDurableId: string,
+    targetType: 'draft' | 'preview' | 'live',
+    tree: ProductIngestionResourceTreeResponse
+  ): void;
   createSubscriptionFixture(options?: {
     tenantId?: string;
     marketplaceToken?: string;
@@ -156,6 +162,11 @@ interface ProductIngestionFixtureState {
   statuses: Map<string, ProductIngestionConfigureStatus[]>;
   details: Map<string, ProductIngestionConfigureDetail>;
   cancelStatuses: Map<string, ProductIngestionConfigureStatus>;
+  resourceTrees: Map<string, ProductIngestionResourceTreeResponse>;
+}
+
+function createResourceTreeKey(productDurableId: string, targetType: 'draft' | 'preview' | 'live' | undefined): string {
+  return `${productDurableId}::${targetType ?? 'draft'}`;
 }
 
 function createProductIngestionClient(state: ProductIngestionFixtureState): ProductIngestionClientLike {
@@ -163,8 +174,13 @@ function createProductIngestionClient(state: ProductIngestionFixtureState): Prod
     async getProductByExternalId() {
       throw new Error('getProductByExternalId should not be called in security tests');
     },
-    async getResourceTree() {
-      throw new Error('getResourceTree should not be called in security tests');
+    async getResourceTree(productDurableId: string, targetType?: 'draft' | 'preview' | 'live') {
+      const tree = state.resourceTrees.get(createResourceTreeKey(productDurableId, targetType));
+      if (!tree) {
+        throw new Error(`No Product Ingestion resource tree fixture registered for ${productDurableId} (${targetType ?? 'draft'})`);
+      }
+
+      return tree;
     },
     async configure() {
       if (state.configureResponses.length === 0) {
@@ -255,7 +271,8 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     configureResponses: [],
     statuses: new Map(),
     details: new Map(),
-    cancelStatuses: new Map()
+    cancelStatuses: new Map(),
+    resourceTrees: new Map()
   };
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members-test' }));
   const subscriptionService = new SubscriptionService(
@@ -290,6 +307,14 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'product-catalog-test' })
   });
+  const submissionMonitoringService = new SubmissionMonitoringService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthProvider,
+    tokenProvider: marketplaceTokenProvider,
+    logger: logger.child({ component: 'submission-monitoring-test' }),
+    clientFactory: () => createProductIngestionClient(productIngestionState)
+  });
   const app = createApp(config, {
     repository: meteringRepository,
     subscriptionRepository,
@@ -298,6 +323,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     partnerCenterService,
     jobPollingService,
     productCatalogService,
+    submissionMonitoringService,
     tenantMemberService
   });
 
@@ -431,6 +457,9 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     },
     setProductIngestionCancelStatus(jobId, status) {
       productIngestionState.cancelStatuses.set(jobId, status);
+    },
+    setProductIngestionResourceTree(productDurableId, targetType, tree) {
+      productIngestionState.resourceTrees.set(createResourceTreeKey(productDurableId, targetType), tree);
     },
     createSubscriptionFixture,
     ingestUsageEventFixture,
