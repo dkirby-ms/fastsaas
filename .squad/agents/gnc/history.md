@@ -151,3 +151,5 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - Future Partner Center operational touchpoints live in `packages/api/src/services/partner-center-auth.ts`, `packages/api/src/services/partner-center-service.ts`, `packages/api/src/routes/v1/publisher.ts`, and `packages/api/package.json` for Azure SDK dependencies.
 ### 2026-06-02T12:29:48.526+00:00
 - Product imports that begin with a marketplace external ID must resolve the durable product ID through `GET /rp/product-ingestion/product?externalId=...` before calling `resource-tree/<durableId>`; tests should assert the two-step contract explicitly.
+### 2026-06-02T13:32:38.823+00:00
+- Staging API secret provisioning in `.github/workflows/deploy-app-staging.yml` must stay mirrored with `infrastructure/env/staging-api.env`; new runtime secrets require both `az containerapp secret set` entries and matching `secretref:` env mappings for Container Apps to resolve them.
