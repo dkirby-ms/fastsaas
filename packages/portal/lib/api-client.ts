@@ -16,11 +16,7 @@ import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
 import { customerApiPaths, publisherAdminMockPaths } from '@/lib/api-paths';
-import {
-  getPublisherApiBaseUrl,
-  isPublisherAdminApiEnabled,
-  publisherAdminPaths,
-} from '@/lib/publisher-admin-api';
+import { getPublisherApiBaseUrl, publisherAdminPaths } from '@/lib/publisher-admin-api';
 import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 
 export { ApiError } from '@/lib/errors';
@@ -173,7 +169,7 @@ async function requestPortal<T>(path: string, init?: RequestInit): Promise<T> {
 async function requestPublisherResource<T>(mockPath: string, livePath: string, init?: RequestInit): Promise<T> {
   await assertAreaAccess('publisher');
 
-  if (shouldUseMockApi() || !isPublisherAdminApiEnabled()) {
+  if (shouldUseMockApi() || !getPublisherApiBaseUrl()) {
     return mockRequest<T>(mockPath, init);
   }
 

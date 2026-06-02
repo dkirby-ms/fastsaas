@@ -15,14 +15,10 @@ export function getPublisherApiBaseUrl() {
   return process.env.PUBLISHER_API_BASE_URL ?? process.env.API_BASE_URL ?? '';
 }
 
-export function isPublisherAdminApiEnabled() {
-  return process.env.ENABLE_PUBLISHER_ADMIN_API === 'true' && getPublisherApiBaseUrl().length > 0;
-}
-
 export function getPublisherIntegrationMode(): 'mock' | 'live' {
   if (process.env.USE_MOCK_API !== 'false') {
     return 'mock';
   }
 
-  return isPublisherAdminApiEnabled() ? 'live' : 'mock';
+  return getPublisherApiBaseUrl().length > 0 ? 'live' : 'mock';
 }
