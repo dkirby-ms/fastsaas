@@ -145,6 +145,9 @@ interface ProductIngestionFixtureState {
 
 function createProductIngestionClient(state: ProductIngestionFixtureState): ProductIngestionClientLike {
   return {
+    async getProductByExternalId() {
+      throw new Error('getProductByExternalId should not be called in security tests');
+    },
     async getResourceTree() {
       throw new Error('getResourceTree should not be called in security tests');
     },

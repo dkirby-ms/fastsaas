@@ -96,6 +96,7 @@ describe('JobPollingService', () => {
       .mockResolvedValueOnce(createStatus({ jobStatus: 'running', jobResult: 'pending' }))
       .mockResolvedValueOnce(createStatus({ jobStatus: 'completed', jobResult: 'succeeded', jobEnd: '2026-06-02T12:03:27.730Z' }));
     const client: ProductIngestionClientLike = {
+      getProductByExternalId: vi.fn(),
       getResourceTree: vi.fn(),
       configure: vi.fn(),
       getConfigureStatus,
@@ -123,6 +124,7 @@ describe('JobPollingService', () => {
 
   it('captures flattened per-resource errors for failed jobs', async () => {
     const client: ProductIngestionClientLike = {
+      getProductByExternalId: vi.fn(),
       getResourceTree: vi.fn(),
       configure: vi.fn(),
       getConfigureStatus: vi.fn(async () =>
@@ -177,6 +179,7 @@ describe('JobPollingService', () => {
 
   it('cancels a running job and stores the cancelled state', async () => {
     const client: ProductIngestionClientLike = {
+      getProductByExternalId: vi.fn(),
       getResourceTree: vi.fn(),
       configure: vi.fn(),
       getConfigureStatus: vi.fn(),
@@ -215,6 +218,7 @@ describe('JobPollingService', () => {
 
   it('marks long-running jobs as timed out', async () => {
     const client: ProductIngestionClientLike = {
+      getProductByExternalId: vi.fn(),
       getResourceTree: vi.fn(),
       configure: vi.fn(),
       getConfigureStatus: vi.fn(),

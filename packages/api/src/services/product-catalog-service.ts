@@ -312,7 +312,13 @@ export class ProductCatalogService {
     const client = await this.loadClient(actor.tenantId);
 
     try {
-      const tree = await client.getResourceTree(externalId);
+      const product = await client.getProductByExternalId(externalId);
+      const durableProductId = product.id?.trim();
+      if (!durableProductId) {
+        throw AppError.serviceUnavailable('Partner Center product sync is temporarily unavailable');
+      }
+
+      const tree = await client.getResourceTree(durableProductId);
       const detail = await this.persistResourceTree(actor, tree, externalId);
       this.options.logger.info({ actorTenantId: actor.tenantId, externalId, requestId: actor.requestId }, 'Imported marketplace product');
       return detail;

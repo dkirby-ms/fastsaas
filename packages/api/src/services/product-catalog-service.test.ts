@@ -137,6 +137,14 @@ async function createService(trees: ProductIngestionResourceTreeResponse[]) {
     expiresAt: null
   });
 
+  const getProductByExternalId = vi.fn(async (externalId: string) => {
+    if (externalId !== 'contoso-saas') {
+      throw new Error(`Unexpected external ID lookup: ${externalId}`);
+    }
+
+    return structuredClone(initialTree.resources[0]);
+  });
+
   const getResourceTree = vi.fn(async () => {
     const nextTree = trees.shift();
     if (!nextTree) {
@@ -152,6 +160,7 @@ async function createService(trees: ProductIngestionResourceTreeResponse[]) {
     authProvider: createAuthProvider(),
     logger: createLogger(),
     clientFactory: () => ({
+      getProductByExternalId,
       getResourceTree,
       configure: vi.fn(),
       getConfigureStatus: vi.fn(),
@@ -161,19 +170,20 @@ async function createService(trees: ProductIngestionResourceTreeResponse[]) {
     })
   });
 
-  return { service, repository, getResourceTree };
+  return { service, repository, getProductByExternalId, getResourceTree };
 }
 
 describe('ProductCatalogService', () => {
   it('imports a Partner Center resource tree into the local catalog cache', async () => {
-    const { service, repository, getResourceTree } = await createService([structuredClone(initialTree)]);
+    const { service, repository, getProductByExternalId, getResourceTree } = await createService([structuredClone(initialTree)]);
 
     const imported = await service.importProduct(actor, { externalId: 'contoso-saas' });
     const products = await service.listProducts(actor.tenantId);
     const resourceTree = await service.getResourceTree(actor.tenantId, imported.id);
     const stored = await repository.getProductDetailById(actor.tenantId, imported.id);
 
-    expect(getResourceTree).toHaveBeenCalledWith('contoso-saas');
+    expect(getProductByExternalId).toHaveBeenCalledWith('contoso-saas');
+    expect(getResourceTree).toHaveBeenCalledWith('product/prod-123');
     expect(imported.alias).toBe('Contoso SaaS');
     expect(imported.externalOfferId).toBe('contoso-saas');
     expect(imported.plans).toHaveLength(1);
@@ -195,14 +205,16 @@ describe('ProductCatalogService', () => {
   });
 
   it('re-syncs an imported product and replaces the cached plans, submissions, and resources', async () => {
-    const { service, repository, getResourceTree } = await createService([structuredClone(initialTree), structuredClone(updatedTree)]);
+    const { service, repository, getProductByExternalId, getResourceTree } = await createService([structuredClone(initialTree), structuredClone(updatedTree)]);
 
     const imported = await service.importProduct(actor, { externalId: 'contoso-saas' });
     const synced = await service.syncProduct(actor, imported.id);
     const resourceTree = await service.getResourceTree(actor.tenantId, imported.id);
     const stored = await repository.getProductDetailById(actor.tenantId, imported.id);
 
-    expect(getResourceTree).toHaveBeenNthCalledWith(1, 'contoso-saas');
+    expect(getProductByExternalId).toHaveBeenCalledTimes(1);
+    expect(getProductByExternalId).toHaveBeenCalledWith('contoso-saas');
+    expect(getResourceTree).toHaveBeenNthCalledWith(1, 'product/prod-123');
     expect(getResourceTree).toHaveBeenNthCalledWith(2, 'product/prod-123');
     expect(synced.id).toBe(imported.id);
     expect(synced.alias).toBe('Contoso SaaS Premium');

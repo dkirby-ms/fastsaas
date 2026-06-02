@@ -68,6 +68,39 @@ function createClient(overrides: Partial<ProductIngestionClientOptions> = {}) {
 }
 
 describe('ProductIngestionHttpClient', () => {
+  it('resolves a product by external ID before loading its resource tree', async () => {
+    const { client, fetchImpl } = createClient({
+      fetchImpl: vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            $schema: PRODUCT_INGESTION_SCHEMAS.product,
+            id: 'product/prod-123',
+            identity: { externalId: 'contoso-saas' },
+            type: 'softwareAsAService',
+            alias: 'Contoso SaaS'
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      ) as typeof fetch
+    });
+
+    const response = await client.getProductByExternalId('contoso-saas');
+
+    expect(response.id).toBe('product/prod-123');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const lookupUrl = fetchImpl.mock.calls[0]?.[0];
+    expect(lookupUrl instanceof URL ? lookupUrl.href : String(lookupUrl)).toBe(
+      'https://graph.microsoft.com/rp/product-ingestion/product?%24version=2022-03-01-preview5&externalId=contoso-saas'
+    );
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: { Authorization: 'Bearer graph-token' }
+    });
+  });
+
   it('builds resource-tree requests with the schema version and target environment', async () => {
     const { client, fetchImpl } = createClient({
       fetchImpl: vi.fn(async () =>
