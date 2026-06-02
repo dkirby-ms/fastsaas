@@ -11,6 +11,7 @@ import { healthRouter } from './routes/health';
 import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
+import type { PartnerCenterService } from './services/partner-center-service';
 import type { PublisherService } from './services/publisher-service';
 import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
@@ -19,6 +20,7 @@ export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
   auditService?: AuditService;
   publisherService?: PublisherService;
+  partnerCenterService?: PartnerCenterService;
   tenantMemberService?: TenantMemberService;
 }
 
@@ -57,6 +59,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.subscriptionService,
       dependencies.auditService,
       dependencies.publisherService,
+      dependencies.partnerCenterService,
       dependencies.tenantMemberService
     )
   );

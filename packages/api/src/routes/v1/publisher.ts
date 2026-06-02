@@ -1,5 +1,9 @@
 import type {
   ApiResponse,
+  PartnerCenterConnectRequest,
+  PartnerCenterConnection,
+  PartnerCenterDisconnectResponse,
+  PartnerCenterStatusResponse,
   PublisherDashboardData,
   PublisherPlan,
   PublisherPlansResponse,
@@ -18,6 +22,7 @@ import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type { PartnerCenterService } from '../../services/partner-center-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 
@@ -100,6 +105,50 @@ function parseTenantBody(body: unknown): PublisherTenantUpsertInput {
   };
 }
 
+function parsePartnerCenterConnectBody(body: unknown): PartnerCenterConnectRequest {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  const candidate = body as Record<string, unknown>;
+
+  if (typeof candidate.pcTenantId !== 'string') {
+    throw AppError.badRequest('pcTenantId is required');
+  }
+
+  if (typeof candidate.clientId !== 'string') {
+    throw AppError.badRequest('clientId is required');
+  }
+
+  if (candidate.authMode !== 'CLIENT_SECRET' && candidate.authMode !== 'CLIENT_CERTIFICATE') {
+    throw AppError.badRequest('authMode must be CLIENT_SECRET or CLIENT_CERTIFICATE');
+  }
+
+  if (typeof candidate.secretReference !== 'string') {
+    throw AppError.badRequest('secretReference is required');
+  }
+
+  if (
+    candidate.rotationMetadata !== undefined &&
+    (!candidate.rotationMetadata || typeof candidate.rotationMetadata !== 'object' || Array.isArray(candidate.rotationMetadata))
+  ) {
+    throw AppError.badRequest('rotationMetadata must be a JSON object when provided');
+  }
+
+  if (candidate.expiresAt !== undefined && typeof candidate.expiresAt !== 'string') {
+    throw AppError.badRequest('expiresAt must be a string when provided');
+  }
+
+  return {
+    pcTenantId: candidate.pcTenantId,
+    clientId: candidate.clientId,
+    authMode: candidate.authMode,
+    secretReference: candidate.secretReference,
+    rotationMetadata: candidate.rotationMetadata as Record<string, unknown> | undefined,
+    expiresAt: candidate.expiresAt
+  };
+}
+
 function buildActorContext(req: ApiRequest): PublisherActorContext {
   if (!req.context) {
     throw AppError.unauthorized();
@@ -140,7 +189,12 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   throw AppError.badRequest('Publisher tenant action is not supported');
 }
 
-export function createPublisherRouter(config: ApiConfig, publisherService: PublisherService, tenantMemberService?: TenantMemberService) {
+export function createPublisherRouter(
+  config: ApiConfig,
+  publisherService: PublisherService,
+  partnerCenterService: PartnerCenterService,
+  tenantMemberService?: TenantMemberService
+) {
   const router = Router();
   router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
 
@@ -170,6 +224,129 @@ export function createPublisherRouter(config: ApiConfig, publisherService: Publi
         const actor = buildActorContext(req);
         const dashboard = await publisherService.getDashboard(actor.tenantId);
         res.status(200).json({ status: 'success', data: dashboard, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/partner-center/connect:
+   *   post:
+   *     summary: Connect a Partner Center account
+   *     description: Stores tenant-scoped Partner Center app metadata and validates the configured Azure Key Vault or local development secret reference against the Partner Center Product Ingestion API.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [pcTenantId, clientId, authMode, secretReference]
+   *             properties:
+   *               pcTenantId:
+   *                 type: string
+   *               clientId:
+   *                 type: string
+   *               authMode:
+   *                 type: string
+   *                 enum: [CLIENT_SECRET, CLIENT_CERTIFICATE]
+   *               secretReference:
+   *                 type: string
+   *                 description: Azure Key Vault secret URI or keyvault:SECRET_NAME in deployed environments; env:VARIABLE_NAME is supported for local/test flows.
+   *               rotationMetadata:
+   *                 type: object
+   *               expiresAt:
+   *                 type: string
+   *                 format: date-time
+   *     responses:
+   *       200:
+   *         description: Partner Center connection validated
+   *       400:
+   *         description: Request body is invalid or credentials cannot be validated
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       503:
+   *         description: Partner Center validation or secret resolution is unavailable
+   */
+  router.post(
+    '/partner-center/connect',
+    authorizeRoute({ resource: 'publisher', action: 'manage' }),
+    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterConnection>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const connection = await partnerCenterService.connect(actor, parsePartnerCenterConnectBody(req.body));
+        res.status(200).json({ status: 'success', data: connection, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/partner-center/status:
+   *   get:
+   *     summary: Get Partner Center connection status
+   *     description: Returns the current tenant-scoped Partner Center connection state and last validation timestamp.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Partner Center connection status
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
+  router.get(
+    '/partner-center/status',
+    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterStatusResponse>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const status = await partnerCenterService.getStatus(actor.tenantId);
+        res.status(200).json({ status: 'success', data: status, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/partner-center/disconnect:
+   *   delete:
+   *     summary: Remove the Partner Center connection
+   *     description: Deletes the tenant-scoped Partner Center account and credential metadata.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Partner Center connection removed
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   */
+  router.delete(
+    '/partner-center/disconnect',
+    authorizeRoute({ resource: 'publisher', action: 'manage' }),
+    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterDisconnectResponse>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const result = await partnerCenterService.disconnect(actor);
+        res.status(200).json({ status: 'success', data: result, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);
       }

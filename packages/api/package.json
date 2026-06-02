@@ -9,12 +9,13 @@
     "migrate": "tsx src/db/migrate.ts",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "migrate": "tsx src/db/migrate.ts",
     "test": "vitest run",
     "test:rls": "vitest run src/__tests__/tenant-rls.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.1",
+    "@azure/keyvault-secrets": "^4.11.2",
     "@fastsaas/shared": "file:../shared",
     "express": "^4.21.1",
     "jose": "^5.9.6",

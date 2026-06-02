@@ -145,3 +145,7 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - API staging wiring covers Entra auth plus Bicep-managed `DATABASE_URL`/`REDIS_URL`, but no checked-in staging source was found for `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, or `MARKETPLACE_METERING_API_KEY`.
 ### 2026-06-01T20:22:40.911+00:00
 - Multi-tenant Entra access tokens for FastSaaS API validation should use the shared `common` JWKS discovery endpoint, while issuer validation must accept any `https://login.microsoftonline.com/{tenant}/v2.0` issuer when the configured authority is `common` or `organizations`.
+### 2026-06-02T01:08:36.792+00:00
+- Partner Center credentials now resolve through Azure Key Vault using managed identity in `packages/api/src/services/partner-center-auth.ts`, accepting full secret URIs or `keyvault:SECRET_NAME` when `AZURE_KEY_VAULT_URL` is configured; `env:` secret refs remain local/test-only via `packages/api/src/server.ts`.
+- `/v1/publisher/partner-center/connect` now proves Product Ingestion access with `GET /rp/product-ingestion/product?$maxpagesize=1&$version=2022-03-01-preview5`; Microsoft Graph `/organization` lookup is best-effort metadata only.
+- Future Partner Center operational touchpoints live in `packages/api/src/services/partner-center-auth.ts`, `packages/api/src/services/partner-center-service.ts`, `packages/api/src/routes/v1/publisher.ts`, and `packages/api/package.json` for Azure SDK dependencies.

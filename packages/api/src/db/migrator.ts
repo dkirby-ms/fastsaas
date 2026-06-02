@@ -6,12 +6,14 @@ import * as auditLogsMigration from './migrations/20260531T213532_audit_logs';
 import * as tenantRlsMigration from './migrations/20260531T213532_tenant_rls';
 import * as publisherPlansMigration from './migrations/20260601T004305_publisher_plans';
 import * as tenantMembersMigration from './migrations/20260601T205004_tenant_members';
+import * as partnerCenterConnectionsMigration from './migrations/20260602T004450_partner_center_connections';
 
 const MIGRATIONS: Record<string, Migration> = {
   '20260531T213532_audit_logs': auditLogsMigration,
   '20260531T213532_tenant_rls': tenantRlsMigration,
   '20260601T004305_publisher_plans': publisherPlansMigration,
-  '20260601T205004_tenant_members': tenantMembersMigration
+  '20260601T205004_tenant_members': tenantMembersMigration,
+  '20260602T004450_partner_center_connections': partnerCenterConnectionsMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {
