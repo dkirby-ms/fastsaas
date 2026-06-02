@@ -1,6 +1,7 @@
 import type { Logger } from 'pino';
 
 import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
+import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from '../services/partner-center-auth';
 import {
   PRODUCT_INGESTION_API_VERSION,
@@ -154,9 +155,10 @@ function parseRetryAfterMs(value: string | null): number | undefined {
 
 export interface ProductIngestionClientOptions {
   logger: Logger;
-  authProvider: PartnerCenterAuthProvider;
-  account: PartnerCenterAccountRecord;
-  credential: PartnerCenterCredentialRecord;
+  tokenProvider?: MarketplaceBearerTokenProvider;
+  authProvider?: PartnerCenterAuthProvider;
+  account?: PartnerCenterAccountRecord;
+  credential?: PartnerCenterCredentialRecord;
   fetchImpl?: typeof fetch;
   baseUrl?: string;
   apiVersion?: string;
@@ -238,6 +240,10 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? 500;
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? 5_000;
     this.sleep = options.sleep ?? (async (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+
+    if (!options.tokenProvider && (!options.authProvider || !options.account || !options.credential)) {
+      throw new Error('ProductIngestionClient requires tokenProvider or authProvider/account/credential');
+    }
   }
 
   async getProductByExternalId(externalId: string): Promise<ProductResource> {
@@ -366,7 +372,7 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
       try {
-        const token = await this.options.authProvider.acquireGraphToken(this.options.account, this.options.credential);
+        const token = await this.resolveAccessToken();
         const response = await this.fetchImpl(url, {
           method: options.method,
           headers: {
@@ -413,6 +419,18 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
     }
 
     throw new ProductIngestionError(`Product Ingestion ${action} request exhausted retries`, action, 503);
+  }
+
+  private async resolveAccessToken(): Promise<string> {
+    if (this.options.tokenProvider) {
+      return this.options.tokenProvider.getAccessToken();
+    }
+
+    if (this.options.authProvider && this.options.account && this.options.credential) {
+      return this.options.authProvider.acquireGraphToken(this.options.account, this.options.credential);
+    }
+
+    throw new ProductIngestionError('Product Ingestion authentication is not configured', 'resolve-access-token', 503);
   }
 
   private shouldRetry(statusCode: number): boolean {

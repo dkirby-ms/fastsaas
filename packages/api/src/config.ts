@@ -79,8 +79,8 @@ function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   clientSecret: string;
   webhookSecret: string;
 } {
-  // Phase 1 uses MARKETPLACE_CLIENT_SECRET directly as the Bearer token.
-  // Phase 2 will replace this with an OAuth token exchange flow (issue #78).
+  // MARKETPLACE_CLIENT_SECRET is shared across marketplace integrations.
+  // Product Ingestion uses it as the OAuth client_secret while fulfillment keeps its direct bearer behavior.
   const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
   const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
 

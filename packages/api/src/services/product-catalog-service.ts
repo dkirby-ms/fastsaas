@@ -22,6 +22,7 @@ import type {
   StoredMarketplaceProductDetail,
   StoredMarketplaceSubmission
 } from '../repositories/product-catalog-repository';
+import type { MarketplaceBearerTokenProvider } from './marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from './partner-center-auth';
 import type { PublisherActorContext } from './publisher-service';
 
@@ -67,10 +68,11 @@ export interface ProductCatalogImportInput {
 
 export interface ProductCatalogServiceOptions {
   repository: ProductCatalogRepository;
-  partnerCenterRepository: PartnerCenterRepository;
-  authProvider: PartnerCenterAuthProvider;
+  partnerCenterRepository?: PartnerCenterRepository;
+  authProvider?: PartnerCenterAuthProvider;
+  tokenProvider?: MarketplaceBearerTokenProvider;
   logger: Logger;
-  clientFactory?: (args: { account: PartnerCenterConnectionRecord }) => ProductIngestionClientLike;
+  clientFactory?: (args: { account?: PartnerCenterConnectionRecord }) => ProductIngestionClientLike;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -261,13 +263,25 @@ export class ProductCatalogService {
   constructor(private readonly options: ProductCatalogServiceOptions) {
     this.clientFactory =
       options.clientFactory ??
-      (({ account }) =>
-        new ProductIngestionClient({
+      (({ account }) => {
+        if (this.options.tokenProvider) {
+          return new ProductIngestionClient({
+            logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account?.account.tenantId }),
+            tokenProvider: this.options.tokenProvider
+          });
+        }
+
+        if (!this.options.authProvider || !account) {
+          throw new Error('ProductCatalogService requires tokenProvider or authProvider with a Partner Center connection');
+        }
+
+        return new ProductIngestionClient({
           logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account.account.tenantId }),
           authProvider: this.options.authProvider,
           account: account.account,
           credential: account.credential
-        }));
+        });
+      });
   }
 
   async listProducts(publisherTenantId: string): Promise<ProductCatalogProduct[]> {
@@ -347,12 +361,15 @@ export class ProductCatalogService {
   }
 
   private async loadClient(publisherTenantId: string): Promise<ProductIngestionClientLike> {
-    const connection = await this.options.partnerCenterRepository.findByTenant(publisherTenantId);
-    if (!connection) {
-      throw AppError.badRequest('Partner Center connection is required before importing marketplace products');
+    const connection = this.options.partnerCenterRepository
+      ? await this.options.partnerCenterRepository.findByTenant(publisherTenantId)
+      : null;
+
+    if (!connection && !this.options.tokenProvider) {
+      throw AppError.badRequest('Marketplace OAuth configuration or a legacy Partner Center connection is required before importing marketplace products');
     }
 
-    return this.clientFactory({ account: connection });
+    return this.clientFactory({ account: connection ?? undefined });
   }
 
   private async persistResourceTree(

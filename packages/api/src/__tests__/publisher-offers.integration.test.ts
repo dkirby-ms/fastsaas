@@ -80,16 +80,6 @@ describe('publisher offer routes', () => {
       scopes: [harness.config.auth.requiredScope]
     });
 
-    await request(harness.app)
-      .post('/v1/publisher/partner-center/connect')
-      .set('Authorization', `Bearer ${adminToken}`)
-      .send({
-        pcTenantId: 'partner-center-tenant',
-        clientId: 'partner-center-client',
-        authMode: 'CLIENT_SECRET',
-        secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET'
-      });
-
     await harness.marketplaceJobRepository.createJob({
       publisherTenantId: 'publisher-admin',
       productId: 'offer-1',

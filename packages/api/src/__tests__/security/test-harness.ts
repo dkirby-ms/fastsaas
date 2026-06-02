@@ -20,6 +20,7 @@ import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-pl
 import { InMemoryProductCatalogRepository } from '../../repositories/product-catalog-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
 import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member-repository';
+import type { MarketplaceBearerTokenProvider } from '../../services/marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from '../../services/partner-center-auth';
 import { JobPollingService } from '../../services/job-polling-service';
 import { PartnerCenterService } from '../../services/partner-center-service';
@@ -134,6 +135,15 @@ function createPartnerCenterAuthProvider(): PartnerCenterAuthProvider {
         organizationId: 'partner-center-org',
         displayName: 'Partner Center Test Org'
       };
+    },
+    invalidate() {}
+  };
+}
+
+function createMarketplaceTokenProvider(): MarketplaceBearerTokenProvider {
+  return {
+    async getAccessToken() {
+      return 'marketplace-oauth-test-token';
     },
     invalidate() {}
   };
@@ -258,6 +268,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     logger.child({ component: 'publisher-test' })
   );
   const partnerCenterAuthProvider = createPartnerCenterAuthProvider();
+  const marketplaceTokenProvider = createMarketplaceTokenProvider();
   const partnerCenterService = new PartnerCenterService(
     partnerCenterRepository,
     partnerCenterAuthProvider,
@@ -268,12 +279,13 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     partnerCenterRepository,
     partnerCenterAuthProvider,
     logger.child({ component: 'job-polling-test' }),
-    { clientFactory: () => createProductIngestionClient(productIngestionState), random: () => 0 }
+    { clientFactory: () => createProductIngestionClient(productIngestionState), random: () => 0, tokenProvider: marketplaceTokenProvider }
   );
   const productCatalogService = new ProductCatalogService({
     repository: productCatalogRepository,
     partnerCenterRepository,
     authProvider: partnerCenterAuthProvider,
+    tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'product-catalog-test' })
   });
   const app = createApp(config, {

@@ -329,7 +329,7 @@ export function createPublisherRouter(
    * /v1/publisher/partner-center/connect:
    *   post:
    *     summary: Connect a Partner Center account
-   *     description: Stores tenant-scoped Partner Center app metadata and validates the configured Azure Key Vault or local development secret reference against the Partner Center Product Ingestion API.
+   *     description: Legacy compatibility endpoint for tenant-scoped Partner Center metadata. Single-publisher deployments use shared MARKETPLACE_* environment credentials automatically for Product Ingestion.
    *     tags:
    *       - Publisher
    *     security:
@@ -388,7 +388,7 @@ export function createPublisherRouter(
    * /v1/publisher/partner-center/status:
    *   get:
    *     summary: Get Partner Center connection status
-   *     description: Returns the current tenant-scoped Partner Center connection state and last validation timestamp.
+   *     description: Returns legacy tenant-scoped Partner Center connection metadata. Product Ingestion uses shared MARKETPLACE_* environment credentials by default.
    *     tags:
    *       - Publisher
    *     security:
@@ -420,7 +420,7 @@ export function createPublisherRouter(
    * /v1/publisher/partner-center/disconnect:
    *   delete:
    *     summary: Remove the Partner Center connection
-   *     description: Deletes the tenant-scoped Partner Center account and credential metadata.
+   *     description: Deletes legacy tenant-scoped Partner Center metadata. Shared MARKETPLACE_* environment credentials remain the primary Product Ingestion auth path.
    *     tags:
    *       - Publisher
    *     security:

@@ -6,6 +6,7 @@ import {
   ProductIngestionJobFailedError,
   type ProductIngestionClientOptions
 } from '../lib/product-ingestion-client';
+import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
 import { PRODUCT_INGESTION_SCHEMAS } from '../lib/product-ingestion-types';
 
 const account: PartnerCenterAccountRecord = {
@@ -98,6 +99,30 @@ describe('ProductIngestionHttpClient', () => {
     expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
       method: 'GET',
       headers: { Authorization: 'Bearer graph-token' }
+    });
+  });
+
+  it('uses a marketplace token provider when supplied', async () => {
+    const tokenProvider: MarketplaceBearerTokenProvider = {
+      getAccessToken: vi.fn(async () => 'oauth-token'),
+      invalidate: vi.fn()
+    };
+    const { client, fetchImpl, authProvider } = createClient({
+      tokenProvider,
+      fetchImpl: vi.fn(async () =>
+        new Response(JSON.stringify({ root: 'product/prod-123', target: { targetType: 'preview' }, resources: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      ) as typeof fetch
+    });
+
+    await client.getResourceTree('product/prod-123', 'preview');
+
+    expect(tokenProvider.getAccessToken).toHaveBeenCalledTimes(1);
+    expect(authProvider.acquireGraphToken).not.toHaveBeenCalled();
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer oauth-token' }
     });
   });
 

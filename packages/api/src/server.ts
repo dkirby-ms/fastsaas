@@ -50,8 +50,9 @@ import {
 } from './repositories/tenant-member-repository';
 import { ConfigureJobPoller } from './jobs/configure-job-poller';
 import { AuditService } from './services/audit-service';
-import { PartnerCenterAuthService } from './services/partner-center-auth';
 import { JobPollingService } from './services/job-polling-service';
+import { MarketplaceOAuthService } from './services/marketplace-oauth-service';
+import { PartnerCenterAuthService } from './services/partner-center-auth';
 import { PartnerCenterService } from './services/partner-center-service';
 import { ProductCatalogService } from './services/product-catalog-service';
 import { PublisherService } from './services/publisher-service';
@@ -136,6 +137,10 @@ async function bootstrap(): Promise<void> {
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members' }));
   const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger, tenantMemberService);
   const auditService = new AuditService(auditLogRepository, logger.child({ component: 'audit' }));
+  const marketplaceOAuthService = new MarketplaceOAuthService({
+    logger: logger.child({ component: 'marketplace-oauth' }),
+    marketplace: config.marketplace
+  });
   const partnerCenterAuthService = new PartnerCenterAuthService({
     logger: logger.child({ component: 'partner-center-auth' }),
     keyVaultUrl: process.env.AZURE_KEY_VAULT_URL,
@@ -155,7 +160,8 @@ async function bootstrap(): Promise<void> {
       pollBaseDelayMs: config.jobPolling.pollBaseDelayMs,
       pollMaxDelayMs: config.jobPolling.pollMaxDelayMs,
       pollJitterRatio: config.jobPolling.pollJitterRatio,
-      maxPollDurationMs: config.jobPolling.maxPollDurationMs
+      maxPollDurationMs: config.jobPolling.maxPollDurationMs,
+      tokenProvider: marketplaceOAuthService
     }
   );
   const configureJobPoller = new ConfigureJobPoller(
@@ -174,6 +180,7 @@ async function bootstrap(): Promise<void> {
     repository: productCatalogRepository,
     partnerCenterRepository,
     authProvider: partnerCenterAuthService,
+    tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'product-catalog' })
   });
   const app = createApp(config, {
