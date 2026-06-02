@@ -1,3 +1,9 @@
+## [0.12.0](https://github.com/dkirby-ms/fastsaas/compare/v0.11.3...v0.12.0) (2026-06-02)
+
+### Features
+
+* **api:** marketplace OAuth service & Product Ingestion API routes ([#78](https://github.com/dkirby-ms/fastsaas/issues/78)) ([#116](https://github.com/dkirby-ms/fastsaas/issues/116)) ([108ee2f](https://github.com/dkirby-ms/fastsaas/commit/108ee2f732e870fcfa55ee8d5963a06bfcbff989))
+
 ## [0.11.3](https://github.com/dkirby-ms/fastsaas/compare/v0.11.2...v0.11.3) (2026-06-02)
 
 ### Bug Fixes
