@@ -337,7 +337,7 @@ resource portalAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@20
 var redisPrimaryKey = redisDatabaseResource.listKeys().primaryKey
 var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImageTag}'
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
-var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${postgresAdminPassword}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
+var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${uriComponent(postgresAdminPassword)}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
 var redisUrl = '${redis.outputs.hostname}:${redis.outputs.sslPort},password=${redisPrimaryKey},ssl=True,abortConnect=False'
 var apiEnvVars = [
   {
