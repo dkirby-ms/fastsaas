@@ -18,7 +18,7 @@ import { Router, type Response } from 'express';
 import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
-import type { ProductIngestionResource, ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
+import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionResource, type ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
@@ -176,6 +176,26 @@ function parseProductImportBody(body: unknown): ProductCatalogImportInput {
   };
 }
 
+function parseSubmissionBody(body: unknown): { resources: ProductIngestionResource[] } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  const candidate = body as Record<string, unknown>;
+  const { resources } = candidate;
+  if (!Array.isArray(resources) || resources.length === 0) {
+    throw AppError.badRequest('resources must be a non-empty array');
+  }
+
+  if (resources.some((resource) => !resource || typeof resource !== 'object' || Array.isArray(resource))) {
+    throw AppError.badRequest('Each resource must be a JSON object');
+  }
+
+  return {
+    resources: resources as ProductIngestionResource[]
+  };
+}
+
 function buildActorContext(req: ApiRequest): PublisherActorContext {
   if (!req.context) {
     throw AppError.unauthorized();
@@ -214,6 +234,15 @@ function getProductId(req: ApiRequest): string {
   }
 
   return productId;
+}
+
+function getOfferId(req: ApiRequest): string {
+  const { offerId } = req.params;
+  if (typeof offerId !== 'string' || offerId.length === 0) {
+    throw AppError.badRequest('offerId path parameter is required');
+  }
+
+  return offerId;
 }
 
 function getJobId(req: ApiRequest): string {
@@ -978,74 +1007,203 @@ export function createPublisherRouter(
   );
 
   if (productCatalogService) {
-    router.get(
-      '/products',
-      authorizeRoute({ resource: 'publisher', action: 'view' }),
-      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next) => {
-        try {
-          const actor = buildActorContext(req);
-          const products = await productCatalogService.listProducts(actor.tenantId);
-          res.status(200).json({ status: 'success', data: products, meta: buildResponseMeta(req, config.apiVersion) });
-        } catch (error) {
-          next(error);
-        }
+    const listProducts = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const products = await productCatalogService.listProducts(actor.tenantId);
+        res.status(200).json({ status: 'success', data: products, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
       }
-    );
+    };
 
-    router.post(
-      '/products/import',
-      authorizeRoute({ resource: 'publisher', action: 'manage' }),
-      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
-        try {
-          const actor = buildActorContext(req);
-          const product = await productCatalogService.importProduct(actor, parseProductImportBody(req.body));
-          res.status(201).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
-        } catch (error) {
-          next(error);
-        }
+    const importProduct = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const product = await productCatalogService.importProduct(actor, parseProductImportBody(req.body));
+        res.status(201).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
       }
-    );
+    };
 
-    router.get(
-      '/products/:productId',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
-      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
-        try {
-          const actor = buildActorContext(req);
-          const product = await productCatalogService.getProduct(actor.tenantId, getProductId(req));
-          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
-        } catch (error) {
-          next(error);
-        }
+    const getProduct = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const product = await productCatalogService.getProduct(actor.tenantId, getProductId(req));
+        res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
       }
-    );
+    };
+
+    const getOffer = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const product = await productCatalogService.getProduct(actor.tenantId, getOfferId(req));
+        res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProductResourceTree = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<ProductIngestionResourceTreeResponse<ProductIngestionResource>>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const resourceTree = await productCatalogService.getResourceTree(actor.tenantId, getProductId(req));
+        res.status(200).json({ status: 'success', data: resourceTree, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getOfferResourceTree = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<ProductIngestionResourceTreeResponse<ProductIngestionResource>>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const resourceTree = await productCatalogService.getResourceTree(actor.tenantId, getOfferId(req));
+        res.status(200).json({ status: 'success', data: resourceTree, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const syncProduct = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const product = await productCatalogService.syncProduct(actor, getProductId(req));
+        res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const syncOffer = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
+      try {
+        const actor = buildActorContext(req);
+        const product = await productCatalogService.syncProduct(actor, getOfferId(req));
+        res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const submitOfferSubmission = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherMarketplaceJobDetail>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const submission = parseSubmissionBody(req.body);
+        const job = await jobPollingService.submitConfigureJob(actor, {
+          productId: getOfferId(req),
+          request: {
+            $schema: PRODUCT_INGESTION_SCHEMAS.configure,
+            resources: submission.resources
+          }
+        });
+        res.status(201).json({ status: 'success', data: job, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const listOfferSubmissions = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherMarketplaceJobListResponse>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const jobs = await jobPollingService.listJobs(actor.tenantId, { ...parseJobListQuery(req), productId: getOfferId(req) });
+        res.status(200).json({ status: 'success', data: jobs, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getOfferSubmission = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherMarketplaceJobDetail>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const job = await jobPollingService.getJob(actor.tenantId, getJobId(req), getOfferId(req));
+        res.status(200).json({ status: 'success', data: job, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const cancelOfferSubmission = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherMarketplaceJobDetail>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const job = await jobPollingService.cancelJob(actor, getJobId(req), getOfferId(req));
+        res.status(200).json({ status: 'success', data: job, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    router.get('/products', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
+    router.get('/offers', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
+
+    router.post('/products/import', authorizeRoute({ resource: 'publisher', action: 'manage' }), importProduct);
+    router.post('/offers/import', authorizeRoute({ resource: 'publisher', action: 'manage' }), importProduct);
+
+    router.get('/products/:productId', authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }), getProduct);
+    router.get('/offers/:offerId', authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }), getOffer);
 
     router.get(
       '/products/:productId/resource-tree',
       authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
-      async (req: ApiRequest, res: Response<ApiResponse<ProductIngestionResourceTreeResponse<ProductIngestionResource>>>, next) => {
-        try {
-          const actor = buildActorContext(req);
-          const resourceTree = await productCatalogService.getResourceTree(actor.tenantId, getProductId(req));
-          res.status(200).json({ status: 'success', data: resourceTree, meta: buildResponseMeta(req, config.apiVersion) });
-        } catch (error) {
-          next(error);
-        }
-      }
+      getProductResourceTree
+    );
+    router.get(
+      '/offers/:offerId/resource-tree',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      getOfferResourceTree
     );
 
     router.post(
       '/products/:productId/sync',
       authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getProductId }),
-      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
-        try {
-          const actor = buildActorContext(req);
-          const product = await productCatalogService.syncProduct(actor, getProductId(req));
-          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
-        } catch (error) {
-          next(error);
-        }
-      }
+      syncProduct
+    );
+    router.post('/offers/:offerId/sync', authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }), syncOffer);
+
+    router.post(
+      '/offers/:offerId/submissions',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }),
+      submitOfferSubmission
+    );
+    router.get(
+      '/offers/:offerId/submissions',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      listOfferSubmissions
+    );
+    router.get(
+      '/offers/:offerId/submissions/:jobId',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      getOfferSubmission
+    );
+    router.post(
+      '/offers/:offerId/submissions/:jobId/cancel',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }),
+      cancelOfferSubmission
     );
   }
 

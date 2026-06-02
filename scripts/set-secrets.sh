@@ -113,6 +113,12 @@ echo ""
 
 # SECTION 4: Marketplace
 echo -e "${BLUE}--- Marketplace ---${NC}"
+MARKETPLACE_CLIENT_ID=$(prompt_value "MARKETPLACE_CLIENT_ID (Microsoft Marketplace app registration client ID)")
+set_secret "MARKETPLACE_CLIENT_ID" "$MARKETPLACE_CLIENT_ID"
+
+MARKETPLACE_TENANT_ID=$(prompt_value "MARKETPLACE_TENANT_ID (Microsoft Marketplace app registration tenant ID)")
+set_secret "MARKETPLACE_TENANT_ID" "$MARKETPLACE_TENANT_ID"
+
 MARKETPLACE_CLIENT_SECRET=$(prompt_secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)")
 set_secret "MARKETPLACE_CLIENT_SECRET" "$MARKETPLACE_CLIENT_SECRET"
 

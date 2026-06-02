@@ -122,6 +122,27 @@ describe('JobPollingService', () => {
     expect(completed.result?.detail?.resources).toHaveLength(1);
   });
 
+  it('filters listed jobs by productId when requested', async () => {
+    const client: ProductIngestionClientLike = {
+      getProductByExternalId: vi.fn(),
+      getResourceTree: vi.fn(),
+      configure: vi.fn(),
+      getConfigureStatus: vi.fn(),
+      getConfigureJobDetails: vi.fn(),
+      cancelConfigure: vi.fn(),
+      waitForConfigureCompletion: vi.fn()
+    };
+    const { repository, service } = createService(client);
+    await seedJob(repository, { jobId: 'job-123', productId: 'offer-1', createdAt: '2026-06-02T12:03:22.730Z' });
+    await seedJob(repository, { jobId: 'job-456', productId: 'offer-2', createdAt: '2026-06-02T12:04:22.730Z' });
+
+    const listed = await service.listJobs('publisher-tenant', { productId: 'offer-1', page: 1, pageSize: 10 });
+
+    expect(listed.total).toBe(1);
+    expect(listed.jobs).toHaveLength(1);
+    expect(listed.jobs[0]).toMatchObject({ jobId: 'job-123', productId: 'offer-1' });
+  });
+
   it('captures flattened per-resource errors for failed jobs', async () => {
     const client: ProductIngestionClientLike = {
       getProductByExternalId: vi.fn(),

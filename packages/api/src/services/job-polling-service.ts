@@ -62,6 +62,7 @@ export interface PublisherMarketplaceJobListResponse {
 export interface ListPublisherMarketplaceJobsInput {
   page?: number;
   pageSize?: number;
+  productId?: string;
 }
 
 export interface SubmitConfigureJobInput<TResource extends ProductIngestionResource = ProductIngestionResource> {
@@ -269,8 +270,12 @@ export class JobPollingService {
   async listJobs(publisherTenantId: string, input: ListPublisherMarketplaceJobsInput = {}): Promise<PublisherMarketplaceJobListResponse> {
     const pagination = normalizePagination(input);
     const [jobs, total] = await Promise.all([
-      this.repository.listByTenant(publisherTenantId, { limit: pagination.pageSize, offset: pagination.offset }),
-      this.repository.countByTenant(publisherTenantId)
+      this.repository.listByTenant(publisherTenantId, {
+        limit: pagination.pageSize,
+        offset: pagination.offset,
+        productId: input.productId
+      }),
+      this.repository.countByTenant(publisherTenantId, input.productId)
     ]);
 
     return {
@@ -281,8 +286,8 @@ export class JobPollingService {
     };
   }
 
-  async getJob(publisherTenantId: string, jobId: string): Promise<PublisherMarketplaceJobDetail> {
-    const job = await this.requireJob(publisherTenantId, jobId);
+  async getJob(publisherTenantId: string, jobId: string, productId?: string): Promise<PublisherMarketplaceJobDetail> {
+    const job = await this.requireJob(publisherTenantId, jobId, productId);
     return buildJobDetail(job);
   }
 
@@ -326,8 +331,8 @@ export class JobPollingService {
     }
   }
 
-  async cancelJob(actor: PublisherActorContext, jobId: string): Promise<PublisherMarketplaceJobDetail> {
-    const existing = await this.requireJob(actor.tenantId, jobId);
+  async cancelJob(actor: PublisherActorContext, jobId: string, productId?: string): Promise<PublisherMarketplaceJobDetail> {
+    const existing = await this.requireJob(actor.tenantId, jobId, productId);
     if (isTerminalStatus(existing.status)) {
       throw AppError.conflict('This job is already complete and cannot be cancelled', { jobId, status: existing.status });
     }
@@ -506,12 +511,12 @@ export class JobPollingService {
     return this.options.maxPollDurationMs ?? DEFAULT_MAX_POLL_DURATION_MS;
   }
 
-  private async requireJob(publisherTenantId: string, jobId: string): Promise<MarketplaceJobRecord> {
+  private async requireJob(publisherTenantId: string, jobId: string, productId?: string): Promise<MarketplaceJobRecord> {
     const job = await this.repository.findByJobId(publisherTenantId, jobId);
-    if (!job) {
-      throw AppError.notFound('The selected Product Ingestion job could not be found', { jobId });
+    if (!job || (productId !== undefined && job.productId !== productId)) {
+      throw AppError.notFound('The selected Product Ingestion job could not be found', { jobId, productId });
     }
-
+ 
     return job;
   }
 

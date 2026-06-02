@@ -112,6 +112,12 @@ Write-Host ""
 
 # SECTION 4: Marketplace
 Write-Host "--- Marketplace ---" -ForegroundColor $Blue
+$MARKETPLACE_CLIENT_ID = Prompt-Value "MARKETPLACE_CLIENT_ID (Microsoft Marketplace app registration client ID)"
+Set-Secret "MARKETPLACE_CLIENT_ID" $MARKETPLACE_CLIENT_ID
+
+$MARKETPLACE_TENANT_ID = Prompt-Value "MARKETPLACE_TENANT_ID (Microsoft Marketplace app registration tenant ID)"
+Set-Secret "MARKETPLACE_TENANT_ID" $MARKETPLACE_TENANT_ID
+
 $MARKETPLACE_CLIENT_SECRET = Prompt-Secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)"
 Set-Secret "MARKETPLACE_CLIENT_SECRET" $MARKETPLACE_CLIENT_SECRET
 
