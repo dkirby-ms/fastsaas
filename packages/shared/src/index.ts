@@ -369,4 +369,76 @@ export interface PartnerCenterDisconnectResponse {
   disconnected: boolean;
 }
 
+export interface PublisherSubmissionValidationIssue {
+  level: 'error' | 'warning' | 'informational';
+  message: string;
+  resourceName: string;
+  code?: string;
+  resourceType?: string;
+  fieldPath?: string;
+}
+
+export interface PublisherSubmissionResourceSummary {
+  resourceKey: string;
+  resourceType: string;
+  resourceName: string;
+  durableId: string;
+  externalId?: string;
+  lifecycleState?: string;
+}
+
+export interface PublisherSubmissionHistoryEntry {
+  submissionId: string;
+  environment: 'draft' | 'preview' | 'live';
+  status: string;
+  result?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  validationIssues: PublisherSubmissionValidationIssue[];
+}
+
+export interface PublisherSubmissionEnvironmentState {
+  environment: 'draft' | 'preview' | 'live';
+  currentSubmission?: PublisherSubmissionHistoryEntry;
+  submissions: PublisherSubmissionHistoryEntry[];
+  validationIssues: PublisherSubmissionValidationIssue[];
+  resources: PublisherSubmissionResourceSummary[];
+  lastUpdatedAt?: string;
+}
+
+export interface PublisherProductSubmissionsResponse {
+  productId: string;
+  externalOfferId: string;
+  durableProductId: string;
+  lastSyncedAt: string;
+  fetchedAt: string;
+  environments: {
+    draft: PublisherSubmissionEnvironmentState;
+    preview: PublisherSubmissionEnvironmentState;
+    live: PublisherSubmissionEnvironmentState;
+  };
+  history: PublisherSubmissionHistoryEntry[];
+}
+
+export interface PublisherSubmissionDiffEntry {
+  resourceKey: string;
+  resourceType: string;
+  resourceName: string;
+  changeType: 'added' | 'removed' | 'modified';
+  fieldPaths: string[];
+  draftResource?: Record<string, unknown>;
+  liveResource?: Record<string, unknown>;
+}
+
+export interface PublisherProductSubmissionDiffResponse {
+  productId: string;
+  externalOfferId: string;
+  durableProductId: string;
+  comparedAt: string;
+  sourceEnvironment: 'draft';
+  targetEnvironment: 'live';
+  hasChanges: boolean;
+  changes: PublisherSubmissionDiffEntry[];
+}
+
 export * from './squad-places.js';

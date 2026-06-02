@@ -36,6 +36,11 @@ import type {
   ProductCatalogService
 } from '../../services/product-catalog-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
+import type {
+  PublisherProductSubmissionDiffResponse,
+  PublisherProductSubmissionsResponse,
+  SubmissionMonitoringService
+} from '../../services/submission-monitoring-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 
 function parsePlanBody(body: unknown): CreatePublisherPlanInput {
@@ -287,6 +292,7 @@ export function createPublisherRouter(
   partnerCenterService: PartnerCenterService,
   jobPollingService: JobPollingService,
   productCatalogService?: ProductCatalogService,
+  submissionMonitoringService?: SubmissionMonitoringService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -1010,7 +1016,7 @@ export function createPublisherRouter(
     }
   );
 
-  if (productCatalogService) {
+  if (productCatalogService && submissionMonitoringService) {
     const listProducts = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next: (error?: unknown) => void) => {
       try {
         const actor = buildActorContext(req);
@@ -1099,6 +1105,34 @@ export function createPublisherRouter(
       }
     };
 
+    const listProductSubmissions = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherProductSubmissionsResponse>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const submissions = await submissionMonitoringService.getProductSubmissions(actor.tenantId, getProductId(req));
+        res.status(200).json({ status: 'success', data: submissions, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProductDiff = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PublisherProductSubmissionDiffResponse>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const diff = await submissionMonitoringService.getProductDiff(actor.tenantId, getProductId(req));
+        res.status(200).json({ status: 'success', data: diff, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
     const submitOfferSubmission = async (
       req: ApiRequest,
       res: Response<ApiResponse<PublisherMarketplaceJobDetail>>,
@@ -1180,6 +1214,69 @@ export function createPublisherRouter(
       '/offers/:offerId/resource-tree',
       authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
       getOfferResourceTree
+    );
+
+    /**
+     * @swagger
+     * /v1/publisher/products/{productId}/submissions:
+     *   get:
+     *     summary: Get submission status by environment
+     *     description: Returns draft, preview, and live submission state, validation issues, and submission history for a marketplace product.
+     *     tags:
+     *       - Publisher
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: productId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Submission monitoring summary
+     *       401:
+     *         description: Missing or invalid bearer token
+     *       403:
+     *         description: Token missing required scope or publisher view permission
+     *       404:
+     *         description: Product not found
+     */
+    router.get(
+      '/products/:productId/submissions',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      listProductSubmissions
+    );
+    /**
+     * @swagger
+     * /v1/publisher/products/{productId}/diff:
+     *   get:
+     *     summary: Compare draft and live product state
+     *     description: Returns a resource-level diff between the draft and live Product Ingestion resource trees for a marketplace product.
+     *     tags:
+     *       - Publisher
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: productId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Draft versus live diff
+     *       401:
+     *         description: Missing or invalid bearer token
+     *       403:
+     *         description: Token missing required scope or publisher view permission
+     *       404:
+     *         description: Product not found
+     */
+    router.get(
+      '/products/:productId/diff',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      getProductDiff
     );
 
     router.post(
