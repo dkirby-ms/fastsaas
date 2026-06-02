@@ -9,6 +9,9 @@ param environmentName string = 'staging'
 @description('Whether to deploy the container apps or bootstrap only the shared infrastructure.')
 param deployContainerApps bool = true
 
+@description('Whether the portal should use mock API responses instead of calling the real API.')
+param useMockApi bool = true
+
 @description('Whether to deploy private endpoints and private networking resources.')
 param usePrivateEndpoints bool = false
 
@@ -350,6 +353,17 @@ var apiEnvVars = [
   }
 ]
 
+var portalEnvVars = [
+  {
+    name: 'USE_MOCK_API'
+    value: string(useMockApi)
+  }
+  {
+    name: 'API_BASE_URL'
+    value: useMockApi ? '' : apiUrl
+  }
+]
+
 var apiSecretEnvVars = [
   {
     name: 'DATABASE_URL'
@@ -391,7 +405,7 @@ module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
     healthPath: '/health'
     registryServer: containerRegistry.outputs.loginServer
     managedIdentityResourceId: portalRegistryIdentity.id
-    envVars: []
+    envVars: portalEnvVars
     tags: mergedTags
   }
 }
