@@ -12,9 +12,12 @@ import { logger } from '../../lib/logger';
 import type { MarketplaceFulfillmentClient } from '../../lib/marketplace-fulfillment';
 import { SystemClock } from '../../metering/clock';
 import { InMemoryUsageEventRepository } from '../../metering/repository';
+import { InMemoryPartnerCenterRepository } from '../../repositories/partner-center-repository';
 import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-plan-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
 import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member-repository';
+import type { PartnerCenterAuthProvider } from '../../services/partner-center-auth';
+import { PartnerCenterService } from '../../services/partner-center-service';
 import { PublisherService } from '../../services/publisher-service';
 import { SubscriptionService } from '../../services/subscription-service';
 import { TenantMemberService } from '../../services/tenant-member-service';
@@ -109,6 +112,21 @@ function buildUsageEvent(body: Partial<UsageEventIngestRequest> = {}): UsageEven
   };
 }
 
+function createPartnerCenterAuthProvider(): PartnerCenterAuthProvider {
+  return {
+    async acquireGraphToken() {
+      return 'partner-center-test-token';
+    },
+    async validateConnection() {
+      return {
+        organizationId: 'partner-center-org',
+        displayName: 'Partner Center Test Org'
+      };
+    },
+    invalidate() {}
+  };
+}
+
 export async function createSecurityHarness(): Promise<SecurityHarness> {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const jwk = (await exportJWK(publicKey)) as JWK;
@@ -150,6 +168,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const subscriptionRepository = new InMemorySubscriptionRepository();
   const tenantMemberRepository = new InMemoryTenantMemberRepository();
   const publisherPlanRepository = new InMemoryPublisherPlanRepository();
+  const partnerCenterRepository = new InMemoryPartnerCenterRepository();
   const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members-test' }));
   const subscriptionService = new SubscriptionService(
@@ -163,11 +182,17 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     publisherPlanRepository,
     logger.child({ component: 'publisher-test' })
   );
+  const partnerCenterService = new PartnerCenterService(
+    partnerCenterRepository,
+    createPartnerCenterAuthProvider(),
+    logger.child({ component: 'partner-center-test' })
+  );
   const app = createApp(config, {
     repository: meteringRepository,
     subscriptionRepository,
     subscriptionService,
     publisherService,
+    partnerCenterService,
     tenantMemberService
   });
 

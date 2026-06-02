@@ -14,6 +14,18 @@ enum TenantMemberRole {
   Viewer
 }
 
+enum PartnerCenterAuthMode {
+  CLIENT_SECRET
+  CLIENT_CERTIFICATE
+}
+
+enum PartnerCenterConnectionStatus {
+  PENDING
+  CONNECTED
+  FAILED
+  EXPIRED
+}
+
 model TenantMember {
   id        String           @id @default(uuid())
   tenantId  String           @map("tenant_id")
@@ -26,4 +38,35 @@ model TenantMember {
   @@unique([tenantId, userId])
   @@index([tenantId], map: "idx_tenant_members_tenant_id")
   @@map("tenant_members")
+}
+
+model PartnerCenterAccount {
+  id               String                         @id @default(uuid())
+  tenantId         String                         @unique @map("tenant_id")
+  pcTenantId       String                         @map("pc_tenant_id")
+  clientId         String                         @map("client_id")
+  authMode         PartnerCenterAuthMode          @map("auth_mode")
+  connectionStatus PartnerCenterConnectionStatus  @map("connection_status")
+  lastValidatedAt  DateTime?                      @map("last_validated_at")
+  createdAt        DateTime                       @default(now()) @map("created_at")
+  updatedAt        DateTime                       @updatedAt @map("updated_at")
+  credential       PartnerCenterCredential?
+
+  @@index([tenantId], map: "idx_partner_center_accounts_tenant_id")
+  @@map("partner_center_accounts")
+}
+
+model PartnerCenterCredential {
+  id               String                @id @default(uuid())
+  accountId        String                @unique @map("account_id")
+  secretReference  String                @map("secret_reference")
+  rotationMetadata Json?                 @map("rotation_metadata")
+  lastRotatedAt    DateTime?             @map("last_rotated_at")
+  expiresAt        DateTime?             @map("expires_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  account          PartnerCenterAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId], map: "idx_partner_center_credentials_account_id")
+  @@map("partner_center_credentials")
 }

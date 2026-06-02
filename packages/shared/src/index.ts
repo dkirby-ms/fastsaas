@@ -332,4 +332,41 @@ export interface PublisherTenantUpsertInput {
   status: PublisherTenantStatus;
 }
 
+export type PartnerCenterAuthMode = 'CLIENT_SECRET' | 'CLIENT_CERTIFICATE';
+
+export type PartnerCenterConnectionStatus = 'PENDING' | 'CONNECTED' | 'FAILED' | 'EXPIRED';
+
+export interface PartnerCenterConnectRequest {
+  pcTenantId: string;
+  clientId: string;
+  authMode: PartnerCenterAuthMode;
+  secretReference: string;
+  rotationMetadata?: Record<string, unknown>;
+  expiresAt?: string;
+}
+
+export interface PartnerCenterConnection {
+  id: string;
+  pcTenantId: string;
+  clientId: string;
+  authMode: PartnerCenterAuthMode;
+  connectionStatus: PartnerCenterConnectionStatus;
+  lastValidatedAt?: string;
+  credentialId: string;
+  rotationMetadata?: Record<string, unknown>;
+  lastRotatedAt?: string;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerCenterStatusResponse {
+  connected: boolean;
+  connection?: PartnerCenterConnection;
+}
+
+export interface PartnerCenterDisconnectResponse {
+  disconnected: boolean;
+}
+
 export * from './squad-places.js';

@@ -41,3 +41,6 @@
 - **PR #61 v0.1.0 tag fix:** Semantic-release baseline established — COMPLETE
 
 **See history-archive.md for detailed session records.**
+
+## Learnings
+- **2026-06-02T00:44:50.069+00:00:** Partner Center publisher connectivity now lives in `packages/api/src/services/partner-center-service.ts` and `packages/api/src/services/partner-center-auth.ts`, with tenant-scoped persistence in `packages/api/src/repositories/partner-center-repository.ts`, RLS-aware tables from `packages/api/src/db/migrations/20260602T004450_partner_center_connections.ts`, and publisher endpoints mounted from `packages/api/src/routes/v1/publisher.ts`.
