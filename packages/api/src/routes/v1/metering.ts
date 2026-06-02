@@ -1,5 +1,5 @@
 import type { ApiResponse, MeteringDashboardSummary, UsageEventIngestRequest, UsageEventIngestResponse } from '@fastsaas/shared';
-import { Router, type Response } from 'express';
+import { Router, type NextFunction, type Response } from 'express';
 
 import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
@@ -73,18 +73,22 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
   router.post(
     '/events',
     ...authorizeWrite,
-    async (req: ApiRequest, res: Response<ApiResponse<UsageEventIngestResponse>>) => {
-      const result = await service.ingestEvent(req.context!.tenantId, req.body as UsageEventIngestRequest);
+    async (req: ApiRequest, res: Response<ApiResponse<UsageEventIngestResponse>>, next: NextFunction) => {
+      try {
+        const result = await service.ingestEvent(req.context!.tenantId, req.body as UsageEventIngestRequest);
 
-      res.status(202).json({
-        status: 'success',
-        data: result,
-        meta: {
-          requestId: req.context!.requestId,
-          timestamp: new Date().toISOString(),
-          version: config.apiVersion
-        }
-      });
+        res.status(202).json({
+          status: 'success',
+          data: result,
+          meta: {
+            requestId: req.context!.requestId,
+            timestamp: new Date().toISOString(),
+            version: config.apiVersion
+          }
+        });
+      } catch (error) {
+        next(error);
+      }
     }
   );
 
@@ -104,18 +108,22 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
   router.get(
     '/dashboard',
     ...authorizeRead,
-    async (req: ApiRequest, res: Response<ApiResponse<MeteringDashboardSummary>>) => {
-      const summary = await service.getDashboardSummary(req.context!.tenantId);
+    async (req: ApiRequest, res: Response<ApiResponse<MeteringDashboardSummary>>, next: NextFunction) => {
+      try {
+        const summary = await service.getDashboardSummary(req.context!.tenantId);
 
-      res.status(200).json({
-        status: 'success',
-        data: summary,
-        meta: {
-          requestId: req.context!.requestId,
-          timestamp: new Date().toISOString(),
-          version: config.apiVersion
-        }
-      });
+        res.status(200).json({
+          status: 'success',
+          data: summary,
+          meta: {
+            requestId: req.context!.requestId,
+            timestamp: new Date().toISOString(),
+            version: config.apiVersion
+          }
+        });
+      } catch (error) {
+        next(error);
+      }
     }
   );
 

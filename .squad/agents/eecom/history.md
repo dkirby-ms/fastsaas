@@ -44,3 +44,4 @@
 
 ## Learnings
 - **2026-06-02T00:44:50.069+00:00:** Partner Center publisher connectivity now lives in `packages/api/src/services/partner-center-service.ts` and `packages/api/src/services/partner-center-auth.ts`, with tenant-scoped persistence in `packages/api/src/repositories/partner-center-repository.ts`, RLS-aware tables from `packages/api/src/db/migrations/20260602T004450_partner_center_connections.ts`, and publisher endpoints mounted from `packages/api/src/routes/v1/publisher.ts`.
+- **2026-06-02T01:33:55.352+00:00:** Fixed `packages/api/src/routes/v1/metering.ts` by adding Express 4 async error forwarding (`next` + try/catch) to the `POST /v1/metering/events` and `GET /v1/metering/dashboard` handlers, following the established route pattern in `packages/api/src/routes/v1/subscriptions.ts` so tenant-isolation metering failures reach error middleware instead of hanging tests.
