@@ -584,3 +584,98 @@ When adding semantic-release to a monorepo:
   2. Guard the ALTER TABLE statements for `subscription_audit_logs` and `marketplace_webhook_events` with `tableExists()` checks (or create the tables in the migration)
   3. Confirm `npm run migrate` succeeds against an empty PostgreSQL database end-to-end
 - **Assigned To:** FIDO — resolve merge conflicts and add missing `tableExists()` guards for ALTER TABLE statements.
+
+## 2026-06-02
+
+### EECOM Decision — Partner Center Secret References
+- **Date:** 2026-06-02T00:44:50.069+00:00
+- **Owner:** EECOM
+- **Status:** Proposed
+
+#### Context
+Issue #97 adds tenant-scoped Partner Center credential management for Product Ingestion connectivity. The backend must validate app-to-app credentials without storing raw secrets in Postgres or echoing them back through publisher APIs.
+
+#### Decision
+Store only a `secretReference` for Partner Center credentials in `partner_center_credentials`, and have the auth layer resolve that reference at runtime. The default resolver supports `env:VARIABLE_NAME` references for local/test flows, while the service contract is injectable so future Key Vault-backed resolution can replace it without changing route or repository shapes.
+
+#### Rationale
+This keeps secrets out of database rows, route payload echoes, and audit-friendly API responses while still allowing immediate validation against Microsoft Graph. The `env:` fallback preserves a minimal development path, and the injected resolver boundary keeps the production secret store flexible.
+
+#### Affected Files
+- `packages/api/src/services/partner-center-auth.ts`
+- `packages/api/src/services/partner-center-service.ts`
+- `packages/api/src/repositories/partner-center-repository.ts`
+- `packages/api/src/routes/v1/publisher.ts`
+
+---
+
+### Kranz PR #108 Review — Partner Center Connection
+- **Date:** 2026-06-02T00:58:37.086+00:00
+- **Reviewer:** Kranz
+- **PR:** #108 — `feat: add Partner Center connection (#97)`
+- **Verdict:** REJECTED
+- **Reassign:** EECOM
+
+#### Summary
+The branch adopts the expected repository → service → route layering, integrates cleanly with the existing publisher router, and passes API typecheck plus the new focused Partner Center tests. However, two production-readiness gaps remain in the security boundary, so this is not ready to merge.
+
+#### Blocking Issues
+1. **Secret resolution is env-only in production, which does not meet the project's secret-management direction.**
+   - `packages/api/src/services/partner-center-auth.ts` only supports `env:VARIABLE_NAME` in the default resolver and throws for any other reference.
+   - `packages/api/src/server.ts` instantiates `PartnerCenterAuthService` without a custom resolver, so deployed API instances cannot resolve Key Vault-backed tenant credentials.
+   - This conflicts with the design document's Azure Key Vault secret-management direction and makes multi-tenant credential rotation operationally brittle.
+
+2. **The connection validation proves Graph access, not Partner Center/Product Ingestion readiness.**
+   - `packages/api/src/services/partner-center-auth.ts` requests a Graph token for `https://graph.microsoft.com/.default` and validates by calling `/v1.0/organization`.
+   - A tenant app can satisfy that check while still lacking the permissions or audience required for the Partner Center/Product Ingestion APIs, so `/partner-center/connect` can report `CONNECTED` for credentials that will fail the actual downstream integration.
+
+#### Test Gap
+- `packages/api/src/__tests__/partner-center.integration.test.ts` routes through `InMemoryPartnerCenterRepository` and the stub auth provider in `packages/api/src/__tests__/security/test-harness.ts`.
+- That covers RBAC and response shaping, but it does not validate the live Kysely repository, migration, or RLS behavior for the new tables.
+
+#### Required Fix
+- EECOM should wire production secret resolution to the approved secret store path, validate against the actual downstream Partner Center/Product Ingestion API contract or equivalent audience/permission check, and add a live persistence-path test for the Kysely/RLS-backed implementation before requesting re-review.
+
+---
+
+### GNC Decision — PR #108 Revision
+- **Date:** 2026-06-02T01:08:36.792+00:00
+- **Owner:** GNC
+- **Status:** Proposed
+
+#### Context
+PR #108 was rejected because Partner Center credential resolution only supported environment variables and `/partner-center/connect` only proved Microsoft Graph access. Production validation needed to align with the repo's Azure Key Vault + managed identity direction and verify the downstream Product Ingestion API contract.
+
+#### Decision
+Use Azure Key Vault as the production secret store for Partner Center credentials in `packages/api/src/services/partner-center-auth.ts`, resolving either full secret URIs or `keyvault:SECRET_NAME` references with `DefaultAzureCredential`/managed identity. Keep `env:` references only as a local/test fallback. Validate connections by calling `GET https://graph.microsoft.com/rp/product-ingestion/product?$maxpagesize=1&$version=2022-03-01-preview5`; treat Microsoft Graph `/organization` as optional metadata enrichment rather than the authoritative readiness check.
+
+#### Rationale
+This preserves the existing database shape (`secretReference` only), keeps secrets out of Postgres responses, and matches the project's cloud-secret-management direction without requiring raw credential material in runtime environment variables. Product Ingestion validation closes the false-positive gap where Graph access could succeed while Partner Center permissions would still fail downstream.
+
+#### Affected Files
+- `packages/api/src/services/partner-center-auth.ts`
+- `packages/api/src/services/partner-center-service.ts`
+- `packages/api/src/routes/v1/publisher.ts`
+- `packages/api/src/server.ts`
+- `packages/api/package.json`
+
+---
+
+### Kranz Decision — PR #108 Re-review
+- **Date:** 2026-06-02T01:22:06.872+00:00
+- **Owner:** Kranz (Lead)
+- **Status:** Approved
+
+#### Context
+PR #108 (`squad/97-partner-center-connection`) was previously rejected on two blockers: production secret management was env-only instead of Azure Key Vault + managed identity, and `/partner-center/connect` only proved Microsoft Graph `/organization` access instead of downstream Product Ingestion readiness.
+
+#### Decision
+Approve PR #108. The revised branch now resolves Partner Center secrets through Azure Key Vault using `DefaultAzureCredential` in `packages/api/src/services/partner-center-auth.ts`, with `packages/api/src/server.ts` disabling `env:` secret references when `NODE_ENV=production`. It also validates readiness against `GET /rp/product-ingestion/product?$maxpagesize=1&$version=2022-03-01-preview5`, treating `/v1.0/organization` as optional enrichment only.
+
+#### Validation
+- Reviewed the updated branch diff for `packages/api/src/services/partner-center-auth.ts`, `packages/api/src/services/partner-center-service.ts`, `packages/api/src/routes/v1/publisher.ts`, `packages/api/src/server.ts`, and related tests.
+- Verified `npm run typecheck --workspace=@fastsaas/api` passes.
+- Verified `npm run test --workspace=@fastsaas/api -- --run src/__tests__/partner-center-auth.test.ts src/__tests__/partner-center.integration.test.ts` passes.
+
+#### Follow-up
+A separate pre-existing failure remains in `packages/api/src/__tests__/security/tenant-isolation.test.ts`: the metering route in `packages/api/src/routes/v1/metering.ts` needs Express 4 error forwarding so `AppError.notFound('Subscription was not found')` returns a 404 instead of hanging the test.
