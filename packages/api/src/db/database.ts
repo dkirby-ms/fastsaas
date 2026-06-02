@@ -11,6 +11,7 @@ import { Kysely, PostgresDialect, type ColumnType } from 'kysely';
 import { Pool } from 'pg';
 
 type JsonRecord = Record<string, unknown>;
+type MarketplaceJobStatus = 'submitted' | 'running' | 'completed' | 'failed' | 'cancelled';
 type GeneratedUuid = ColumnType<string, string | undefined, never>;
 type Numeric = ColumnType<string, number | string, number | string>;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
@@ -147,6 +148,20 @@ export interface PartnerCenterCredentialsTable {
   updated_at: GeneratedTimestamp;
 }
 
+export interface MarketplaceJobsTable {
+  id: GeneratedUuid;
+  product_id: string | null;
+  publisher_tenant_id: string;
+  job_id: string;
+  request_payload_hash: string;
+  status: MarketplaceJobStatus;
+  result: NullableJsonColumn;
+  errors: NullableJsonColumn;
+  created_at: GeneratedTimestamp;
+  polled_at: NullableTimestamp;
+  completed_at: NullableTimestamp;
+}
+
 export interface MarketplaceProductsTable {
   id: GeneratedUuid;
   publisher_tenant_id: string;
@@ -218,6 +233,7 @@ export interface Database {
   tenant_members: TenantMembersTable;
   partner_center_accounts: PartnerCenterAccountsTable;
   partner_center_credentials: PartnerCenterCredentialsTable;
+  marketplace_jobs: MarketplaceJobsTable;
   marketplace_products: MarketplaceProductsTable;
   marketplace_plans: MarketplacePlansTable;
   marketplace_submissions: MarketplaceSubmissionsTable;

@@ -39,6 +39,14 @@ export interface ApiConfig {
     marketplaceEndpoint?: string;
     marketplaceApiKey?: string;
   };
+  jobPolling: {
+    batchSize: number;
+    workerIntervalMs: number;
+    pollBaseDelayMs: number;
+    pollMaxDelayMs: number;
+    pollJitterRatio: number;
+    maxPollDurationMs: number;
+  };
 }
 
 function normalizeUrl(url: string): string {
@@ -162,6 +170,14 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       submissionSlaMs: Number(env.METERING_SUBMISSION_SLA_MS ?? 4 * 60 * 60 * 1000),
       marketplaceEndpoint: env.MARKETPLACE_METERING_ENDPOINT,
       marketplaceApiKey: env.MARKETPLACE_METERING_API_KEY
+    },
+    jobPolling: {
+      batchSize: Number(env.JOB_POLLING_BATCH_SIZE ?? 100),
+      workerIntervalMs: Number(env.JOB_POLLING_WORKER_INTERVAL_MS ?? 15000),
+      pollBaseDelayMs: Number(env.JOB_POLLING_BASE_DELAY_MS ?? 5000),
+      pollMaxDelayMs: Number(env.JOB_POLLING_MAX_DELAY_MS ?? 300000),
+      pollJitterRatio: Number(env.JOB_POLLING_JITTER_RATIO ?? 0.2),
+      maxPollDurationMs: Number(env.JOB_POLLING_MAX_DURATION_MS ?? 30 * 60 * 1000)
     }
   };
 }
