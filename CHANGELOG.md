@@ -1,3 +1,9 @@
+## [0.14.0](https://github.com/dkirby-ms/fastsaas/compare/v0.13.1...v0.14.0) (2026-06-02)
+
+### Features
+
+* **infra:** wire USE_MOCK_API and API_BASE_URL for portal container app ([e269056](https://github.com/dkirby-ms/fastsaas/commit/e269056e4d931508a732cb618129dfb6265f3224))
+
 ## [0.13.1](https://github.com/dkirby-ms/fastsaas/compare/v0.13.0...v0.13.1) (2026-06-02)
 
 ### Bug Fixes
