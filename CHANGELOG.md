@@ -1,3 +1,9 @@
+## [0.9.1](https://github.com/dkirby-ms/fastsaas/compare/v0.9.0...v0.9.1) (2026-06-02)
+
+### Bug Fixes
+
+* **api:** wrap metering route handlers with try/catch for Express 4 async error handling ([ca5f0ea](https://github.com/dkirby-ms/fastsaas/commit/ca5f0eab962ec678b9dfc7becf17df14495f0c6e)), closes [#109](https://github.com/dkirby-ms/fastsaas/issues/109)
+
 ## [0.9.0](https://github.com/dkirby-ms/fastsaas/compare/v0.8.2...v0.9.0) (2026-06-02)
 
 ### Features
