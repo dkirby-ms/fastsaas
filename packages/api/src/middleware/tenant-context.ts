@@ -7,7 +7,19 @@ import type { ApiRequest } from '../http';
 import type { TenantMemberService } from '../services/tenant-member-service';
 import { getRoles, getScopes, getUserId } from './auth';
 
-export function injectTenantContext(config: ApiConfig, tenantMemberService?: TenantMemberService) {
+export type AuthorizationModel = 'customer' | 'publisher';
+
+export interface InjectTenantContextOptions {
+  authorizationModel?: AuthorizationModel;
+}
+
+export function injectTenantContext(
+  config: ApiConfig,
+  tenantMemberService?: TenantMemberService,
+  options: InjectTenantContextOptions = {}
+) {
+  const authorizationModel = options.authorizationModel ?? 'customer';
+
   return async function tenantContext(req: ApiRequest, _res: Response, next: NextFunction): Promise<void> {
     if (!req.auth) {
       next(AppError.unauthorized());
@@ -34,10 +46,21 @@ export function injectTenantContext(config: ApiConfig, tenantMemberService?: Ten
       }
 
       const jwtRoles = getRoles(req.auth);
-      const member = jwtRoles.length === 0 && tenantMemberService
+      const member = authorizationModel === 'customer' && tenantMemberService
         ? await tenantMemberService.resolveMemberRole(tenantId, userId)
         : null;
-      const roles = jwtRoles.length > 0 ? jwtRoles : member ? [member.role] : [];
+      const roles =
+        authorizationModel === 'publisher'
+          ? jwtRoles
+          : tenantMemberService
+            ? member ? [member.role] : []
+            : jwtRoles;
+      const roleSource =
+        authorizationModel === 'publisher'
+          ? jwtRoles.length > 0 ? 'jwt' : 'none'
+          : tenantMemberService
+            ? member ? 'tenant_membership' : 'none'
+            : jwtRoles.length > 0 ? 'jwt' : 'none';
 
       req.context = {
         requestId: String(req.id ?? 'unknown'),
@@ -46,7 +69,7 @@ export function injectTenantContext(config: ApiConfig, tenantMemberService?: Ten
         scopes: getScopes(req.auth),
         roles,
         jwtRoles,
-        roleSource: jwtRoles.length > 0 ? 'jwt' : member ? 'tenant_membership' : 'none',
+        roleSource,
         memberId: member?.id
       };
 

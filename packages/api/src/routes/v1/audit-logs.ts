@@ -14,7 +14,11 @@ import type { AuditService } from '../../services/audit-service';
 export function createAuditLogsRouter(config: ApiConfig, auditService: AuditService, tenantMemberService?: TenantMemberService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), injectTenantContext(config, tenantMemberService), requireScopes([config.auth.requiredScope]));
+  router.use(
+    authenticateRequest(config),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
+    requireScopes([config.auth.requiredScope])
+  );
 
   router.get(
     '/',

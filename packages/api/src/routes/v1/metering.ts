@@ -13,7 +13,7 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
   const router = Router();
   const authorizeWrite = [
     authenticateRequest(config),
-    injectTenantContext(config, tenantMemberService),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
     requireScopes([config.metering.writeScope]),
     authorizeRoute({
       resource: 'metering',
@@ -23,7 +23,7 @@ export function createMeteringRouter(config: ApiConfig, service: MeteringService
   ];
   const authorizeRead = [
     authenticateRequest(config),
-    injectTenantContext(config, tenantMemberService),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
     requireScopes([config.metering.readScope]),
     authorizeRoute({ resource: 'metering', action: 'view' })
   ];

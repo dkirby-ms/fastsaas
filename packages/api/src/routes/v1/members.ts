@@ -80,7 +80,11 @@ function parseRoleBody(body: unknown): { role: RbacRole } {
 export function createMembersRouter(config: ApiConfig, tenantMemberService: TenantMemberService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
+  router.use(
+    authenticateRequest(config),
+    requireScopes([config.auth.requiredScope]),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })
+  );
 
   /**
    * @openapi

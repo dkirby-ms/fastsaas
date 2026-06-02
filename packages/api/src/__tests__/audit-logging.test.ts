@@ -132,7 +132,7 @@ function buildAuditApp() {
   app.post(
     '/fixtures/subscriptions/:subscriptionId/manage',
     authenticateRequest(config),
-    injectTenantContext(config),
+    injectTenantContext(config, undefined, { authorizationModel: 'publisher' }),
     requireScopes([config.auth.requiredScope]),
     authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: (req) => req.params.subscriptionId }),
     (_req, res) => {

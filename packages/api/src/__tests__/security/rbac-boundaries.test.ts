@@ -211,6 +211,26 @@ describe('RBAC boundary security catalog', () => {
     }
   );
 
+  it('blocks publisher app roles from satisfying customer RBAC without tenant membership', async () => {
+    await harness.createSubscriptionFixture({ tenantId: 'tenant-jwt-only-customer', marketplaceToken: 'jwt-only-customer' });
+
+    const token = await harness.createToken({
+      tenantId: 'tenant-jwt-only-customer',
+      roles: ['Admin'],
+      scopes: [harness.config.auth.requiredScope],
+      seedTenantMembership: false,
+      userId: 'jwt-only-user',
+      subject: 'subject-jwt-only-user'
+    });
+
+    const response = await request(harness.app)
+      .post('/v1/members/invite')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: 'member-denied', email: 'member-denied@example.com', role: 'Member' });
+
+    expect(response.status).toBe(403);
+  });
+
   it('blocks member role promotion when an external customer lacks app roles', async () => {
     const tenantId = 'tenant-external-members';
     await harness.createSubscriptionFixture({ tenantId, marketplaceToken: 'members-bootstrap' });
