@@ -1,3 +1,9 @@
+## [0.11.3](https://github.com/dkirby-ms/fastsaas/compare/v0.11.2...v0.11.3) (2026-06-02)
+
+### Bug Fixes
+
+* **scripts:** add MARKETPLACE_METERING_API_KEY to set-secrets helpers ([#73](https://github.com/dkirby-ms/fastsaas/issues/73)) ([#114](https://github.com/dkirby-ms/fastsaas/issues/114)) ([dc29aea](https://github.com/dkirby-ms/fastsaas/commit/dc29aea794c2092003d75ab9bcbc9f4ac042303b))
+
 ## [0.11.2](https://github.com/dkirby-ms/fastsaas/compare/v0.11.1...v0.11.2) (2026-06-02)
 
 ### Bug Fixes
