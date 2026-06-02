@@ -1,3 +1,9 @@
+## [0.9.0](https://github.com/dkirby-ms/fastsaas/compare/v0.8.2...v0.9.0) (2026-06-02)
+
+### Features
+
+* add Partner Center connection ([#97](https://github.com/dkirby-ms/fastsaas/issues/97)) ([#108](https://github.com/dkirby-ms/fastsaas/issues/108)) ([14e3f17](https://github.com/dkirby-ms/fastsaas/commit/14e3f174c086181444a4072c9247a55871f41ed9))
+
 ## [0.8.2](https://github.com/dkirby-ms/fastsaas/compare/v0.8.1...v0.8.2) (2026-06-01)
 
 ### Bug Fixes
