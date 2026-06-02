@@ -47,11 +47,17 @@ describe('PartnerCenterAuthService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('validates the connection with Microsoft Graph', async () => {
+  it('validates Product Ingestion access and enriches the connection with organization details when available', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ access_token: 'graph-token-2', expires_in: 3600, token_type: 'Bearer' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ value: [] }), {
           status: 200,
           headers: { 'content-type': 'application/json' }
         })
@@ -72,6 +78,6 @@ describe('PartnerCenterAuthService', () => {
     const result = await service.validateConnection(account, credential);
 
     expect(result).toEqual({ organizationId: 'org-1', displayName: 'Contoso' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

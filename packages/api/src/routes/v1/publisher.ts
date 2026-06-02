@@ -235,7 +235,7 @@ export function createPublisherRouter(
    * /v1/publisher/partner-center/connect:
    *   post:
    *     summary: Connect a Partner Center account
-   *     description: Stores tenant-scoped Partner Center app metadata and validates the configured secret reference against Microsoft Graph.
+   *     description: Stores tenant-scoped Partner Center app metadata and validates the configured Azure Key Vault or local development secret reference against the Partner Center Product Ingestion API.
    *     tags:
    *       - Publisher
    *     security:
@@ -257,6 +257,7 @@ export function createPublisherRouter(
    *                 enum: [CLIENT_SECRET, CLIENT_CERTIFICATE]
    *               secretReference:
    *                 type: string
+   *                 description: Azure Key Vault secret URI or keyvault:SECRET_NAME in deployed environments; env:VARIABLE_NAME is supported for local/test flows.
    *               rotationMetadata:
    *                 type: object
    *               expiresAt:
@@ -272,7 +273,7 @@ export function createPublisherRouter(
    *       403:
    *         description: Token missing required scope or publisher management permission
    *       503:
-   *         description: Microsoft Graph validation is unavailable
+   *         description: Partner Center validation or secret resolution is unavailable
    */
   router.post(
     '/partner-center/connect',

@@ -1,5 +1,7 @@
 import { createPrivateKey, randomUUID } from 'node:crypto';
 
+import { DefaultAzureCredential } from '@azure/identity';
+import { SecretClient } from '@azure/keyvault-secrets';
 import { SignJWT } from 'jose';
 import type { Logger } from 'pino';
 
@@ -7,7 +9,10 @@ import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '
 
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 const DEFAULT_GRAPH_BASE_URL = 'https://graph.microsoft.com';
+const DEFAULT_PRODUCT_INGESTION_API_VERSION = '2022-03-01-preview5';
 const TOKEN_REFRESH_BUFFER_MS = 60_000;
+const ENV_SECRET_PREFIX = 'env:';
+const KEY_VAULT_REFERENCE_PREFIX = 'keyvault:';
 
 interface TokenResponseShape {
   access_token?: unknown;
@@ -20,6 +25,12 @@ interface GraphOrganizationResponseShape {
     id?: unknown;
     displayName?: unknown;
   }>;
+}
+
+interface KeyVaultSecretReference {
+  vaultUrl: string;
+  secretName: string;
+  version?: string;
 }
 
 export interface PartnerCenterValidationResult {
@@ -49,8 +60,126 @@ export interface PartnerCenterAuthServiceOptions {
   logger: Logger;
   fetchImpl?: typeof fetch;
   graphBaseUrl?: string;
+  productIngestionApiVersion?: string;
+  keyVaultUrl?: string;
+  allowEnvironmentSecretReferences?: boolean;
   secretResolver?: (secretReference: string) => Promise<string>;
   now?: () => Date;
+}
+
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function normalizeSecretReference(secretReference: string): string {
+  const normalizedReference = secretReference.trim();
+  if (!normalizedReference) {
+    throw new PartnerCenterAuthError('secretReference must not be empty', 'resolve-secret', 400);
+  }
+
+  return normalizedReference;
+}
+
+function resolveEnvironmentSecret(secretReference: string): string {
+  const environmentVariable = secretReference.slice(ENV_SECRET_PREFIX.length).trim();
+  if (!environmentVariable) {
+    throw new PartnerCenterAuthError('env secret references must include a variable name', 'resolve-secret', 400);
+  }
+
+  const secretValue = process.env[environmentVariable]?.trim();
+  if (!secretValue) {
+    throw new PartnerCenterAuthError(
+      `The secret reference ${secretReference} is not available in the process environment`,
+      'resolve-secret',
+      400
+    );
+  }
+
+  return secretValue;
+}
+
+function parseKeyVaultSecretUri(secretReference: string): KeyVaultSecretReference {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(secretReference);
+  } catch {
+    throw new PartnerCenterAuthError('Azure Key Vault secret references must be valid HTTPS URLs', 'resolve-secret', 400);
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    throw new PartnerCenterAuthError('Azure Key Vault secret references must use HTTPS', 'resolve-secret', 400);
+  }
+
+  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+  if (pathSegments[0] !== 'secrets' || pathSegments.length < 2) {
+    throw new PartnerCenterAuthError(
+      'Azure Key Vault secret references must use the /secrets/<name>[/version] path',
+      'resolve-secret',
+      400
+    );
+  }
+
+  return {
+    vaultUrl: normalizeBaseUrl(`${parsedUrl.protocol}//${parsedUrl.host}`),
+    secretName: decodeURIComponent(pathSegments[1]),
+    version: pathSegments[2] ? decodeURIComponent(pathSegments[2]) : undefined
+  };
+}
+
+function parseKeyVaultSecretReference(secretReference: string, keyVaultUrl?: string): KeyVaultSecretReference {
+  if (secretReference.startsWith(KEY_VAULT_REFERENCE_PREFIX)) {
+    const referenceValue = secretReference.slice(KEY_VAULT_REFERENCE_PREFIX.length).trim();
+    if (!referenceValue) {
+      throw new PartnerCenterAuthError(
+        'keyvault secret references must include a secret name or full secret URI',
+        'resolve-secret',
+        400
+      );
+    }
+
+    if (referenceValue.startsWith('https://')) {
+      return parseKeyVaultSecretUri(referenceValue);
+    }
+
+    if (!keyVaultUrl?.trim()) {
+      throw new PartnerCenterAuthError(
+        'AZURE_KEY_VAULT_URL is required when using keyvault:SECRET_NAME references',
+        'resolve-secret',
+        400
+      );
+    }
+
+    return {
+      vaultUrl: normalizeBaseUrl(keyVaultUrl.trim()),
+      secretName: referenceValue
+    };
+  }
+
+  if (secretReference.startsWith('https://')) {
+    return parseKeyVaultSecretUri(secretReference);
+  }
+
+  throw new PartnerCenterAuthError(
+    'Unsupported secret reference. Use an Azure Key Vault secret URI, keyvault:SECRET_NAME, or env:VARIABLE_NAME in local/test environments.',
+    'resolve-secret',
+    400
+  );
+}
+
+function extractStatusCode(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  if ('statusCode' in error && typeof error.statusCode === 'number') {
+    return error.statusCode;
+  }
+
+  if ('status' in error && typeof error.status === 'number') {
+    return error.status;
+  }
+
+  return undefined;
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
@@ -64,44 +193,25 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return text.length > 0 ? text : undefined;
 }
 
-async function defaultSecretResolver(secretReference: string): Promise<string> {
-  const normalizedReference = secretReference.trim();
-  if (!normalizedReference.startsWith('env:')) {
-    throw new PartnerCenterAuthError(
-      'Unsupported secret reference. Use env:VARIABLE_NAME or configure a custom secret resolver.',
-      'resolve-secret',
-      400
-    );
-  }
-
-  const environmentVariable = normalizedReference.slice(4).trim();
-  if (!environmentVariable) {
-    throw new PartnerCenterAuthError('env secret references must include a variable name', 'resolve-secret', 400);
-  }
-
-  const secretValue = process.env[environmentVariable]?.trim();
-  if (!secretValue) {
-    throw new PartnerCenterAuthError(
-      `The secret reference ${normalizedReference} is not available in the process environment`,
-      'resolve-secret',
-      400
-    );
-  }
-
-  return secretValue;
-}
-
 export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly graphBaseUrl: string;
+  private readonly productIngestionApiVersion: string;
+  private readonly keyVaultUrl?: string;
+  private readonly allowEnvironmentSecretReferences: boolean;
   private readonly secretResolver: (secretReference: string) => Promise<string>;
   private readonly now: () => Date;
   private readonly tokenCache = new Map<string, { token: string; expiresAt: number }>();
+  private readonly secretClients = new Map<string, SecretClient>();
+  private readonly keyVaultCredential = new DefaultAzureCredential();
 
   constructor(private readonly options: PartnerCenterAuthServiceOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.graphBaseUrl = (options.graphBaseUrl ?? DEFAULT_GRAPH_BASE_URL).replace(/\/+$/, '');
-    this.secretResolver = options.secretResolver ?? defaultSecretResolver;
+    this.graphBaseUrl = normalizeBaseUrl(options.graphBaseUrl ?? DEFAULT_GRAPH_BASE_URL);
+    this.productIngestionApiVersion = options.productIngestionApiVersion ?? DEFAULT_PRODUCT_INGESTION_API_VERSION;
+    this.keyVaultUrl = options.keyVaultUrl?.trim() || undefined;
+    this.allowEnvironmentSecretReferences = options.allowEnvironmentSecretReferences ?? true;
+    this.secretResolver = options.secretResolver ?? (async (secretReference) => this.resolveSecretValue(secretReference));
     this.now = options.now ?? (() => new Date());
   }
 
@@ -178,7 +288,23 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     credential: PartnerCenterCredentialRecord
   ): Promise<PartnerCenterValidationResult> {
     const token = await this.acquireGraphToken(account, credential);
-    const response = await this.fetchImpl(`${this.graphBaseUrl}/v1.0/organization?$select=id,displayName`, {
+    await this.validateProductIngestionAccess(account.id, token);
+
+    const organization = await this.tryGetOrganization(account.id, token);
+    const resolvedOrganization = Array.isArray(organization?.value) ? organization.value[0] : undefined;
+
+    return {
+      organizationId: typeof resolvedOrganization?.id === 'string' ? resolvedOrganization.id : undefined,
+      displayName: typeof resolvedOrganization?.displayName === 'string' ? resolvedOrganization.displayName : undefined
+    };
+  }
+
+  private async validateProductIngestionAccess(accountId: string, token: string): Promise<void> {
+    const validationUrl = new URL('/rp/product-ingestion/product', `${this.graphBaseUrl}/`);
+    validationUrl.searchParams.set('$version', this.productIngestionApiVersion);
+    validationUrl.searchParams.set('$maxpagesize', '1');
+
+    const response = await this.fetchImpl(validationUrl.toString(), {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`
@@ -189,29 +315,117 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
       const responseBody = await parseResponseBody(response);
       this.options.logger.warn(
         {
-          accountId: account.id,
-          action: 'validate-connection',
+          accountId,
+          action: 'validate-product-ingestion-access',
           statusCode: response.status,
           responseBody
         },
-        'Partner Center Graph validation failed'
+        'Partner Center Product Ingestion validation failed'
       );
 
       throw new PartnerCenterAuthError(
-        `Partner Center validation request failed with status ${response.status}`,
-        'validate-connection',
+        `Partner Center Product Ingestion validation request failed with status ${response.status}`,
+        'validate-product-ingestion-access',
         response.status,
         responseBody
       );
     }
+  }
 
-    const body = (await response.json()) as GraphOrganizationResponseShape;
-    const organization = Array.isArray(body.value) ? body.value[0] : undefined;
+  private async tryGetOrganization(accountId: string, token: string): Promise<GraphOrganizationResponseShape | undefined> {
+    try {
+      const response = await this.fetchImpl(`${this.graphBaseUrl}/v1.0/organization?$select=id,displayName`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
 
-    return {
-      organizationId: typeof organization?.id === 'string' ? organization.id : undefined,
-      displayName: typeof organization?.displayName === 'string' ? organization.displayName : undefined
-    };
+      if (!response.ok) {
+        const responseBody = await parseResponseBody(response);
+        this.options.logger.info(
+          {
+            accountId,
+            action: 'lookup-organization',
+            statusCode: response.status,
+            responseBody
+          },
+          'Partner Center organization lookup skipped after Product Ingestion validation'
+        );
+        return undefined;
+      }
+
+      return (await response.json()) as GraphOrganizationResponseShape;
+    } catch (error) {
+      this.options.logger.info(
+        {
+          accountId,
+          action: 'lookup-organization',
+          err: error
+        },
+        'Partner Center organization lookup skipped after Product Ingestion validation'
+      );
+      return undefined;
+    }
+  }
+
+  private async resolveSecretValue(secretReference: string): Promise<string> {
+    const normalizedReference = normalizeSecretReference(secretReference);
+
+    if (normalizedReference.startsWith(ENV_SECRET_PREFIX)) {
+      if (!this.allowEnvironmentSecretReferences) {
+        throw new PartnerCenterAuthError(
+          'Environment-backed secret references are disabled in this environment. Use an Azure Key Vault secret URI or keyvault:SECRET_NAME reference instead.',
+          'resolve-secret',
+          400
+        );
+      }
+
+      return resolveEnvironmentSecret(normalizedReference);
+    }
+
+    const keyVaultReference = parseKeyVaultSecretReference(normalizedReference, this.keyVaultUrl);
+
+    try {
+      const response = await this.getSecretClient(keyVaultReference.vaultUrl).getSecret(
+        keyVaultReference.secretName,
+        keyVaultReference.version ? { version: keyVaultReference.version } : {}
+      );
+      const secretValue = response.value?.trim();
+      if (!secretValue) {
+        throw new PartnerCenterAuthError(
+          `Azure Key Vault secret ${keyVaultReference.secretName} did not include a value`,
+          'resolve-secret',
+          400
+        );
+      }
+
+      return secretValue;
+    } catch (error) {
+      if (error instanceof PartnerCenterAuthError) {
+        throw error;
+      }
+
+      const statusCode = extractStatusCode(error);
+      const message =
+        statusCode === 404
+          ? `Azure Key Vault secret ${keyVaultReference.secretName} was not found`
+          : `Failed to resolve Azure Key Vault secret ${keyVaultReference.secretName}`;
+
+      throw new PartnerCenterAuthError(message, 'resolve-secret', statusCode === 404 ? 400 : 503, error);
+    }
+  }
+
+  private getSecretClient(vaultUrl: string): SecretClient {
+    const normalizedVaultUrl = normalizeBaseUrl(vaultUrl);
+    const existingClient = this.secretClients.get(normalizedVaultUrl);
+    if (existingClient) {
+      return existingClient;
+    }
+
+    const client = new SecretClient(normalizedVaultUrl, this.keyVaultCredential);
+    this.secretClients.set(normalizedVaultUrl, client);
+    return client;
   }
 
   private async createClientAssertion(

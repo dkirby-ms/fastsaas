@@ -112,7 +112,11 @@ async function bootstrap(): Promise<void> {
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members' }));
   const subscriptionService = new SubscriptionService(subscriptionRepository, fulfillmentClient, logger, tenantMemberService);
   const auditService = new AuditService(auditLogRepository, logger.child({ component: 'audit' }));
-  const partnerCenterAuthService = new PartnerCenterAuthService({ logger: logger.child({ component: 'partner-center-auth' }) });
+  const partnerCenterAuthService = new PartnerCenterAuthService({
+    logger: logger.child({ component: 'partner-center-auth' }),
+    keyVaultUrl: process.env.AZURE_KEY_VAULT_URL,
+    allowEnvironmentSecretReferences: (process.env.NODE_ENV ?? 'development') !== 'production'
+  });
   const partnerCenterService = new PartnerCenterService(
     partnerCenterRepository,
     partnerCenterAuthService,
