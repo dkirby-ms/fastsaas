@@ -8,6 +8,7 @@ import * as publisherPlansMigration from './migrations/20260601T004305_publisher
 import * as tenantMembersMigration from './migrations/20260601T205004_tenant_members';
 import * as partnerCenterConnectionsMigration from './migrations/20260602T004450_partner_center_connections';
 import * as marketplaceCatalogMigration from './migrations/20260602T120322_marketplace_catalog';
+import * as marketplaceJobsMigration from './migrations/20260602T120322_marketplace_jobs';
 
 const MIGRATIONS: Record<string, Migration> = {
   '20260531T213532_audit_logs': auditLogsMigration,
@@ -15,7 +16,8 @@ const MIGRATIONS: Record<string, Migration> = {
   '20260601T004305_publisher_plans': publisherPlansMigration,
   '20260601T205004_tenant_members': tenantMembersMigration,
   '20260602T004450_partner_center_connections': partnerCenterConnectionsMigration,
-  '20260602T120322_marketplace_catalog': marketplaceCatalogMigration
+  '20260602T120322_marketplace_catalog': marketplaceCatalogMigration,
+  '20260602T120322_marketplace_jobs': marketplaceJobsMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {

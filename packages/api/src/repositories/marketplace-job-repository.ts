@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Kysely, Selectable } from 'kysely';
+import { sql, type Kysely, type Selectable } from 'kysely';
 
 import type {
   ProductIngestionConfigureDetail,
@@ -128,7 +128,22 @@ function mapRow(row: MarketplaceJobRow): MarketplaceJobRecord {
 }
 
 function comparePollingPriority(left: MarketplaceJobRecord, right: MarketplaceJobRecord): number {
-  return new Date(left.polledAt ?? left.createdAt).getTime() - new Date(right.polledAt ?? right.createdAt).getTime();
+  const leftNeverPolled = left.polledAt === undefined;
+  const rightNeverPolled = right.polledAt === undefined;
+
+  if (leftNeverPolled !== rightNeverPolled) {
+    return leftNeverPolled ? -1 : 1;
+  }
+
+  if (left.polledAt && right.polledAt) {
+    const polledAtDifference = new Date(left.polledAt).getTime() - new Date(right.polledAt).getTime();
+
+    if (polledAtDifference !== 0) {
+      return polledAtDifference;
+    }
+  }
+
+  return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
 }
 
 export class InMemoryMarketplaceJobRepository implements MarketplaceJobRepository {
@@ -322,7 +337,7 @@ export class KyselyMarketplaceJobRepository implements MarketplaceJobRepository 
           .selectFrom('marketplace_jobs')
           .selectAll()
           .where('status', 'in', ['submitted', 'running'])
-          .orderBy('polled_at', 'asc')
+          .orderBy(sql`polled_at asc nulls first`)
           .orderBy('created_at', 'asc')
           .limit(limit)
           .execute();
