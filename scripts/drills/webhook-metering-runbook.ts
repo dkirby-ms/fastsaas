@@ -343,7 +343,7 @@ function createMeteringHarness(
   const worker = new MeteringOutboxWorker(
     config,
     repository,
-    new HttpMarketplaceMeteringClient(config.metering.marketplaceEndpoint, config.metering.marketplaceClientSecret),
+    new HttpMarketplaceMeteringClient(config.metering.marketplaceEndpoint, config.marketplace.clientSecret),
     clock,
     () => 0
   );

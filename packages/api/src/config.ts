@@ -75,7 +75,8 @@ function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   clientSecret: string;
   webhookSecret: string;
 } {
-  // TODO: Phase 2: implement OAuth token exchange using these credentials.
+  // Phase 1 uses MARKETPLACE_CLIENT_SECRET directly as the Bearer token.
+  // Phase 2 will replace this with an OAuth token exchange flow (issue #78).
   const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
   const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
 

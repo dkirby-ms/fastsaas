@@ -42,7 +42,7 @@ Audited surfaces:
 | `AUTH_DEV_TENANT_ID` | API config only | Config | `packages/api/src/config.ts` default | Dev only. |
 | `MARKETPLACE_BASE_URL` | API config only | Config | `packages/api/src/config.ts` default | Not surfaced in staging env files. |
 | `MARKETPLACE_API_VERSION` | API config only | Config | `packages/api/src/config.ts` default | Not surfaced in staging env files. |
-| `MARKETPLACE_AUTH_TOKEN` | API config only | Secret | No deployment source found; code falls back to local default | Production/staging gap. |
+| `MARKETPLACE_CLIENT_SECRET` | API config only; metering client | Secret | No deployment source found; code falls back to local default | Production/staging gap. |
 | `MARKETPLACE_WEBHOOK_SECRET` | API config; drill script | Secret | No deployment source found; code falls back to local default | Production/staging gap. |
 | `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS` | API config only | Config | `packages/api/src/config.ts` default | Not documented elsewhere. |
 | `METERING_READ_SCOPE` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
@@ -350,7 +350,7 @@ Notes:
    - Those are different logical identities and should not share one ambiguous name.
 
 8. **Marketplace secrets/config are missing from staging surfaces.**
-   - API code expects `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, and optional metering vars.
+   - API code expects `MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`, and optional metering endpoint overrides.
    - No staging env file, Bicep param, or workflow secret wiring was found for them.
    - The code therefore falls back to local development defaults in deployed environments unless values are injected outside the repo.
 
