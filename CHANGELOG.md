@@ -1,3 +1,9 @@
+## [0.10.0](https://github.com/dkirby-ms/fastsaas/compare/v0.9.1...v0.10.0) (2026-06-02)
+
+### Features
+
+* **api:** add Product Ingestion API client library ([#98](https://github.com/dkirby-ms/fastsaas/issues/98)) ([#110](https://github.com/dkirby-ms/fastsaas/issues/110)) ([bde8882](https://github.com/dkirby-ms/fastsaas/commit/bde8882e1c4fbd954c655d1f5eb77781225ea53b))
+
 ## [0.9.1](https://github.com/dkirby-ms/fastsaas/compare/v0.9.0...v0.9.1) (2026-06-02)
 
 ### Bug Fixes
