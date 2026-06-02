@@ -12,6 +12,7 @@ import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
 import type { PartnerCenterService } from './services/partner-center-service';
+import type { ProductCatalogService } from './services/product-catalog-service';
 import type { PublisherService } from './services/publisher-service';
 import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
@@ -21,6 +22,7 @@ export interface AppDependencies extends MeteringRuntimeDependencies {
   auditService?: AuditService;
   publisherService?: PublisherService;
   partnerCenterService?: PartnerCenterService;
+  productCatalogService?: ProductCatalogService;
   tenantMemberService?: TenantMemberService;
 }
 
@@ -60,6 +62,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.auditService,
       dependencies.publisherService,
       dependencies.partnerCenterService,
+      dependencies.productCatalogService,
       dependencies.tenantMemberService
     )
   );

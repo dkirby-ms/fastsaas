@@ -14,10 +14,12 @@ import { SystemClock } from '../../metering/clock';
 import { InMemoryUsageEventRepository } from '../../metering/repository';
 import { InMemoryPartnerCenterRepository } from '../../repositories/partner-center-repository';
 import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-plan-repository';
+import { InMemoryProductCatalogRepository } from '../../repositories/product-catalog-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
 import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member-repository';
 import type { PartnerCenterAuthProvider } from '../../services/partner-center-auth';
 import { PartnerCenterService } from '../../services/partner-center-service';
+import { ProductCatalogService } from '../../services/product-catalog-service';
 import { PublisherService } from '../../services/publisher-service';
 import { SubscriptionService } from '../../services/subscription-service';
 import { TenantMemberService } from '../../services/tenant-member-service';
@@ -169,6 +171,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const tenantMemberRepository = new InMemoryTenantMemberRepository();
   const publisherPlanRepository = new InMemoryPublisherPlanRepository();
   const partnerCenterRepository = new InMemoryPartnerCenterRepository();
+  const productCatalogRepository = new InMemoryProductCatalogRepository();
   const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members-test' }));
   const subscriptionService = new SubscriptionService(
@@ -182,17 +185,25 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     publisherPlanRepository,
     logger.child({ component: 'publisher-test' })
   );
+  const partnerCenterAuthProvider = createPartnerCenterAuthProvider();
   const partnerCenterService = new PartnerCenterService(
     partnerCenterRepository,
-    createPartnerCenterAuthProvider(),
+    partnerCenterAuthProvider,
     logger.child({ component: 'partner-center-test' })
   );
+  const productCatalogService = new ProductCatalogService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthProvider,
+    logger: logger.child({ component: 'product-catalog-test' })
+  });
   const app = createApp(config, {
     repository: meteringRepository,
     subscriptionRepository,
     subscriptionService,
     publisherService,
     partnerCenterService,
+    productCatalogService,
     tenantMemberService
   });
 

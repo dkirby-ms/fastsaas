@@ -18,11 +18,18 @@ import { Router, type Response } from 'express';
 import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
+import type { ProductIngestionResource, ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { PartnerCenterService } from '../../services/partner-center-service';
+import type {
+  ProductCatalogImportInput,
+  ProductCatalogProduct,
+  ProductCatalogProductDetail,
+  ProductCatalogService
+} from '../../services/product-catalog-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 
@@ -149,6 +156,21 @@ function parsePartnerCenterConnectBody(body: unknown): PartnerCenterConnectReque
   };
 }
 
+function parseProductImportBody(body: unknown): ProductCatalogImportInput {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  const candidate = body as Record<string, unknown>;
+  if (typeof candidate.externalId !== 'string') {
+    throw AppError.badRequest('externalId is required');
+  }
+
+  return {
+    externalId: candidate.externalId
+  };
+}
+
 function buildActorContext(req: ApiRequest): PublisherActorContext {
   if (!req.context) {
     throw AppError.unauthorized();
@@ -180,6 +202,15 @@ function getTenantId(req: ApiRequest): string {
   return tenantId;
 }
 
+function getProductId(req: ApiRequest): string {
+  const { productId } = req.params;
+  if (typeof productId !== 'string' || productId.length === 0) {
+    throw AppError.badRequest('productId path parameter is required');
+  }
+
+  return productId;
+}
+
 function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   const { action } = req.params;
   if (action === 'activate' || action === 'suspend' || action === 'cancel') {
@@ -193,6 +224,7 @@ export function createPublisherRouter(
   config: ApiConfig,
   publisherService: PublisherService,
   partnerCenterService: PartnerCenterService,
+  productCatalogService?: ProductCatalogService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -785,6 +817,78 @@ export function createPublisherRouter(
       }
     }
   );
+
+  if (productCatalogService) {
+    router.get(
+      '/products',
+      authorizeRoute({ resource: 'publisher', action: 'view' }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const products = await productCatalogService.listProducts(actor.tenantId);
+          res.status(200).json({ status: 'success', data: products, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.post(
+      '/products/import',
+      authorizeRoute({ resource: 'publisher', action: 'manage' }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.importProduct(actor, parseProductImportBody(req.body));
+          res.status(201).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.get(
+      '/products/:productId',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.getProduct(actor.tenantId, getProductId(req));
+          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.get(
+      '/products/:productId/resource-tree',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductIngestionResourceTreeResponse<ProductIngestionResource>>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const resourceTree = await productCatalogService.getResourceTree(actor.tenantId, getProductId(req));
+          res.status(200).json({ status: 'success', data: resourceTree, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.post(
+      '/products/:productId/sync',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.syncProduct(actor, getProductId(req));
+          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+  }
 
   return router;
 }

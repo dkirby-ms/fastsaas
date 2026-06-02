@@ -28,6 +28,11 @@ import {
   type PublisherPlanRepository
 } from './repositories/publisher-plan-repository';
 import {
+  InMemoryProductCatalogRepository,
+  KyselyProductCatalogRepository,
+  type ProductCatalogRepository
+} from './repositories/product-catalog-repository';
+import {
   InMemorySubscriptionRepository,
   KyselySubscriptionRepository,
   type SubscriptionRepository
@@ -40,6 +45,7 @@ import {
 import { AuditService } from './services/audit-service';
 import { PartnerCenterAuthService } from './services/partner-center-auth';
 import { PartnerCenterService } from './services/partner-center-service';
+import { ProductCatalogService } from './services/product-catalog-service';
 import { PublisherService } from './services/publisher-service';
 import { SubscriptionService } from './services/subscription-service';
 import { TenantMemberService } from './services/tenant-member-service';
@@ -62,6 +68,10 @@ function createTenantMemberRepository(database?: Kysely<Database>): TenantMember
 
 function createPartnerCenterRepository(database?: Kysely<Database>): PartnerCenterRepository {
   return database ? new KyselyPartnerCenterRepository(database) : new InMemoryPartnerCenterRepository();
+}
+
+function createProductCatalogRepository(database?: Kysely<Database>): ProductCatalogRepository {
+  return database ? new KyselyProductCatalogRepository(database) : new InMemoryProductCatalogRepository();
 }
 
 async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
@@ -103,6 +113,7 @@ async function bootstrap(): Promise<void> {
   const publisherPlanRepository = createPublisherPlanRepository(database);
   const tenantMemberRepository = createTenantMemberRepository(database);
   const partnerCenterRepository = createPartnerCenterRepository(database);
+  const productCatalogRepository = createProductCatalogRepository(database);
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
@@ -127,6 +138,12 @@ async function bootstrap(): Promise<void> {
     publisherPlanRepository,
     logger.child({ component: 'publisher' })
   );
+  const productCatalogService = new ProductCatalogService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthService,
+    logger: logger.child({ component: 'product-catalog' })
+  });
   const app = createApp(config, {
     ...meteringRuntime,
     subscriptionRepository,
@@ -134,6 +151,7 @@ async function bootstrap(): Promise<void> {
     auditService,
     publisherService,
     partnerCenterService,
+    productCatalogService,
     tenantMemberService
   });
 
