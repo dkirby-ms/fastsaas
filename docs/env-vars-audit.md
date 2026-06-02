@@ -9,7 +9,7 @@ Audited surfaces:
 - `packages/api/src/config.ts`
 - `packages/portal/auth.ts`
 - `packages/portal/.env.example`
-- `packages/api/.env.example` (not present)
+- `packages/api/.env.example`
 - `infrastructure/env/staging-api.env`
 - `infrastructure/env/staging-portal.env`
 - `infrastructure/bicep/main.bicep`
@@ -42,8 +42,8 @@ Audited surfaces:
 | `AUTH_DEV_TENANT_ID` | API config only | Config | `packages/api/src/config.ts` default | Dev only. |
 | `MARKETPLACE_BASE_URL` | API config only | Config | `packages/api/src/config.ts` default | Not surfaced in staging env files. |
 | `MARKETPLACE_API_VERSION` | API config only | Config | `packages/api/src/config.ts` default | Not surfaced in staging env files. |
-| `MARKETPLACE_AUTH_TOKEN` | API config only | Secret | No deployment source found; code falls back to local default | Production/staging gap. |
-| `MARKETPLACE_WEBHOOK_SECRET` | API config; drill script | Secret | No deployment source found; code falls back to local default | Production/staging gap. |
+| `MARKETPLACE_CLIENT_SECRET` | API config only; metering client; `staging-api.env` (`secretref:`); `deploy-app-staging.yml` secret | Secret | Staging env file via Container App secret; provisioned by deploy workflow | Wired for staging via secret ref. |
+| `MARKETPLACE_WEBHOOK_SECRET` | API config; drill script; `staging-api.env` (`secretref:`); `deploy-app-staging.yml` secret | Secret | Staging env file via Container App secret; provisioned by deploy workflow | Wired for staging via secret ref. |
 | `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS` | API config only | Config | `packages/api/src/config.ts` default | Not documented elsewhere. |
 | `METERING_READ_SCOPE` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
 | `METERING_WRITE_SCOPE` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
@@ -56,7 +56,6 @@ Audited surfaces:
 | `METERING_MAX_RETRIES` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
 | `METERING_SUBMISSION_SLA_MS` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
 | `MARKETPLACE_METERING_ENDPOINT` | API config; drill script | Config | Code/runtime override only | No deployment source found. |
-| `MARKETPLACE_METERING_API_KEY` | API config only | Secret | No deployment source found | No env template. |
 | `LOG_LEVEL` | API logger only | Config | Runtime only | No example or deploy surface. |
 | `SECURITY_RLS_ENABLED` | API security tests only | Config | Test runtime only | Not an application runtime var. |
 | `NEXTAUTH_SECRET` | Portal auth; portal `.env.example`; `staging-portal.env` (`secretref:`); root `.env`; portal Docker build placeholder | Secret | Portal example for local; staging env file for deployment | Staging secret ref is not provisioned anywhere in repo automation. |
@@ -130,13 +129,13 @@ API runtime expects or supports:
 
 - Core runtime: `NODE_ENV`, `API_PORT`, `API_VERSION`, `DATABASE_URL`
 - Auth: `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_ISSUER`, `ENTRA_AUDIENCE`, `ENTRA_JWKS_URI`, `JWT_REQUIRED_SCOPE`, `AUTH_BYPASS_ENABLED`, `AUTH_DEV_USER_ID`, `AUTH_DEV_TENANT_ID`
-- Marketplace: `MARKETPLACE_BASE_URL`, `MARKETPLACE_API_VERSION`, `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`
-- Metering: `METERING_READ_SCOPE`, `METERING_WRITE_SCOPE`, `METERING_BATCH_SIZE`, `METERING_WORKER_INTERVAL_MS`, `METERING_CLAIM_LEASE_MS`, `METERING_RETRY_BASE_DELAY_MS`, `METERING_RETRY_MAX_DELAY_MS`, `METERING_RETRY_JITTER_RATIO`, `METERING_MAX_RETRIES`, `METERING_SUBMISSION_SLA_MS`, `MARKETPLACE_METERING_ENDPOINT`, `MARKETPLACE_METERING_API_KEY`
+- Marketplace: `MARKETPLACE_BASE_URL`, `MARKETPLACE_API_VERSION`, `MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`, `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`
+- Metering: `METERING_READ_SCOPE`, `METERING_WRITE_SCOPE`, `METERING_BATCH_SIZE`, `METERING_WORKER_INTERVAL_MS`, `METERING_CLAIM_LEASE_MS`, `METERING_RETRY_BASE_DELAY_MS`, `METERING_RETRY_MAX_DELAY_MS`, `METERING_RETRY_JITTER_RATIO`, `METERING_MAX_RETRIES`, `METERING_SUBMISSION_SLA_MS`, `MARKETPLACE_METERING_ENDPOINT`
 
 Important behavior:
 
 - If `AUTH_BYPASS_ENABLED` is not `true`, both `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` are required.
-- Several production-sensitive values still have local fallback defaults (`MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`).
+- Several production-sensitive values still have local fallback defaults (`MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`).
 - `DATABASE_URL` is optional for startup, so the API can run in degraded mode.
 
 ### `packages/portal/auth.ts`
@@ -168,8 +167,13 @@ Documents local portal values for:
 
 ### `packages/api/.env.example`
 
-- No API env example file exists.
-- This is the biggest documentation gap in the repo: the API expects many env vars, but there is no canonical developer-facing template.
+Documents local API values for:
+
+- Core: `NODE_ENV`, `API_PORT`, `API_VERSION`, `DATABASE_URL`
+- Auth: `AUTH_BYPASS_ENABLED`, `AUTH_DEV_USER_ID`, `AUTH_DEV_TENANT_ID`, `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_ISSUER`, `ENTRA_AUDIENCE`, `ENTRA_JWKS_URI`, `JWT_REQUIRED_SCOPE`
+- Marketplace: `MARKETPLACE_BASE_URL`, `MARKETPLACE_API_VERSION`, `MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`, `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`, `MARKETPLACE_METERING_ENDPOINT`
+- Metering: `METERING_READ_SCOPE`, `METERING_WRITE_SCOPE`, `METERING_BATCH_SIZE`, `METERING_WORKER_INTERVAL_MS`, `METERING_CLAIM_LEASE_MS`, `METERING_RETRY_BASE_DELAY_MS`, `METERING_RETRY_MAX_DELAY_MS`, `METERING_RETRY_JITTER_RATIO`, `METERING_MAX_RETRIES`, `METERING_SUBMISSION_SLA_MS`
+- Logging: `LOG_LEVEL`
 
 ### `infrastructure/env/staging-api.env`
 
@@ -183,7 +187,7 @@ Defines only:
 Notes:
 
 - `DATABASE_URL` and `REDIS_URL` are not here because Bicep injects them as Container App secrets.
-- Marketplace and metering secrets are not here either.
+- `MARKETPLACE_CLIENT_SECRET` and `MARKETPLACE_WEBHOOK_SECRET` are here as secret refs, provisioned by `deploy-app-staging.yml` from GitHub Actions secrets.
 
 ### `infrastructure/env/staging-portal.env`
 
@@ -226,6 +230,8 @@ Consumes GitHub secrets:
 - `PORTAL_CLIENT_ID`
 - `PORTAL_ENTRA_CLIENT_SECRET`
 - `PORTAL_NEXTAUTH_SECRET`
+- `MARKETPLACE_CLIENT_SECRET`
+- `MARKETPLACE_WEBHOOK_SECRET`
 
 Deployment behavior:
 
@@ -233,12 +239,12 @@ Deployment behavior:
 - Deploys Bicep with `azureTenantId` and `azureClientId` parameters for the API Container App
 - Reads `infrastructure/env/staging-api.env` and `infrastructure/env/staging-portal.env`
 - Replaces `{{PLACEHOLDER}}` tokens from workflow env/secrets/outputs
-- Provisions Container App secrets `portal-entra-client-secret` and `portal-nextauth-secret`
+- Provisions Container App secrets `marketplace-client-secret`, `marketplace-webhook-secret`, `portal-entra-client-secret`, and `portal-nextauth-secret`
 - Calls `az containerapp update --set-env-vars ...`
 
 Gap:
 
-- The workflow now creates Container App secrets for `portal-entra-client-secret` and `portal-nextauth-secret` before using `secretref:` values.
+- The workflow creates Container App secrets for `marketplace-client-secret`, `marketplace-webhook-secret`, `portal-entra-client-secret`, and `portal-nextauth-secret` before using `secretref:` values.
 - The workflow passes `API_BASE_URL` to the portal env file, but the portal app code expects `NEXT_PUBLIC_API_BASE_URL`.
 
 ### `.github/workflows/deploy-infra-staging.yml`
@@ -317,49 +323,41 @@ Notes:
 
 ## 3. Inconsistencies found
 
-1. **No API env template exists.**
-   - The API has the largest env surface, but `packages/api/.env.example` is missing.
-   - Current behavior is discoverable only by reading `packages/api/src/config.ts` and migration scripts.
-
-2. **Legacy naming still exists in root `.env`.**
+1. **Legacy naming still exists in root `.env`.**
    - Local root `.env` uses `AZURE_AD_*` names.
    - Current portal and API code use `ENTRA_*` names.
    - This is an easy source of local misconfiguration.
 
-3. **Portal staging config uses the wrong API base URL variable.**
+2. **Portal staging config uses the wrong API base URL variable.**
    - The portal app code reads `NEXT_PUBLIC_API_BASE_URL`.
    - `infrastructure/env/staging-portal.env` and the deploy workflow set `API_BASE_URL` instead.
    - `API_BASE_URL` is only used by the placeholder server/Docker build path, not by the live portal code.
 
-4. **Portal public env is treated like runtime config, but it is mostly build-time config.**
+3. **Portal public env is treated like runtime config, but it is mostly build-time config.**
    - `packages/portal/Dockerfile` bakes `NEXT_PUBLIC_API_BASE_URL` from `ARG API_BASE_URL` during build.
    - `deploy-app-staging.yml` does not pass a build arg, so builds default to `http://api:3000`.
    - That strongly suggests the staging portal image can be built with the wrong public API URL.
 
-5. **Portal secret refs are now provisioned by the staging app workflow.**
+4. **Marketplace and portal secret refs are now provisioned by the staging app workflow.**
+   - `staging-api.env` uses `secretref:marketplace-client-secret` and `secretref:marketplace-webhook-secret`.
    - `staging-portal.env` uses `secretref:portal-entra-client-secret` and `secretref:portal-nextauth-secret`.
-   - `deploy-app-staging.yml` now creates those Container App secrets from GitHub Actions secrets before configuring the portal environment.
+   - `deploy-app-staging.yml` creates these Container App secrets from GitHub Actions secrets before configuring the environments.
 
-6. **API auth env has duplicate control planes.**
+5. **API auth env has duplicate control planes.**
    - Bicep injects `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` into the API Container App.
    - The app deploy workflow also sets those same values again from `staging-api.env`.
    - Current source of truth is duplicated.
 
-7. **`AZURE_CLIENT_ID` is overloaded.**
+6. **`AZURE_CLIENT_ID` is overloaded.**
    - It is used for GitHub Actions Azure login.
    - It is also substituted into app auth settings (`ENTRA_CLIENT_ID` for API and `ENTRA_API_CLIENT_ID` for portal).
    - Those are different logical identities and should not share one ambiguous name.
 
-8. **Marketplace secrets/config are missing from staging surfaces.**
-   - API code expects `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, and optional metering vars.
-   - No staging env file, Bicep param, or workflow secret wiring was found for them.
-   - The code therefore falls back to local development defaults in deployed environments unless values are injected outside the repo.
-
-9. **`REDIS_URL` is deployed but appears unused by current app code.**
+7. **`REDIS_URL` is deployed but appears unused by current app code.**
    - Bicep and compose both provide it.
    - No runtime API consumer was found in the current codebase.
 
-10. **Docker/compose contain stale generic vars.**
+8. **Docker/compose contain stale generic vars.**
    - API Dockerfile sets both `API_PORT` and `PORT`, but API code reads `API_PORT`.
    - `docker-compose.yml` build args `SERVICE_NAME` and `SERVICE_PORT` have no current Dockerfile consumer.
    - `APP_NAME` is only used by the placeholder portal server.
@@ -391,9 +389,9 @@ Notes:
    - `deploy-app-staging.yml` now provisions `portal-entra-client-secret` and `portal-nextauth-secret` explicitly.
    - Apply the same pattern for any future portal or API `secretref:` values, or switch to another supported secret injection path that is actually wired up.
 
-7. **Add missing staging wiring for marketplace secrets.**
-   - At minimum: `MARKETPLACE_AUTH_TOKEN` and `MARKETPLACE_WEBHOOK_SECRET`.
-   - If staging exercises metering, also decide on `MARKETPLACE_METERING_ENDPOINT` and `MARKETPLACE_METERING_API_KEY`.
+7. **Marketplace secrets are now wired for staging deployment.**
+   - Staging wires `MARKETPLACE_CLIENT_SECRET` and `MARKETPLACE_WEBHOOK_SECRET` via Container App secrets.
+   - If staging also needs `MARKETPLACE_METERING_ENDPOINT` override, consider adding it to `infrastructure/env/staging-api.env`.
 
 8. **Delete or document unused vars.**
    - Revisit `REDIS_URL`, `SERVICE_NAME`, `SERVICE_PORT`, API `PORT`, and portal `APP_NAME`.

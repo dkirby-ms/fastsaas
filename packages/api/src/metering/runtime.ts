@@ -35,7 +35,7 @@ export function createMeteringRuntime(config: ApiConfig, dependencies: MeteringR
   const repository = dependencies.repository ?? createDefaultRepository(config, clock, dependencies.sqlClient);
   const marketplaceClient = dependencies.marketplaceClient ?? new HttpMarketplaceMeteringClient(
     config.metering.marketplaceEndpoint,
-    config.metering.marketplaceApiKey
+    config.marketplace.clientSecret
   );
 
   return {

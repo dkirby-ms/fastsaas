@@ -18,7 +18,7 @@ export interface ApiConfig {
   marketplace: {
     baseUrl: string;
     apiVersion: string;
-    authToken: string;
+    clientSecret: string;
     webhookSecret: string;
     webhookTimestampToleranceMs: number;
   };
@@ -37,7 +37,6 @@ export interface ApiConfig {
     maxRetries: number;
     submissionSlaMs: number;
     marketplaceEndpoint?: string;
-    marketplaceApiKey?: string;
   };
   jobPolling: {
     batchSize: number;
@@ -73,21 +72,23 @@ function isLocalEnvironment(nodeEnv: string): boolean {
 }
 
 function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
-  authToken: string;
+  clientSecret: string;
   webhookSecret: string;
 } {
-  const authToken = env.MARKETPLACE_AUTH_TOKEN?.trim();
+  // Phase 1 uses MARKETPLACE_CLIENT_SECRET directly as the Bearer token.
+  // Phase 2 will replace this with an OAuth token exchange flow (issue #78).
+  const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
   const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
 
   if (isLocalEnvironment(nodeEnv)) {
     return {
-      authToken: authToken || 'local-marketplace-token',
+      clientSecret: clientSecret || 'local-marketplace-client-secret',
       webhookSecret: webhookSecret || 'local-marketplace-webhook-secret'
     };
   }
 
   const missingSecrets = [
-    !authToken ? 'MARKETPLACE_AUTH_TOKEN' : undefined,
+    !clientSecret ? 'MARKETPLACE_CLIENT_SECRET' : undefined,
     !webhookSecret ? 'MARKETPLACE_WEBHOOK_SECRET' : undefined
   ].filter((value): value is string => Boolean(value));
 
@@ -99,7 +100,7 @@ function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   }
 
   return {
-    authToken: authToken as string,
+    clientSecret: clientSecret as string,
     webhookSecret: webhookSecret as string
   };
 }
@@ -150,7 +151,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     marketplace: {
       baseUrl: normalizeUrl(env.MARKETPLACE_BASE_URL ?? 'https://marketplaceapi.microsoft.com'),
       apiVersion: env.MARKETPLACE_API_VERSION ?? '2018-08-31',
-      authToken: marketplaceSecrets.authToken,
+      clientSecret: marketplaceSecrets.clientSecret,
       webhookSecret: marketplaceSecrets.webhookSecret,
       webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },
@@ -168,8 +169,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       retryJitterRatio: Number(env.METERING_RETRY_JITTER_RATIO ?? 0.1),
       maxRetries: Number(env.METERING_MAX_RETRIES ?? 8),
       submissionSlaMs: Number(env.METERING_SUBMISSION_SLA_MS ?? 4 * 60 * 60 * 1000),
-      marketplaceEndpoint: env.MARKETPLACE_METERING_ENDPOINT,
-      marketplaceApiKey: env.MARKETPLACE_METERING_API_KEY
+      marketplaceEndpoint: env.MARKETPLACE_METERING_ENDPOINT
     },
     jobPolling: {
       batchSize: Number(env.JOB_POLLING_BATCH_SIZE ?? 100),

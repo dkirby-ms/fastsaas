@@ -112,14 +112,11 @@ Write-Host ""
 
 # SECTION 4: Marketplace
 Write-Host "--- Marketplace ---" -ForegroundColor $Blue
-$MARKETPLACE_AUTH_TOKEN = Prompt-Secret "MARKETPLACE_AUTH_TOKEN (Microsoft Marketplace API authentication token)"
-Set-Secret "MARKETPLACE_AUTH_TOKEN" $MARKETPLACE_AUTH_TOKEN
+$MARKETPLACE_CLIENT_SECRET = Prompt-Secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)"
+Set-Secret "MARKETPLACE_CLIENT_SECRET" $MARKETPLACE_CLIENT_SECRET
 
 $MARKETPLACE_WEBHOOK_SECRET = Prompt-Secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)"
 Set-Secret "MARKETPLACE_WEBHOOK_SECRET" $MARKETPLACE_WEBHOOK_SECRET
-
-$MARKETPLACE_METERING_API_KEY = Prompt-Secret "MARKETPLACE_METERING_API_KEY (Marketplace metering API key for usage reporting)"
-Set-Secret "MARKETPLACE_METERING_API_KEY" $MARKETPLACE_METERING_API_KEY
 
 Write-Host ""
 

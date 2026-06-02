@@ -32,7 +32,7 @@ export class MarketplaceMeteringError extends Error {
 }
 
 export class HttpMarketplaceMeteringClient implements MarketplaceMeteringClient {
-  constructor(private readonly endpoint?: string, private readonly apiKey?: string) {}
+  constructor(private readonly endpoint?: string, private readonly clientSecret?: string) {}
 
   async submitUsageEvent(event: MarketplaceSubmitUsageEvent): Promise<void> {
     if (!this.endpoint) {
@@ -44,7 +44,7 @@ export class HttpMarketplaceMeteringClient implements MarketplaceMeteringClient 
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {})
+        ...(this.clientSecret ? { authorization: `Bearer ${this.clientSecret}` } : {})
       },
       body: JSON.stringify(event.payload)
     });

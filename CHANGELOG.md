@@ -8,7 +8,7 @@
 
 ### Bug Fixes
 
-* **infra:** provision MARKETPLACE_METERING_API_KEY in staging ([#73](https://github.com/dkirby-ms/fastsaas/issues/73)) ([#113](https://github.com/dkirby-ms/fastsaas/issues/113)) ([b41a6d4](https://github.com/dkirby-ms/fastsaas/commit/b41a6d4b0f844471edea38c48b10f299e84e86a0))
+* **infra:** provision marketplace API secrets in staging ([#73](https://github.com/dkirby-ms/fastsaas/issues/73)) ([#113](https://github.com/dkirby-ms/fastsaas/issues/113)) ([b41a6d4](https://github.com/dkirby-ms/fastsaas/commit/b41a6d4b0f844471edea38c48b10f299e84e86a0))
 
 ## [0.11.1](https://github.com/dkirby-ms/fastsaas/compare/v0.11.0...v0.11.1) (2026-06-02)
 
