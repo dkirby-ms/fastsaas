@@ -1,3 +1,9 @@
+## [0.11.0](https://github.com/dkirby-ms/fastsaas/compare/v0.10.0...v0.11.0) (2026-06-02)
+
+### Features
+
+* **api:** add Partner Center product import and sync ([#111](https://github.com/dkirby-ms/fastsaas/issues/111)) ([45ba129](https://github.com/dkirby-ms/fastsaas/commit/45ba1299fc59aeb070fb21e1d0804ed735933654)), closes [#100](https://github.com/dkirby-ms/fastsaas/issues/100)
+
 ## [0.10.0](https://github.com/dkirby-ms/fastsaas/compare/v0.9.1...v0.10.0) (2026-06-02)
 
 ### Features
