@@ -18,11 +18,23 @@ import { Router, type Response } from 'express';
 import type { ApiConfig } from '../../config';
 import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
+import type { ProductIngestionResource, ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
+import type {
+  JobPollingService,
+  PublisherMarketplaceJobDetail,
+  PublisherMarketplaceJobListResponse
+} from '../../services/job-polling-service';
 import type { PartnerCenterService } from '../../services/partner-center-service';
+import type {
+  ProductCatalogImportInput,
+  ProductCatalogProduct,
+  ProductCatalogProductDetail,
+  ProductCatalogService
+} from '../../services/product-catalog-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 
@@ -149,6 +161,21 @@ function parsePartnerCenterConnectBody(body: unknown): PartnerCenterConnectReque
   };
 }
 
+function parseProductImportBody(body: unknown): ProductCatalogImportInput {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  const candidate = body as Record<string, unknown>;
+  if (typeof candidate.externalId !== 'string') {
+    throw AppError.badRequest('externalId is required');
+  }
+
+  return {
+    externalId: candidate.externalId
+  };
+}
+
 function buildActorContext(req: ApiRequest): PublisherActorContext {
   if (!req.context) {
     throw AppError.unauthorized();
@@ -180,6 +207,42 @@ function getTenantId(req: ApiRequest): string {
   return tenantId;
 }
 
+function getProductId(req: ApiRequest): string {
+  const { productId } = req.params;
+  if (typeof productId !== 'string' || productId.length === 0) {
+    throw AppError.badRequest('productId path parameter is required');
+  }
+
+  return productId;
+}
+
+function getJobId(req: ApiRequest): string {
+  const { jobId } = req.params;
+  if (typeof jobId !== 'string' || jobId.length === 0) {
+    throw AppError.badRequest('jobId path parameter is required');
+  }
+
+  return jobId;
+}
+
+function parseJobListQuery(req: ApiRequest): { page?: number; pageSize?: number } {
+  const pageRaw = typeof req.query.page === 'string' ? Number(req.query.page) : undefined;
+  const pageSizeRaw = typeof req.query.pageSize === 'string' ? Number(req.query.pageSize) : undefined;
+
+  if (pageRaw !== undefined && (!Number.isInteger(pageRaw) || pageRaw <= 0)) {
+    throw AppError.badRequest('page must be a positive integer when provided');
+  }
+
+  if (pageSizeRaw !== undefined && (!Number.isInteger(pageSizeRaw) || pageSizeRaw <= 0)) {
+    throw AppError.badRequest('pageSize must be a positive integer when provided');
+  }
+
+  return {
+    page: pageRaw,
+    pageSize: pageSizeRaw
+  };
+}
+
 function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   const { action } = req.params;
   if (action === 'activate' || action === 'suspend' || action === 'cancel') {
@@ -193,6 +256,8 @@ export function createPublisherRouter(
   config: ApiConfig,
   publisherService: PublisherService,
   partnerCenterService: PartnerCenterService,
+  jobPollingService: JobPollingService,
+  productCatalogService?: ProductCatalogService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -347,6 +412,132 @@ export function createPublisherRouter(
         const actor = buildActorContext(req);
         const result = await partnerCenterService.disconnect(actor);
         res.status(200).json({ status: 'success', data: result, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/jobs:
+   *   get:
+   *     summary: List Product Ingestion jobs
+   *     description: Returns recent Product Ingestion configure jobs for the authenticated publisher tenant.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *       - in: query
+   *         name: pageSize
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 100
+   *     responses:
+   *       200:
+   *         description: Publisher Product Ingestion jobs
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   */
+  router.get(
+    '/jobs',
+    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobListResponse>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const jobs = await jobPollingService.listJobs(actor.tenantId, parseJobListQuery(req));
+        res.status(200).json({ status: 'success', data: jobs, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/jobs/{jobId}:
+   *   get:
+   *     summary: Get Product Ingestion job detail
+   *     description: Returns Product Ingestion job detail, including resource-level validation errors.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: jobId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Product Ingestion job detail
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher view permission
+   *       404:
+   *         description: Job not found
+   */
+  router.get(
+    '/jobs/:jobId',
+    authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getJobId }),
+    async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobDetail>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const job = await jobPollingService.getJob(actor.tenantId, getJobId(req));
+        res.status(200).json({ status: 'success', data: job, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/jobs/{jobId}/cancel:
+   *   post:
+   *     summary: Cancel a Product Ingestion job
+   *     description: Attempts to cancel a running Product Ingestion configure job.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: jobId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Product Ingestion job cancellation requested
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Job not found
+   *       409:
+   *         description: Job already completed
+   */
+  router.post(
+    '/jobs/:jobId/cancel',
+    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getJobId }),
+    async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobDetail>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const job = await jobPollingService.cancelJob(actor, getJobId(req));
+        res.status(200).json({ status: 'success', data: job, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);
       }
@@ -785,6 +976,78 @@ export function createPublisherRouter(
       }
     }
   );
+
+  if (productCatalogService) {
+    router.get(
+      '/products',
+      authorizeRoute({ resource: 'publisher', action: 'view' }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const products = await productCatalogService.listProducts(actor.tenantId);
+          res.status(200).json({ status: 'success', data: products, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.post(
+      '/products/import',
+      authorizeRoute({ resource: 'publisher', action: 'manage' }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.importProduct(actor, parseProductImportBody(req.body));
+          res.status(201).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.get(
+      '/products/:productId',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.getProduct(actor.tenantId, getProductId(req));
+          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.get(
+      '/products/:productId/resource-tree',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductIngestionResourceTreeResponse<ProductIngestionResource>>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const resourceTree = await productCatalogService.getResourceTree(actor.tenantId, getProductId(req));
+          res.status(200).json({ status: 'success', data: resourceTree, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    router.post(
+      '/products/:productId/sync',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getProductId }),
+      async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const product = await productCatalogService.syncProduct(actor, getProductId(req));
+          res.status(200).json({ status: 'success', data: product, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+  }
 
   return router;
 }

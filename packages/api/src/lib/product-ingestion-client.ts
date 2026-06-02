@@ -13,7 +13,8 @@ import {
   type ProductIngestionInnerError,
   type ProductIngestionResource,
   type ProductIngestionResourceReference,
-  type ProductIngestionResourceTreeResponse
+  type ProductIngestionResourceTreeResponse,
+  type ProductResource
 } from './product-ingestion-types';
 
 function normalizeBaseUrl(url: string): string {
@@ -171,6 +172,7 @@ export interface WaitForConfigureCompletionOptions {
 }
 
 export interface ProductIngestionClientLike {
+  getProductByExternalId(externalId: string): Promise<ProductResource>;
   getResourceTree<TResource extends ProductIngestionResource = ProductIngestionResource>(
     productDurableId: string,
     targetType?: 'draft' | 'preview' | 'live'
@@ -236,6 +238,15 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? 500;
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? 5_000;
     this.sleep = options.sleep ?? (async (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  }
+
+  async getProductByExternalId(externalId: string): Promise<ProductResource> {
+    const response = await this.request<Record<string, unknown>>('get-product-by-external-id', 'product', {
+      method: 'GET',
+      query: { externalId }
+    });
+
+    return response as ProductResource;
   }
 
   async getResourceTree<TResource extends ProductIngestionResource = ProductIngestionResource>(

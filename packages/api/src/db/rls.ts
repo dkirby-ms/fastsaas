@@ -10,7 +10,11 @@ export const TENANT_SCOPED_TABLE_POLICIES: readonly TenantScopedTablePolicy[] = 
   { tableName: 'subscription_audit_logs', tenantColumn: 'tenant_id' },
   { tableName: 'usage_events', tenantColumn: 'tenant_id' },
   { tableName: 'usage_event_dead_letters', tenantColumn: 'tenant_id' },
-  { tableName: 'marketplace_webhook_events', tenantColumn: 'tenant_id' }
+  { tableName: 'marketplace_webhook_events', tenantColumn: 'tenant_id' },
+  { tableName: 'marketplace_products', tenantColumn: 'publisher_tenant_id' },
+  { tableName: 'marketplace_plans', tenantColumn: 'publisher_tenant_id' },
+  { tableName: 'marketplace_submissions', tenantColumn: 'publisher_tenant_id' },
+  { tableName: 'marketplace_resources', tenantColumn: 'publisher_tenant_id' }
 ] as const;
 
 export function buildTenantIsolationPredicate(tenantColumn: string): string {

@@ -11,6 +11,7 @@ import { migrateToLatest } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
 import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
+import { SystemClock } from './metering/clock';
 import { createMeteringRuntime } from './metering/runtime';
 import {
   InMemoryAuditLogRepository,
@@ -23,10 +24,20 @@ import {
   type PartnerCenterRepository
 } from './repositories/partner-center-repository';
 import {
+  InMemoryMarketplaceJobRepository,
+  KyselyMarketplaceJobRepository,
+  type MarketplaceJobRepository
+} from './repositories/marketplace-job-repository';
+import {
   InMemoryPublisherPlanRepository,
   KyselyPublisherPlanRepository,
   type PublisherPlanRepository
 } from './repositories/publisher-plan-repository';
+import {
+  InMemoryProductCatalogRepository,
+  KyselyProductCatalogRepository,
+  type ProductCatalogRepository
+} from './repositories/product-catalog-repository';
 import {
   InMemorySubscriptionRepository,
   KyselySubscriptionRepository,
@@ -37,9 +48,12 @@ import {
   KyselyTenantMemberRepository,
   type TenantMemberRepository
 } from './repositories/tenant-member-repository';
+import { ConfigureJobPoller } from './jobs/configure-job-poller';
 import { AuditService } from './services/audit-service';
 import { PartnerCenterAuthService } from './services/partner-center-auth';
+import { JobPollingService } from './services/job-polling-service';
 import { PartnerCenterService } from './services/partner-center-service';
+import { ProductCatalogService } from './services/product-catalog-service';
 import { PublisherService } from './services/publisher-service';
 import { SubscriptionService } from './services/subscription-service';
 import { TenantMemberService } from './services/tenant-member-service';
@@ -62,6 +76,14 @@ function createTenantMemberRepository(database?: Kysely<Database>): TenantMember
 
 function createPartnerCenterRepository(database?: Kysely<Database>): PartnerCenterRepository {
   return database ? new KyselyPartnerCenterRepository(database) : new InMemoryPartnerCenterRepository();
+}
+
+function createMarketplaceJobRepository(database?: Kysely<Database>): MarketplaceJobRepository {
+  return database ? new KyselyMarketplaceJobRepository(database) : new InMemoryMarketplaceJobRepository();
+}
+
+function createProductCatalogRepository(database?: Kysely<Database>): ProductCatalogRepository {
+  return database ? new KyselyProductCatalogRepository(database) : new InMemoryProductCatalogRepository();
 }
 
 async function initializeDatabaseDependencies(databaseUrl?: string): Promise<{
@@ -103,6 +125,8 @@ async function bootstrap(): Promise<void> {
   const publisherPlanRepository = createPublisherPlanRepository(database);
   const tenantMemberRepository = createTenantMemberRepository(database);
   const partnerCenterRepository = createPartnerCenterRepository(database);
+  const marketplaceJobRepository = createMarketplaceJobRepository(database);
+  const productCatalogRepository = createProductCatalogRepository(database);
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
@@ -122,11 +146,36 @@ async function bootstrap(): Promise<void> {
     partnerCenterAuthService,
     logger.child({ component: 'partner-center' })
   );
+  const jobPollingService = new JobPollingService(
+    marketplaceJobRepository,
+    partnerCenterRepository,
+    partnerCenterAuthService,
+    logger.child({ component: 'job-polling' }),
+    {
+      pollBaseDelayMs: config.jobPolling.pollBaseDelayMs,
+      pollMaxDelayMs: config.jobPolling.pollMaxDelayMs,
+      pollJitterRatio: config.jobPolling.pollJitterRatio,
+      maxPollDurationMs: config.jobPolling.maxPollDurationMs
+    }
+  );
+  const configureJobPoller = new ConfigureJobPoller(
+    marketplaceJobRepository,
+    jobPollingService,
+    new SystemClock(),
+    logger.child({ component: 'configure-job-poller' }),
+    { batchSize: config.jobPolling.batchSize }
+  );
   const publisherService = new PublisherService(
     subscriptionRepository,
     publisherPlanRepository,
     logger.child({ component: 'publisher' })
   );
+  const productCatalogService = new ProductCatalogService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthService,
+    logger: logger.child({ component: 'product-catalog' })
+  });
   const app = createApp(config, {
     ...meteringRuntime,
     subscriptionRepository,
@@ -134,6 +183,8 @@ async function bootstrap(): Promise<void> {
     auditService,
     publisherService,
     partnerCenterService,
+    jobPollingService,
+    productCatalogService,
     tenantMemberService
   });
 
@@ -148,23 +199,39 @@ async function bootstrap(): Promise<void> {
     }
   }
 
+  async function runConfigureJobPoller(): Promise<void> {
+    try {
+      const result = await runWithSystemExecutionContext(() => configureJobPoller.runNextBatch());
+      if (result.scanned > 0) {
+        logger.info(result, 'Completed configure job polling batch');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Configure job poller run failed');
+    }
+  }
+
   const meteringWorkerInterval = setInterval(() => {
     void runMeteringWorker();
   }, config.metering.workerIntervalMs);
   meteringWorkerInterval.unref();
 
+  const configureJobPollerInterval = setInterval(() => {
+    void runConfigureJobPoller();
+  }, config.jobPolling.workerIntervalMs);
+  configureJobPollerInterval.unref();
+
   const server = app.listen(config.port, () => {
     logger.info({ port: config.port }, 'API server listening');
   });
 
-  registerShutdownHandlers(server, database, meteringPool, meteringWorkerInterval);
+  registerShutdownHandlers(server, database, meteringPool, [meteringWorkerInterval, configureJobPollerInterval]);
 }
 
 function registerShutdownHandlers(
   server: Server,
   database?: Kysely<Database>,
   meteringPool?: Pool,
-  meteringWorkerInterval?: ReturnType<typeof setInterval>
+  workerIntervals: Array<ReturnType<typeof setInterval> | undefined> = []
 ): void {
   let shuttingDown = false;
 
@@ -174,8 +241,10 @@ function registerShutdownHandlers(
     }
 
     shuttingDown = true;
-    if (meteringWorkerInterval) {
-      clearInterval(meteringWorkerInterval);
+    for (const workerInterval of workerIntervals) {
+      if (workerInterval) {
+        clearInterval(workerInterval);
+      }
     }
 
     logger.info({ signal }, 'Shutdown signal received');

@@ -11,6 +11,7 @@ import { Kysely, PostgresDialect, type ColumnType } from 'kysely';
 import { Pool } from 'pg';
 
 type JsonRecord = Record<string, unknown>;
+type MarketplaceJobStatus = 'submitted' | 'running' | 'completed' | 'failed' | 'cancelled';
 type GeneratedUuid = ColumnType<string, string | undefined, never>;
 type Numeric = ColumnType<string, number | string, number | string>;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
@@ -147,6 +148,69 @@ export interface PartnerCenterCredentialsTable {
   updated_at: GeneratedTimestamp;
 }
 
+export interface MarketplaceJobsTable {
+  id: GeneratedUuid;
+  product_id: string | null;
+  publisher_tenant_id: string;
+  job_id: string;
+  request_payload_hash: string;
+  status: MarketplaceJobStatus;
+  result: NullableJsonColumn;
+  errors: NullableJsonColumn;
+  created_at: GeneratedTimestamp;
+  polled_at: NullableTimestamp;
+  completed_at: NullableTimestamp;
+}
+
+export interface MarketplaceProductsTable {
+  id: GeneratedUuid;
+  publisher_tenant_id: string;
+  external_offer_id: string;
+  durable_product_id: string;
+  product_type: string;
+  alias: string;
+  lifecycle_state: string | null;
+  last_synced_at: GeneratedTimestamp;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface MarketplacePlansTable {
+  id: GeneratedUuid;
+  publisher_tenant_id: string;
+  product_id: string;
+  external_plan_id: string;
+  durable_plan_id: string;
+  status: string;
+  pricing_summary: NullableJsonColumn;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface MarketplaceSubmissionsTable {
+  id: GeneratedUuid;
+  publisher_tenant_id: string;
+  product_id: string;
+  durable_submission_id: string;
+  target_type: string;
+  status: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface MarketplaceResourcesTable {
+  id: GeneratedUuid;
+  publisher_tenant_id: string;
+  resource_type: string;
+  durable_id: string;
+  product_id: string;
+  json_snapshot: JsonColumn;
+  schema_version: string;
+  environment: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 export interface AuditLogsTable {
   id: string;
   tenant_id: string;
@@ -169,6 +233,11 @@ export interface Database {
   tenant_members: TenantMembersTable;
   partner_center_accounts: PartnerCenterAccountsTable;
   partner_center_credentials: PartnerCenterCredentialsTable;
+  marketplace_jobs: MarketplaceJobsTable;
+  marketplace_products: MarketplaceProductsTable;
+  marketplace_plans: MarketplacePlansTable;
+  marketplace_submissions: MarketplaceSubmissionsTable;
+  marketplace_resources: MarketplaceResourcesTable;
   audit_logs: AuditLogsTable;
 }
 

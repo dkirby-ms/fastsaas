@@ -3,7 +3,9 @@ import { Router } from 'express';
 import type { ApiConfig } from '../../config';
 import type { MeteringService } from '../../metering/service';
 import type { AuditService } from '../../services/audit-service';
+import type { JobPollingService } from '../../services/job-polling-service';
 import type { PartnerCenterService } from '../../services/partner-center-service';
+import type { ProductCatalogService } from '../../services/product-catalog-service';
 import type { PublisherService } from '../../services/publisher-service';
 import type { SubscriptionService } from '../../services/subscription-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
@@ -21,6 +23,8 @@ export function createV1Router(
   auditService?: AuditService,
   publisherService?: PublisherService,
   partnerCenterService?: PartnerCenterService,
+  jobPollingService?: JobPollingService,
+  productCatalogService?: ProductCatalogService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -40,8 +44,8 @@ export function createV1Router(
     router.use('/audit-logs', createAuditLogsRouter(config, auditService, tenantMemberService));
   }
 
-  if (publisherService && partnerCenterService) {
-    router.use('/publisher', createPublisherRouter(config, publisherService, partnerCenterService, tenantMemberService));
+  if (publisherService && partnerCenterService && jobPollingService) {
+    router.use('/publisher', createPublisherRouter(config, publisherService, partnerCenterService, jobPollingService, productCatalogService, tenantMemberService));
   }
 
   return router;
