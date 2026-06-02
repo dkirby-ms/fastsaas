@@ -1,3 +1,9 @@
+## [0.11.1](https://github.com/dkirby-ms/fastsaas/compare/v0.11.0...v0.11.1) (2026-06-02)
+
+### Bug Fixes
+
+* **api:** prioritize unpolled marketplace jobs ([#112](https://github.com/dkirby-ms/fastsaas/issues/112)) ([4dc5d39](https://github.com/dkirby-ms/fastsaas/commit/4dc5d398f471c7e70d77a332add25fa556e5aba8))
+
 ## [0.11.0](https://github.com/dkirby-ms/fastsaas/compare/v0.10.0...v0.11.0) (2026-06-02)
 
 ### Features
