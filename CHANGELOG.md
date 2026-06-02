@@ -1,3 +1,9 @@
+## [0.13.1](https://github.com/dkirby-ms/fastsaas/compare/v0.13.0...v0.13.1) (2026-06-02)
+
+### Bug Fixes
+
+* URL-encode Postgres password in DATABASE_URL construction ([bfe28b8](https://github.com/dkirby-ms/fastsaas/commit/bfe28b85d5d3b6f7ee14629b2c6d24f264813a43)), closes [#120](https://github.com/dkirby-ms/fastsaas/issues/120)
+
 ## [0.13.0](https://github.com/dkirby-ms/fastsaas/compare/v0.12.0...v0.13.0) (2026-06-02)
 
 ### Features
