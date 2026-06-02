@@ -22,7 +22,7 @@ import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 export { ApiError } from '@/lib/errors';
 
 function shouldUseMockApi() {
-  return process.env.USE_MOCK_API !== 'false' || !process.env.API_BASE_URL;
+  return process.env.USE_MOCK_API?.toLowerCase() !== 'false' || !process.env.API_BASE_URL;
 }
 
 function normalizeBaseUrl(baseUrl: string) {

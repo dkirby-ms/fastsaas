@@ -16,7 +16,7 @@ export function getPublisherApiBaseUrl() {
 }
 
 export function getPublisherIntegrationMode(): 'mock' | 'live' {
-  if (process.env.USE_MOCK_API !== 'false') {
+  if (process.env.USE_MOCK_API?.toLowerCase() !== 'false') {
     return 'mock';
   }
 
