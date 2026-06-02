@@ -1,3 +1,9 @@
+## [0.13.0](https://github.com/dkirby-ms/fastsaas/compare/v0.12.0...v0.13.0) (2026-06-02)
+
+### Features
+
+* **api:** add submission status monitoring endpoints ([#102](https://github.com/dkirby-ms/fastsaas/issues/102)) ([#119](https://github.com/dkirby-ms/fastsaas/issues/119)) ([08d4581](https://github.com/dkirby-ms/fastsaas/commit/08d458173fe780f30f714c0192a26acb988204b0))
+
 ## [0.12.0](https://github.com/dkirby-ms/fastsaas/compare/v0.11.3...v0.12.0) (2026-06-02)
 
 ### Features
