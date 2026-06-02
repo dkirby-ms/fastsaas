@@ -37,7 +37,6 @@ export interface ApiConfig {
     maxRetries: number;
     submissionSlaMs: number;
     marketplaceEndpoint?: string;
-    marketplaceClientSecret?: string;
   };
   jobPolling: {
     batchSize: number;
@@ -169,9 +168,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       retryJitterRatio: Number(env.METERING_RETRY_JITTER_RATIO ?? 0.1),
       maxRetries: Number(env.METERING_MAX_RETRIES ?? 8),
       submissionSlaMs: Number(env.METERING_SUBMISSION_SLA_MS ?? 4 * 60 * 60 * 1000),
-      marketplaceEndpoint: env.MARKETPLACE_METERING_ENDPOINT,
-      // TODO: Phase 2: implement OAuth token exchange using these credentials.
-      marketplaceClientSecret: env.MARKETPLACE_METERING_CLIENT_SECRET
+      marketplaceEndpoint: env.MARKETPLACE_METERING_ENDPOINT
     },
     jobPolling: {
       batchSize: Number(env.JOB_POLLING_BATCH_SIZE ?? 100),

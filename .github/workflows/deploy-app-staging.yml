@@ -165,7 +165,6 @@ jobs:
           CONTAINER_APP_NAME: ${{ steps.deployment.outputs.api_app_name }}
           MARKETPLACE_CLIENT_SECRET: ${{ secrets.MARKETPLACE_CLIENT_SECRET }}
           MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
-          MARKETPLACE_METERING_CLIENT_SECRET: ${{ secrets.MARKETPLACE_METERING_CLIENT_SECRET }}
         run: |
           az containerapp secret set \
             --resource-group "$RESOURCE_GROUP" \
@@ -173,7 +172,6 @@ jobs:
             --secrets \
               marketplace-client-secret="$MARKETPLACE_CLIENT_SECRET" \
               marketplace-webhook-secret="$MARKETPLACE_WEBHOOK_SECRET" \
-              marketplace-metering-client-secret="$MARKETPLACE_METERING_CLIENT_SECRET" \
             --output none
 
       - name: Configure API environment

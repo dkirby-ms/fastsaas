@@ -56,7 +56,6 @@ Audited surfaces:
 | `METERING_MAX_RETRIES` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
 | `METERING_SUBMISSION_SLA_MS` | API config only | Config | `packages/api/src/config.ts` default | No env template. |
 | `MARKETPLACE_METERING_ENDPOINT` | API config; drill script | Config | Code/runtime override only | No deployment source found. |
-| `MARKETPLACE_METERING_API_KEY` | API config only | Secret | No deployment source found | No env template. |
 | `LOG_LEVEL` | API logger only | Config | Runtime only | No example or deploy surface. |
 | `SECURITY_RLS_ENABLED` | API security tests only | Config | Test runtime only | Not an application runtime var. |
 | `NEXTAUTH_SECRET` | Portal auth; portal `.env.example`; `staging-portal.env` (`secretref:`); root `.env`; portal Docker build placeholder | Secret | Portal example for local; staging env file for deployment | Staging secret ref is not provisioned anywhere in repo automation. |
@@ -130,13 +129,13 @@ API runtime expects or supports:
 
 - Core runtime: `NODE_ENV`, `API_PORT`, `API_VERSION`, `DATABASE_URL`
 - Auth: `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_ISSUER`, `ENTRA_AUDIENCE`, `ENTRA_JWKS_URI`, `JWT_REQUIRED_SCOPE`, `AUTH_BYPASS_ENABLED`, `AUTH_DEV_USER_ID`, `AUTH_DEV_TENANT_ID`
-- Marketplace: `MARKETPLACE_BASE_URL`, `MARKETPLACE_API_VERSION`, `MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`, `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`
-- Metering: `METERING_READ_SCOPE`, `METERING_WRITE_SCOPE`, `METERING_BATCH_SIZE`, `METERING_WORKER_INTERVAL_MS`, `METERING_CLAIM_LEASE_MS`, `METERING_RETRY_BASE_DELAY_MS`, `METERING_RETRY_MAX_DELAY_MS`, `METERING_RETRY_JITTER_RATIO`, `METERING_MAX_RETRIES`, `METERING_SUBMISSION_SLA_MS`, `MARKETPLACE_METERING_ENDPOINT`, `MARKETPLACE_METERING_API_KEY`
+- Marketplace: `MARKETPLACE_BASE_URL`, `MARKETPLACE_API_VERSION`, `MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`, `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`
+- Metering: `METERING_READ_SCOPE`, `METERING_WRITE_SCOPE`, `METERING_BATCH_SIZE`, `METERING_WORKER_INTERVAL_MS`, `METERING_CLAIM_LEASE_MS`, `METERING_RETRY_BASE_DELAY_MS`, `METERING_RETRY_MAX_DELAY_MS`, `METERING_RETRY_JITTER_RATIO`, `METERING_MAX_RETRIES`, `METERING_SUBMISSION_SLA_MS`, `MARKETPLACE_METERING_ENDPOINT`
 
 Important behavior:
 
 - If `AUTH_BYPASS_ENABLED` is not `true`, both `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` are required.
-- Several production-sensitive values still have local fallback defaults (`MARKETPLACE_AUTH_TOKEN`, `MARKETPLACE_WEBHOOK_SECRET`).
+- Several production-sensitive values still have local fallback defaults (`MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_WEBHOOK_SECRET`).
 - `DATABASE_URL` is optional for startup, so the API can run in degraded mode.
 
 ### `packages/portal/auth.ts`
@@ -391,9 +390,9 @@ Notes:
    - `deploy-app-staging.yml` now provisions `portal-entra-client-secret` and `portal-nextauth-secret` explicitly.
    - Apply the same pattern for any future portal or API `secretref:` values, or switch to another supported secret injection path that is actually wired up.
 
-7. **Add missing staging wiring for marketplace secrets.**
-   - At minimum: `MARKETPLACE_AUTH_TOKEN` and `MARKETPLACE_WEBHOOK_SECRET`.
-   - If staging exercises metering, also decide on `MARKETPLACE_METERING_ENDPOINT` and `MARKETPLACE_METERING_API_KEY`.
+7. **Add missing staging wiring for marketplace metering endpoint only if needed.**
+   - Staging already wires `MARKETPLACE_CLIENT_SECRET` and `MARKETPLACE_WEBHOOK_SECRET`.
+   - If staging exercises metering against a non-default endpoint, decide on `MARKETPLACE_METERING_ENDPOINT`.
 
 8. **Delete or document unused vars.**
    - Revisit `REDIS_URL`, `SERVICE_NAME`, `SERVICE_PORT`, API `PORT`, and portal `APP_NAME`.
