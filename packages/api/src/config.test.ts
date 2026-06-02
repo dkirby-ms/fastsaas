@@ -48,9 +48,9 @@ describe('createConfig auth defaults', () => {
       ENTRA_CLIENT_ID: 'fastsaas-api-client'
     });
 
-    expect(developmentConfig.marketplace.authToken).toBe('local-marketplace-token');
+    expect(developmentConfig.marketplace.clientSecret).toBe('local-marketplace-client-secret');
     expect(developmentConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
-    expect(testConfig.marketplace.authToken).toBe('local-marketplace-token');
+    expect(testConfig.marketplace.clientSecret).toBe('local-marketplace-client-secret');
     expect(testConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
   });
 
@@ -61,14 +61,14 @@ describe('createConfig auth defaults', () => {
         ENTRA_CLIENT_ID: 'fastsaas-api-client'
       })
     ).toThrow(
-      'Missing required marketplace secrets for NODE_ENV=production: MARKETPLACE_AUTH_TOKEN, MARKETPLACE_WEBHOOK_SECRET. Fallback values are only allowed in development and test environments.'
+      'Missing required marketplace secrets for NODE_ENV=production: MARKETPLACE_CLIENT_SECRET, MARKETPLACE_WEBHOOK_SECRET. Fallback values are only allowed in development and test environments.'
     );
 
     expect(() =>
       createConfig({
         NODE_ENV: 'staging',
         ENTRA_CLIENT_ID: 'fastsaas-api-client',
-        MARKETPLACE_AUTH_TOKEN: 'token-present'
+        MARKETPLACE_CLIENT_SECRET: 'client-secret-present'
       })
     ).toThrow(
       'Missing required marketplace secrets for NODE_ENV=staging: MARKETPLACE_WEBHOOK_SECRET. Fallback values are only allowed in development and test environments.'

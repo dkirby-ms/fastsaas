@@ -57,7 +57,7 @@ export class MarketplaceFulfillmentError extends Error {
 interface MarketplaceHttpClientOptions {
   baseUrl: string;
   apiVersion: string;
-  authToken: string;
+  clientSecret: string;
   logger: Logger;
 }
 
@@ -232,7 +232,7 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
     const response = await fetch(url, {
       method: options.method,
       headers: {
-        Authorization: `Bearer ${this.options.authToken}`,
+        Authorization: `Bearer ${this.options.clientSecret}`,
         'Content-Type': 'application/json',
         'x-request-id': options.requestId,
         'x-correlation-id': options.correlationId

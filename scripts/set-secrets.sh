@@ -113,14 +113,14 @@ echo ""
 
 # SECTION 4: Marketplace
 echo -e "${BLUE}--- Marketplace ---${NC}"
-MARKETPLACE_AUTH_TOKEN=$(prompt_secret "MARKETPLACE_AUTH_TOKEN (Microsoft Marketplace API authentication token)")
-set_secret "MARKETPLACE_AUTH_TOKEN" "$MARKETPLACE_AUTH_TOKEN"
+MARKETPLACE_CLIENT_SECRET=$(prompt_secret "MARKETPLACE_CLIENT_SECRET (Microsoft Marketplace client secret for OAuth token exchange)")
+set_secret "MARKETPLACE_CLIENT_SECRET" "$MARKETPLACE_CLIENT_SECRET"
 
 MARKETPLACE_WEBHOOK_SECRET=$(prompt_secret "MARKETPLACE_WEBHOOK_SECRET (Marketplace webhook validation secret)")
 set_secret "MARKETPLACE_WEBHOOK_SECRET" "$MARKETPLACE_WEBHOOK_SECRET"
 
-MARKETPLACE_METERING_API_KEY=$(prompt_secret "MARKETPLACE_METERING_API_KEY (Marketplace metering API key for usage reporting)")
-set_secret "MARKETPLACE_METERING_API_KEY" "$MARKETPLACE_METERING_API_KEY"
+MARKETPLACE_METERING_CLIENT_SECRET=$(prompt_secret "MARKETPLACE_METERING_CLIENT_SECRET (Marketplace metering client secret for OAuth token exchange)")
+set_secret "MARKETPLACE_METERING_CLIENT_SECRET" "$MARKETPLACE_METERING_CLIENT_SECRET"
 
 echo ""
 

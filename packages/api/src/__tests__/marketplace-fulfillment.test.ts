@@ -21,7 +21,7 @@ describe('MarketplaceFulfillmentHttpClient', () => {
     const client = new MarketplaceFulfillmentHttpClient({
       baseUrl: 'https://marketplaceapi.microsoft.com',
       apiVersion: '2018-08-31',
-      authToken: 'test-token',
+      clientSecret: 'test-client-secret',
       logger
     });
 
@@ -40,7 +40,7 @@ describe('MarketplaceFulfillmentHttpClient', () => {
     const client = new MarketplaceFulfillmentHttpClient({
       baseUrl: 'https://marketplaceapi.microsoft.com',
       apiVersion: '2018-08-31',
-      authToken: 'test-token',
+      clientSecret: 'test-client-secret',
       logger
     });
 
@@ -87,7 +87,7 @@ describe('MarketplaceFulfillmentHttpClient', () => {
     const client = new MarketplaceFulfillmentHttpClient({
       baseUrl: 'https://marketplaceapi.microsoft.com',
       apiVersion: '2018-08-31',
-      authToken: 'test-token',
+      clientSecret: 'test-client-secret',
       logger
     });
 

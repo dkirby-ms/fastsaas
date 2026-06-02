@@ -130,7 +130,7 @@ async function bootstrap(): Promise<void> {
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
-    authToken: config.marketplace.authToken,
+    clientSecret: config.marketplace.clientSecret,
     logger
   });
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members' }));
