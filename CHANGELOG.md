@@ -1,3 +1,9 @@
+## [0.14.1](https://github.com/dkirby-ms/fastsaas/compare/v0.14.0...v0.14.1) (2026-06-02)
+
+### Bug Fixes
+
+* **portal:** case-insensitive USE_MOCK_API comparison ([1e70c09](https://github.com/dkirby-ms/fastsaas/commit/1e70c0961db8fcae0d8de059641b75c1e6367685))
+
 ## [0.14.0](https://github.com/dkirby-ms/fastsaas/compare/v0.13.1...v0.14.0) (2026-06-02)
 
 ### Features
