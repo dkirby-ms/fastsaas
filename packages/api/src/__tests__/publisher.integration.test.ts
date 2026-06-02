@@ -36,6 +36,23 @@ describe('publisher administration routes', () => {
     expect(memberResponse.body.error).not.toHaveProperty('details');
   });
 
+  it('rejects tenant-membership-only access on publisher routes', async () => {
+    await harness.createSubscriptionFixture({ tenantId: 'publisher-membership-only', marketplaceToken: 'publisher-membership-only' });
+
+    const membershipOnlyToken = await harness.createToken({
+      tenantId: 'publisher-membership-only',
+      roles: [],
+      scopes: [harness.config.auth.requiredScope]
+    });
+
+    const response = await request(harness.app)
+      .get('/v1/publisher/dashboard')
+      .set('Authorization', `Bearer ${membershipOnlyToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).not.toHaveProperty('details');
+  });
+
   it('scopes publisher subscriptions to the actor tenant and overlays publisher plan updates', async () => {
     await harness.createSubscriptionFixture({ tenantId: 'publisher-admin', marketplaceToken: 'publisher-fixture-a', planId: 'starter' });
     await harness.createSubscriptionFixture({ tenantId: 'publisher-admin', marketplaceToken: 'publisher-fixture-b', planId: 'growth' });

@@ -112,7 +112,7 @@ function buildFixtureApp(executedHandlers: string[]) {
 
   const baseMiddleware = [
     authenticateRequest(config),
-    injectTenantContext(config, tenantMemberService),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'publisher' }),
     requireScopes([config.auth.requiredScope])
   ] as const;
 
@@ -160,13 +160,33 @@ describe('RBAC permissions matrix', () => {
   });
 
   it('falls back to tenant membership when JWT roles are empty', async () => {
+    const app = express();
+    app.use(requestLogger);
+    app.use(express.json());
+    app.post(
+      '/fixtures/subscriptions/manage',
+      authenticateRequest(config),
+      injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
+      requireScopes([config.auth.requiredScope]),
+      authorizeRoute({ resource: 'subscriptions', action: 'manage', resourceId: () => 'subscriptions-1' }),
+      (_req, res) => {
+        res.status(200).json({ ok: true });
+      }
+    );
+
+    const deniedToken = await createToken({ tenantId: 'tenant-a', role: 'Owner' });
+    const deniedResponse = await request(app)
+      .post('/fixtures/subscriptions/manage')
+      .set('Authorization', `Bearer ${deniedToken}`);
+
+    expect(deniedResponse.status).toBe(403);
+
     await tenantMemberService.bootstrapOwnerIfNeeded({
       tenantId: 'tenant-a',
       userId: 'user-123',
       email: 'external@example.com'
     });
 
-    const app = buildFixtureApp([]);
     const token = await createToken({ tenantId: 'tenant-a', roles: [] });
 
     const response = await request(app)

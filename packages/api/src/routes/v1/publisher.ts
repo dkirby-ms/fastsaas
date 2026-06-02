@@ -290,7 +290,11 @@ export function createPublisherRouter(
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
-  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
+  router.use(
+    authenticateRequest(config),
+    requireScopes([config.auth.requiredScope]),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'publisher' })
+  );
 
   /**
    * @swagger

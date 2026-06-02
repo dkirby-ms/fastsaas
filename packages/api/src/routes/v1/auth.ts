@@ -30,7 +30,7 @@ export function createAuthRouter(config: ApiConfig, tenantMemberService?: Tenant
   router.get(
     '/context',
     authenticateRequest(config),
-    injectTenantContext(config, tenantMemberService),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
     requireScopes([config.auth.requiredScope]),
     (req: ApiRequest, res: Response<ApiResponse<{ tenantId: string; userId: string; scopes: string[]; roles: string[] }>>) => {
       const context = req.context!;

@@ -84,7 +84,11 @@ function assertLifecycleAccess(req: ApiRequest): void {
 export function createSubscriptionsRouter(config: ApiConfig, subscriptionService: SubscriptionService, tenantMemberService?: TenantMemberService) {
   const router = Router();
 
-  router.use(authenticateRequest(config), requireScopes([config.auth.requiredScope]), injectTenantContext(config, tenantMemberService));
+  router.use(
+    authenticateRequest(config),
+    requireScopes([config.auth.requiredScope]),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })
+  );
 
   /**
    * @swagger

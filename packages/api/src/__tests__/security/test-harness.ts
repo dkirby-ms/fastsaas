@@ -26,6 +26,7 @@ import { JobPollingService } from '../../services/job-polling-service';
 import { PartnerCenterService } from '../../services/partner-center-service';
 import { ProductCatalogService } from '../../services/product-catalog-service';
 import { PublisherService } from '../../services/publisher-service';
+import { normalizeRbacRole } from '../../middleware/rbac';
 import { SubscriptionService } from '../../services/subscription-service';
 import { TenantMemberService } from '../../services/tenant-member-service';
 
@@ -43,6 +44,7 @@ export interface TokenOptions {
   audience?: string;
   issuer?: string;
   additionalClaims?: Record<string, unknown>;
+  seedTenantMembership?: boolean;
 }
 
 export interface SecurityHarness {
@@ -302,9 +304,11 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   async function createToken(options: TokenOptions = {}): Promise<string> {
     const tenantId = options.tenantId ?? config.auth.azureTenantId;
     const tenantClaimKey = options.tenantClaimKey ?? 'tenant_id';
+    const userId = options.userId ?? 'user-123';
+    const roles = options.roles ?? ['Member'];
     const payload: Record<string, unknown> = {
-      roles: options.roles ?? ['Member'],
-      oid: options.omitSubject ? undefined : (options.userId ?? 'user-123'),
+      roles,
+      oid: options.omitSubject ? undefined : userId,
       ...options.additionalClaims
     };
 
@@ -324,6 +328,16 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
       payload.scp = config.auth.requiredScope;
     } else if (options.scopes.length > 0) {
       payload.scp = options.scopes.join(' ');
+    }
+
+    const membershipRole = roles.map((role) => normalizeRbacRole(role)).find((role): role is NonNullable<typeof role> => role !== null);
+    if ((options.seedTenantMembership ?? true) && !options.omitTenantId && membershipRole) {
+      await tenantMemberRepository.upsertByTenantAndUserId({
+        tenantId,
+        userId,
+        email: `${userId}@example.com`,
+        role: membershipRole
+      });
     }
 
     let token = new SignJWT(payload)
@@ -351,36 +365,29 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
       metadata?: Record<string, unknown>;
     } = {}
   ): Promise<Subscription> {
-    const token = await createToken({
-      tenantId: options.tenantId,
-      scopes: options.scopes,
-      roles: options.roles ?? ['Owner']
-    });
-
+    const tenantId = options.tenantId ?? config.auth.azureTenantId;
+    const userId = 'user-123';
     const marketplaceToken = options.marketplaceToken ?? `fixture-${randomUUID()}`;
     fulfillmentOverrides.set(marketplaceToken, {
       planId: options.planId,
       quantity: options.seats,
-      beneficiaryTenantId: options.tenantId
+      beneficiaryTenantId: tenantId
     });
 
     try {
-      const response = await request(app)
-        .post('/v1/subscriptions')
-        .set('Authorization', `Bearer ${token}`)
-        .send({
-          marketplaceToken,
-          metadata: {
-            fixture: 'security-suite',
-            ...(options.metadata ?? {})
-          }
-        });
-
-      if (response.status !== 201 || !response.body.data) {
-        throw new Error(`Expected subscription fixture creation to succeed, received ${response.status}`);
-      }
-
-      return response.body.data as Subscription;
+      return await subscriptionService.subscribe({
+        tenantId,
+        userId,
+        userEmail: `${userId}@example.com`,
+        requestId: `fixture-${randomUUID()}`,
+        correlationId: `fixture-${randomUUID()}`,
+        source: 'api',
+        marketplaceToken,
+        metadata: {
+          fixture: 'security-suite',
+          ...(options.metadata ?? {})
+        }
+      });
     } finally {
       fulfillmentOverrides.delete(marketplaceToken);
     }
