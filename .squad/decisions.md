@@ -1364,3 +1364,59 @@ Keep `/publisher/partner-center/*` for connection lifecycle. Move offer operatio
 - `scripts/set-secrets.sh`
 - `scripts/set-secrets.ps1`
 - deployment/env wiring for staging and later production
+
+## 2026-06-03
+
+### User Directive: Single Publisher Model
+- **Date:** 2026-06-03T11:29:19Z
+- **By:** dkirby-ms (via Copilot)
+- **What:** FastSaaS is ONE published marketplace offer with different plans — not a multi-offer platform. Descope multi-offer (VM, Container) generalization.
+- **Why:** User request — captured for team memory
+
+### Issue #103 Architecture Plan: Listing Asset & Audience Visibility
+- **Date:** 2026-06-03T14:09:03.495+00:00
+- **Status:** Architecture Phase
+- **Phase:** Phase 2 (Read-Only Marketplace Data Display)
+- **Decision:** Implement backend with dedicated `AssetVisibilityService` that resolves product durable IDs, queries Product Ingestion `resource-tree` (live only), and caches in memory with TTL. Single-publisher model maintained. Read-only display only (no batch edits).
+- **Backend Routes:**
+  - `GET /v1/publisher/products/:productId/assets`
+  - `GET /v1/publisher/products/:productId/audiences`
+  - `GET /v1/publisher/products/:productId/plans/:planId/pricing`
+- **Portal Pages:** `/publisher/products/:productId/assets`, `/audiences`, `/plans/:planId/pricing` with Asset Gallery, Video Player, Audience List, Pricing Table components
+- **Caching:** In-memory TTL cache (no persistence in first pass); invalidate on new submissions
+- **Type Definitions:** ListingAsset, ListingTrailer, PreviewAudience, PrivateAudience, PlanPricing, Market, BillingTerm, Availability exported from @fastsaas/shared
+- **Files:** `packages/api/src/services/asset-visibility-service.ts`, `packages/api/src/routes/v1/publisher.ts`, `packages/api/src/lib/product-ingestion-types.ts`, `packages/shared/src/index.ts`, `packages/api/src/__tests__/asset-visibility-service.test.ts`, portal pages and components
+
+### EECOM Issue #103 Backend Implementation
+- **Date:** 2026-06-03T14:39:04.834+00:00
+- **Owner:** EECOM
+- **Status:** Implemented
+- **Decision:** Implement backend first pass with dedicated `AssetVisibilityService` that resolves product durable IDs from existing marketplace catalog, queries only live Product Ingestion `resource-tree`, and caches with TTL. No persistence or new database schema in this pass.
+- **Rationale:** Keeps scope aligned with first-pass behavior, ships read-only API quickly, preserves clean service boundary for future database-backed cache migration
+- **Files Created:**
+  - `packages/api/src/services/asset-visibility-service.ts`
+  - `packages/api/src/routes/v1/publisher.ts` (extended)
+  - `packages/api/src/lib/product-ingestion-types.ts`
+  - `packages/shared/src/index.ts` (extended)
+  - `packages/api/src/__tests__/asset-visibility-service.test.ts`
+
+### FIDO #103 Frontend Navigation Implementation
+- **Date:** 2026-06-03T14:39:04.834+00:00
+- **Owner:** FIDO
+- **Status:** Implemented
+- **Decision:** Add dedicated product area at `/publisher/products` with nested layout at `/publisher/products/[productId]`. Layout owns product header, "Synced from Partner Center" badge, and Assets/Audiences/Pricing tabs for consistent navigation.
+- **Rationale:** Aligns with architecture plan, enables reusable components, integrates with existing `/v1/publisher/products` contracts via portal API client and mock patterns
+- **Files Created:**
+  - `packages/portal/app/(portal)/publisher/products/page.tsx`
+  - `packages/portal/app/(portal)/publisher/products/[productId]/layout.tsx`
+  - `packages/portal/components/publisher/PublisherProductsClient.tsx`
+  - `packages/portal/components/publisher/PublisherProductLayoutClient.tsx`
+  - `packages/portal/lib/api-client.ts` (extended)
+  - `packages/portal/lib/mock-api.ts` (extended)
+
+### Windows-Compatible Timestamps in Filenames
+- **Date:** 2026-06-03T13:51:10Z
+- **By:** GNC (via Squad)
+- **What:** All `.squad/` log/orchestration filenames must use hyphens instead of colons in timestamps (e.g., `2026-05-31T21-35-32.766Z` not `2026-05-31T21:35:32.766Z`). Colons are illegal on NTFS/Windows.
+- **Why:** User reported `git pull` failures on Windows due to invalid paths.
+
