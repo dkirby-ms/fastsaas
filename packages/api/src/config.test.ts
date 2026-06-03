@@ -54,6 +54,7 @@ describe('createConfig auth defaults', () => {
     expect(developmentConfig.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
     expect(developmentConfig.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(developmentConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
+    expect(developmentConfig.marketplace.webhookAuthMode).toBe('callback');
     expect(developmentConfig.metering.marketplaceEndpoint).toBeUndefined();
     expect(testConfig.marketplace.clientId).toBe('local-marketplace-client-id');
     expect(testConfig.marketplace.tenantId).toBe('local-marketplace-tenant-id');
@@ -61,6 +62,7 @@ describe('createConfig auth defaults', () => {
     expect(testConfig.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
     expect(testConfig.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(testConfig.marketplace.webhookSecret).toBe('local-marketplace-webhook-secret');
+    expect(testConfig.marketplace.webhookAuthMode).toBe('callback');
     expect(testConfig.metering.marketplaceEndpoint).toBeUndefined();
   });
 
@@ -83,6 +85,28 @@ describe('createConfig auth defaults', () => {
     expect(config.marketplace.tokenScope).toBe('https://graph.microsoft.com/.default');
     expect(config.marketplace.productIngestionBaseUrl).toBe('https://graph.microsoft.com/rp/product-ingestion');
     expect(config.metering.marketplaceEndpoint).toBe('https://marketplace.example.test/api/usageEvent?api-version=2018-08-31');
+  });
+
+  it('accepts an explicit marketplace webhook auth mode', () => {
+    const config = createConfig({
+      NODE_ENV: 'production',
+      ENTRA_CLIENT_ID: 'fastsaas-api-client',
+      MARKETPLACE_CLIENT_SECRET: 'shared-client-secret',
+      MARKETPLACE_WEBHOOK_SECRET: 'webhook-secret',
+      MARKETPLACE_WEBHOOK_AUTH_MODE: 'hmac'
+    });
+
+    expect(config.marketplace.webhookAuthMode).toBe('hmac');
+  });
+
+  it('throws for an invalid marketplace webhook auth mode', () => {
+    expect(() =>
+      createConfig({
+        NODE_ENV: 'test',
+        ENTRA_CLIENT_ID: 'fastsaas-api-client',
+        MARKETPLACE_WEBHOOK_AUTH_MODE: 'invalid'
+      })
+    ).toThrow('MARKETPLACE_WEBHOOK_AUTH_MODE must be one of: hmac, callback, none');
   });
 
   it('throws when marketplace secrets are missing outside development and test', () => {

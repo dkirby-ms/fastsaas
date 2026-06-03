@@ -35,6 +35,7 @@ describe('MarketplaceOAuthService', () => {
         tokenScope: 'https://graph.microsoft.com/.default',
         productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
         webhookSecret: 'marketplace-webhook-secret',
+        webhookAuthMode: 'callback',
         webhookTimestampToleranceMs: 300000
       },
       fetchImpl: fetchMock,
@@ -74,6 +75,7 @@ describe('MarketplaceOAuthService', () => {
         tokenScope: 'https://graph.microsoft.com/.default',
         productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
         webhookSecret: 'marketplace-webhook-secret',
+        webhookAuthMode: 'callback',
         webhookTimestampToleranceMs: 300000
       },
       fetchImpl: fetchMock,
@@ -97,6 +99,7 @@ describe('MarketplaceOAuthService', () => {
         tokenScope: 'https://graph.microsoft.com/.default',
         productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
         webhookSecret: 'marketplace-webhook-secret',
+        webhookAuthMode: 'callback',
         webhookTimestampToleranceMs: 300000
       },
       fetchImpl: vi.fn(async () =>

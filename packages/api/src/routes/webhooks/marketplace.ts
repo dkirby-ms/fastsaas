@@ -116,22 +116,22 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    * /api/webhooks/marketplace:
    *   post:
    *     summary: Process Azure Marketplace subscription webhooks
-   *     description: Validates the signed Azure Marketplace webhook payload and applies the requested subscription lifecycle transition.
+   *     description: Applies the requested subscription lifecycle transition. When webhook signature headers are present, the API validates them with the configured webhook secret; otherwise the webhook can still be processed in callback mode and downstream services validate marketplace operations via the fulfillment API.
    *     tags:
    *       - Webhooks
    *     parameters:
    *       - in: header
    *         name: x-ms-marketplace-timestamp
-   *         required: true
+   *         required: false
    *         schema:
    *           type: string
-   *         description: Request timestamp used for replay-window validation and signature generation.
+   *         description: Optional request timestamp used for replay-window validation and signature generation when Partner Center webhook signing is enabled.
    *       - in: header
    *         name: x-ms-marketplace-signature
-   *         required: true
+   *         required: false
    *         schema:
    *           type: string
-   *         description: HMAC SHA-256 signature of `<timestamp>.<raw body>` using the configured webhook secret.
+   *         description: Optional HMAC SHA-256 signature of `<timestamp>.<raw body>` using the configured webhook secret when Partner Center webhook signing is enabled.
    *       - in: header
    *         name: x-ms-marketplace-event-id
    *         required: false
@@ -180,7 +180,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *       400:
    *         description: Webhook body is invalid
    *       401:
-   *         description: Missing or invalid webhook signature or timestamp headers
+   *         description: Invalid signed webhook headers when strict HMAC auth is enabled or when a partially signed request is received
    *       404:
    *         description: Marketplace subscription not found
    *       409:

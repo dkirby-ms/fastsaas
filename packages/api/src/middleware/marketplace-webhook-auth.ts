@@ -72,19 +72,31 @@ function validateSignature(rawBody: Buffer, timestamp: string, signature: string
 
 export function createMarketplaceWebhookAuth(config: ApiConfig): RequestHandler {
   return (req: ApiRequest, _res: Response, next: NextFunction) => {
+    if (config.marketplace.webhookAuthMode === 'none') {
+      next();
+      return;
+    }
+
+    const timestamp = readHeader(req, TIMESTAMP_HEADERS);
+    const signature = readHeader(req, SIGNATURE_HEADERS);
+    const requiresHmac = config.marketplace.webhookAuthMode === 'hmac';
+
+    if (!requiresHmac && !timestamp && !signature) {
+      next();
+      return;
+    }
+
     const rawBody = Buffer.isBuffer(req.body) ? req.body : undefined;
     if (!rawBody) {
       next(AppError.unauthorized('Marketplace webhook signature validation requires the raw request body'));
       return;
     }
 
-    const timestamp = readHeader(req, TIMESTAMP_HEADERS);
     if (!timestamp) {
       next(AppError.unauthorized('Marketplace webhook timestamp header is required'));
       return;
     }
 
-    const signature = readHeader(req, SIGNATURE_HEADERS);
     if (!signature) {
       next(AppError.unauthorized('Marketplace webhook signature header is required'));
       return;

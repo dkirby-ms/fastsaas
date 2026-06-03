@@ -1,3 +1,5 @@
+export type MarketplaceWebhookAuthMode = 'hmac' | 'callback' | 'none';
+
 export interface ApiConfig {
   port: number;
   apiVersion: string;
@@ -24,6 +26,7 @@ export interface ApiConfig {
     tokenScope: string;
     productIngestionBaseUrl: string;
     webhookSecret: string;
+    webhookAuthMode: MarketplaceWebhookAuthMode;
     webhookTimestampToleranceMs: number;
   };
   database: {
@@ -73,6 +76,19 @@ function isMultiTenantAuthority(tenantId: string): boolean {
 
 function isLocalEnvironment(nodeEnv: string): boolean {
   return nodeEnv === 'development' || nodeEnv === 'test';
+}
+
+function parseMarketplaceWebhookAuthMode(value: string | undefined): MarketplaceWebhookAuthMode {
+  const normalized = value?.trim().toLowerCase() ?? 'callback';
+
+  switch (normalized) {
+    case 'hmac':
+    case 'callback':
+    case 'none':
+      return normalized;
+    default:
+      throw new Error('MARKETPLACE_WEBHOOK_AUTH_MODE must be one of: hmac, callback, none');
+  }
 }
 
 function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
@@ -162,6 +178,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       productIngestionBaseUrl:
         normalizeUrl(env.MARKETPLACE_PRODUCT_INGESTION_BASE_URL ?? 'https://graph.microsoft.com/rp/product-ingestion'),
       webhookSecret: marketplaceSecrets.webhookSecret,
+      webhookAuthMode: parseMarketplaceWebhookAuthMode(env.MARKETPLACE_WEBHOOK_AUTH_MODE),
       webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },
     database: {
