@@ -1,3 +1,9 @@
+## [0.17.0](https://github.com/dkirby-ms/fastsaas/compare/v0.16.4...v0.17.0) (2026-06-03)
+
+### Features
+
+* **portal:** gate dashboard access for unsubscribed users ([#129](https://github.com/dkirby-ms/fastsaas/issues/129)) ([852cd20](https://github.com/dkirby-ms/fastsaas/commit/852cd20cf376d909b897ec6f395141441fab1de4)), closes [#128](https://github.com/dkirby-ms/fastsaas/issues/128)
+
 ## [0.16.4](https://github.com/dkirby-ms/fastsaas/compare/v0.16.3...v0.16.4) (2026-06-03)
 
 ### Performance Improvements
