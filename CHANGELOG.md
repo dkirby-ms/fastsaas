@@ -1,3 +1,9 @@
+## [0.16.1](https://github.com/dkirby-ms/fastsaas/compare/v0.16.0...v0.16.1) (2026-06-03)
+
+### Bug Fixes
+
+* switch deploy-app-staging to image-only updates ([88fc730](https://github.com/dkirby-ms/fastsaas/commit/88fc730cc0652825bcf515ac0ac40cb3f52d8b44))
+
 ## [0.16.0](https://github.com/dkirby-ms/fastsaas/compare/v0.15.0...v0.16.0) (2026-06-03)
 
 ### Features
