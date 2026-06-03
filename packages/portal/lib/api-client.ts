@@ -17,6 +17,13 @@ import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
 import { customerApiPaths, publisherAdminMockPaths } from '@/lib/api-paths';
 import { getPublisherApiBaseUrl, publisherAdminPaths } from '@/lib/publisher-admin-api';
+import type {
+  PlanPricing,
+  ProductAssetsResponse,
+  ProductAudiencesResponse,
+  PublisherProductDetail,
+  PublisherProductSummary,
+} from '@/lib/publisher/types';
 import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 
 export { ApiError } from '@/lib/errors';
@@ -231,6 +238,25 @@ export const portalApi = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  getPublisherProducts: async () =>
+    requestPublisherResource<PublisherProductSummary[]>(publisherAdminMockPaths.products, publisherAdminPaths.products),
+  getPublisherProduct: async (productId: string) =>
+    requestPublisherResource<PublisherProductDetail>(publisherAdminMockPaths.product(productId), publisherAdminPaths.product(productId)),
+  getPublisherProductAssets: async (productId: string) =>
+    requestPublisherResource<ProductAssetsResponse>(
+      publisherAdminMockPaths.productAssets(productId),
+      publisherAdminPaths.productAssets(productId),
+    ),
+  getPublisherProductAudiences: async (productId: string) =>
+    requestPublisherResource<ProductAudiencesResponse>(
+      publisherAdminMockPaths.productAudiences(productId),
+      publisherAdminPaths.productAudiences(productId),
+    ),
+  getPublisherPlanPricing: async (productId: string, planId: string) =>
+    requestPublisherResource<PlanPricing>(
+      publisherAdminMockPaths.productPlanPricing(productId, planId),
+      publisherAdminPaths.productPlanPricing(productId, planId),
+    ),
   getPublisherTenants: async () =>
     requestPublisherResource<PublisherTenantsResponse>('/publisher/tenants', publisherAdminPaths.tenants),
   getPublisherTenant: async (tenantId: string) =>

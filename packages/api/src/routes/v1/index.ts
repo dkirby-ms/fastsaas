@@ -10,6 +10,7 @@ import type { PublisherService } from '../../services/publisher-service';
 import type { SubmissionMonitoringService } from '../../services/submission-monitoring-service';
 import type { SubscriptionService } from '../../services/subscription-service';
 import type { TenantMemberService } from '../../services/tenant-member-service';
+import type { AssetVisibilityService } from '../../services/asset-visibility-service';
 import { createAuditLogsRouter } from './audit-logs';
 import { createAuthRouter } from './auth';
 import { createMembersRouter } from './members';
@@ -27,6 +28,7 @@ export function createV1Router(
   jobPollingService?: JobPollingService,
   productCatalogService?: ProductCatalogService,
   submissionMonitoringService?: SubmissionMonitoringService,
+  assetVisibilityService?: AssetVisibilityService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -47,7 +49,19 @@ export function createV1Router(
   }
 
   if (publisherService && partnerCenterService && jobPollingService) {
-    router.use('/publisher', createPublisherRouter(config, publisherService, partnerCenterService, jobPollingService, productCatalogService, submissionMonitoringService, tenantMemberService));
+    router.use(
+      '/publisher',
+      createPublisherRouter(
+        config,
+        publisherService,
+        partnerCenterService,
+        jobPollingService,
+        productCatalogService,
+        submissionMonitoringService,
+        assetVisibilityService,
+        tenantMemberService
+      )
+    );
   }
 
   return router;

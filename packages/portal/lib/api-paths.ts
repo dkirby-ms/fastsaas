@@ -16,11 +16,18 @@ function createCustomerApiPaths(prefix: string) {
 function createPublisherAdminPaths(prefix: string) {
   const plan = (planId: string) => `${prefix}/plans/${encodePathSegment(planId)}`;
   const tenant = (tenantId: string) => `${prefix}/tenants/${encodePathSegment(tenantId)}`;
+  const product = (productId: string) => `${prefix}/products/${encodePathSegment(productId)}`;
+  const productPlan = (productId: string, planId: string) => `${product(productId)}/plans/${encodePathSegment(planId)}`;
 
   return {
     dashboard: `${prefix}/dashboard`,
     plans: `${prefix}/plans`,
     plan,
+    products: `${prefix}/products`,
+    product,
+    productAssets: (productId: string) => `${product(productId)}/assets`,
+    productAudiences: (productId: string) => `${product(productId)}/audiences`,
+    productPlanPricing: (productId: string, planId: string) => `${productPlan(productId, planId)}/pricing`,
     tenants: `${prefix}/tenants`,
     tenant,
     tenantAction: (tenantId: string, action: 'activate' | 'suspend' | 'cancel') =>

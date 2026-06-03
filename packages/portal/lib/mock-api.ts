@@ -15,11 +15,27 @@ import type {
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
+import type {
+  PlanPricing,
+  ProductAudiencesResponse,
+  PublisherProductDetail,
+  PublisherProductSummary,
+  ListingAsset,
+  ListingTrailer,
+} from '@/lib/publisher/types';
 import { hasPublisherAccess } from '@/lib/roles';
+
+interface MockPublisherProduct extends PublisherProductDetail {
+  assets: ListingAsset[];
+  trailers: ListingTrailer[];
+  audiences: ProductAudiencesResponse;
+  pricing: Record<string, PlanPricing>;
+}
 
 interface PublisherMockState {
   plans: PublisherPlan[];
   tenants: PublisherTenantDetail[];
+  products: MockPublisherProduct[];
 }
 
 interface MockPortalState {
@@ -84,6 +100,110 @@ function defaultPublisherTenants(): PublisherTenantDetail[] {
   ];
 }
 
+function defaultPublisherProducts(): MockPublisherProduct[] {
+  return [
+    {
+      id: 'product-fastsaas-core',
+      externalOfferId: 'fastsaas-core',
+      durableProductId: 'durable-fastsaas-core',
+      productType: 'SaaS',
+      alias: 'FastSaaS Core Platform',
+      lifecycleState: 'generallyAvailable',
+      lastSyncedAt: '2026-06-02T12:00:00.000Z',
+      createdAt: '2026-05-29T12:00:00.000Z',
+      updatedAt: '2026-06-02T12:00:00.000Z',
+      plans: [
+        { id: 'starter', externalPlanId: 'starter', durablePlanId: 'durable-plan-starter', status: 'active', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
+        { id: 'growth', externalPlanId: 'growth', durablePlanId: 'durable-plan-growth', status: 'active', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
+        { id: 'scale', externalPlanId: 'scale', durablePlanId: 'durable-plan-scale', status: 'draft', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
+      ],
+      submissions: [
+        { id: 'submission-live-core', durableSubmissionId: 'durable-submission-live-core', targetType: 'live', status: 'published', createdAt: '2026-06-01T10:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
+      ],
+      assets: [
+        { id: 'asset-core-1', resourceName: 'Hero screenshot', assetType: 'screenshot', url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80', description: 'Main analytics dashboard', displayOrder: 1 },
+        { id: 'asset-core-2', resourceName: 'Tenant overview', assetType: 'screenshot', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80', description: 'Publisher tenant visibility', displayOrder: 2 },
+        { id: 'asset-core-3', resourceName: 'Primary logo', assetType: 'logo', url: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80', description: 'Marketplace logo lockup', displayOrder: 3 },
+      ],
+      trailers: [
+        { id: 'trailer-core-1', resourceName: 'Platform walkthrough', trailerType: 'video', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', thumbnailUrl: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80', duration: 92 },
+      ],
+      audiences: {
+        preview: [
+          { id: 'preview-core-1', resourceName: 'Preview cohort A', audienceType: 'preview', count: 24, description: 'Pilot customers validating the June release.' },
+        ],
+        private: [
+          { id: 'private-core-1', resourceName: 'Strategic accounts', audienceType: 'private', segmentDescription: 'Named enterprise buyers invited through private marketplace offers.' },
+        ],
+      },
+      pricing: {
+        starter: {
+          planId: 'starter',
+          planName: 'Starter',
+          markets: [
+            { region: 'United States', currency: 'USD', price: 79, marketAvailability: 'available' },
+            { region: 'United Kingdom', currency: 'GBP', price: 65, marketAvailability: 'available' },
+          ],
+          billingTerms: [{ billingTermType: 'monthly', duration: 1, durationUnit: 'month' }],
+          availability: { lifecycleState: 'generallyAvailable', availableForPurchase: true },
+        },
+        growth: {
+          planId: 'growth',
+          planName: 'Growth',
+          markets: [
+            { region: 'United States', currency: 'USD', price: 249, marketAvailability: 'available' },
+            { region: 'Canada', currency: 'CAD', price: 339, marketAvailability: 'preview' },
+          ],
+          billingTerms: [
+            { billingTermType: 'monthly', duration: 1, durationUnit: 'month' },
+            { billingTermType: 'annual', duration: 1, durationUnit: 'year' },
+          ],
+          availability: { lifecycleState: 'generallyAvailable', availableForPurchase: true },
+        },
+        scale: {
+          planId: 'scale',
+          planName: 'Scale',
+          markets: [{ region: 'United States', currency: 'USD', price: 499, marketAvailability: 'preview' }],
+          billingTerms: [{ billingTermType: 'annual', duration: 1, durationUnit: 'year' }],
+          availability: { lifecycleState: 'preview', availableForPurchase: false },
+        },
+      },
+    },
+    {
+      id: 'product-fastsaas-analytics',
+      externalOfferId: 'fastsaas-analytics',
+      durableProductId: 'durable-fastsaas-analytics',
+      productType: 'SaaS',
+      alias: 'FastSaaS Analytics Add-on',
+      lifecycleState: 'preview',
+      lastSyncedAt: '2026-06-01T18:30:00.000Z',
+      createdAt: '2026-05-30T12:00:00.000Z',
+      updatedAt: '2026-06-01T18:30:00.000Z',
+      plans: [
+        { id: 'growth', externalPlanId: 'growth', durablePlanId: 'durable-plan-growth-addon', status: 'active', createdAt: '2026-05-30T12:00:00.000Z', updatedAt: '2026-06-01T18:30:00.000Z' },
+      ],
+      submissions: [
+        { id: 'submission-preview-addon', durableSubmissionId: 'durable-submission-preview-addon', targetType: 'preview', status: 'published', createdAt: '2026-06-01T09:30:00.000Z', updatedAt: '2026-06-01T18:30:00.000Z' },
+      ],
+      assets: [],
+      trailers: [],
+      audiences: {
+        preview: [],
+        private: [],
+      },
+      pricing: {
+        growth: {
+          planId: 'growth',
+          planName: 'Growth',
+          markets: [{ region: 'United States', currency: 'USD', price: 59, marketAvailability: 'preview' }],
+          billingTerms: [{ billingTermType: 'monthly', duration: 1, durationUnit: 'month' }],
+          availability: { lifecycleState: 'preview', availableForPurchase: false },
+        },
+      },
+    },
+  ];
+}
+
 const defaultState = (): MockPortalState => ({
   dashboard: {
     user: { id: 'cust_001', name: 'Alex Customer', email: 'alex.customer@fastsaas.dev', company: 'Northwind Traders' },
@@ -101,7 +221,7 @@ const defaultState = (): MockPortalState => ({
   },
   settings: { displayName: 'Alex Customer', email: 'alex.customer@fastsaas.dev', company: 'Northwind Traders', timezone: 'America/Chicago', notificationsEnabled: true },
   subscriptions: [],
-  publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants() },
+  publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants(), products: defaultPublisherProducts() },
 });
 
 const isBrowser = () => typeof window !== 'undefined';
@@ -152,6 +272,7 @@ function hydrateState(saved: string | null): MockPortalState {
       publisher: {
         plans: parsed.publisher?.plans ?? base.publisher.plans,
         tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
+        products: parsed.publisher?.products ?? base.publisher.products,
       },
     });
   } catch {
@@ -177,6 +298,20 @@ function writeState(state: MockPortalState) {
 
 function getPublisherPlan(state: MockPortalState, planId: string) {
   return state.publisher.plans.find((plan) => plan.id === planId);
+}
+
+function getPublisherProduct(state: MockPortalState, productId: string) {
+  return state.publisher.products.find((product) => product.id === productId);
+}
+
+function mapPublisherProductSummary(product: MockPublisherProduct): PublisherProductSummary {
+  const { assets, trailers, audiences, pricing, plans, submissions, ...summary } = product;
+  return summary;
+}
+
+function mapPublisherProductDetail(product: MockPublisherProduct): PublisherProductDetail {
+  const { assets, trailers, audiences, pricing, ...detail } = product;
+  return detail;
 }
 
 function buildPublisherDashboard(state: MockPortalState): PublisherDashboardData {
@@ -416,6 +551,43 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
 
   if (path === '/publisher/dashboard' && method === 'GET') {
     return buildPublisherDashboard(state) as T;
+  }
+
+  if (path === '/publisher/products' && method === 'GET') {
+    return state.publisher.products.map((product) => mapPublisherProductSummary(product)) as T;
+  }
+
+  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/assets')) {
+    const productId = decodePathSegment(path.split('/')[3]);
+    const product = productId ? getPublisherProduct(state, productId) : undefined;
+    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
+    return { assets: product.assets, trailers: product.trailers } as T;
+  }
+
+  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/audiences')) {
+    const productId = decodePathSegment(path.split('/')[3]);
+    const product = productId ? getPublisherProduct(state, productId) : undefined;
+    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
+    return product.audiences as T;
+  }
+
+  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/pricing')) {
+    const segments = path.split('/');
+    const productId = decodePathSegment(segments[3]);
+    const planId = decodePathSegment(segments[5]);
+    const product = productId ? getPublisherProduct(state, productId) : undefined;
+    if (!product || !planId) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
+    const pricing = product.pricing[planId];
+    if (!pricing) throw new ApiError('The selected plan could not be found.', 404, 'publisher_plan_not_found');
+    const currentPlan = getPublisherPlan(state, planId);
+    return { ...pricing, planName: currentPlan?.name ?? pricing.planName } as T;
+  }
+
+  if (path.startsWith('/publisher/products/') && method === 'GET') {
+    const productId = decodePathSegment(path.split('/')[3]);
+    const product = productId ? getPublisherProduct(state, productId) : undefined;
+    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
+    return mapPublisherProductDetail(product) as T;
   }
 
   if (path === '/publisher/plans' && method === 'GET') {

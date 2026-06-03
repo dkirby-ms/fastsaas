@@ -30,6 +30,7 @@ import { SubmissionMonitoringService } from '../../services/submission-monitorin
 import { normalizeRbacRole } from '../../middleware/rbac';
 import { SubscriptionService } from '../../services/subscription-service';
 import { TenantMemberService } from '../../services/tenant-member-service';
+import { AssetVisibilityService } from '../../services/asset-visibility-service';
 
 export interface TokenOptions {
   scopes?: string[];
@@ -315,6 +316,14 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     logger: logger.child({ component: 'submission-monitoring-test' }),
     clientFactory: () => createProductIngestionClient(productIngestionState)
   });
+  const assetVisibilityService = new AssetVisibilityService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthProvider,
+    tokenProvider: marketplaceTokenProvider,
+    logger: logger.child({ component: 'asset-visibility-test' }),
+    clientFactory: () => createProductIngestionClient(productIngestionState)
+  });
   const app = createApp(config, {
     repository: meteringRepository,
     subscriptionRepository,
@@ -324,6 +333,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     jobPollingService,
     productCatalogService,
     submissionMonitoringService,
+    assetVisibilityService,
     tenantMemberService
   });
 

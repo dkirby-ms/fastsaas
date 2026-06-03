@@ -1,9 +1,14 @@
 import type {
   ApiResponse,
+  ListingAsset,
+  ListingTrailer,
   PartnerCenterConnectRequest,
   PartnerCenterConnection,
   PartnerCenterDisconnectResponse,
   PartnerCenterStatusResponse,
+  PlanPricing,
+  PreviewAudience,
+  PrivateAudience,
   PublisherDashboardData,
   PublisherPlan,
   PublisherPlansResponse,
@@ -42,6 +47,7 @@ import type {
   SubmissionMonitoringService
 } from '../../services/submission-monitoring-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
+import type { AssetVisibilityService } from '../../services/asset-visibility-service';
 
 function parsePlanBody(body: unknown): CreatePublisherPlanInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -293,6 +299,7 @@ export function createPublisherRouter(
   jobPollingService: JobPollingService,
   productCatalogService?: ProductCatalogService,
   submissionMonitoringService?: SubmissionMonitoringService,
+  assetVisibilityService?: AssetVisibilityService,
   tenantMemberService?: TenantMemberService
 ) {
   const router = Router();
@@ -1016,7 +1023,7 @@ export function createPublisherRouter(
     }
   );
 
-  if (productCatalogService && submissionMonitoringService) {
+  if (productCatalogService && submissionMonitoringService && assetVisibilityService) {
     const listProducts = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProduct[]>>, next: (error?: unknown) => void) => {
       try {
         const actor = buildActorContext(req);
@@ -1133,6 +1140,51 @@ export function createPublisherRouter(
       }
     };
 
+    const getProductAssets = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<{ assets: ListingAsset[]; trailers: ListingTrailer[] }>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const [assets, trailers] = await Promise.all([
+          assetVisibilityService.getListingAssets(actor.tenantId, getProductId(req)),
+          assetVisibilityService.getListingTrailers(actor.tenantId, getProductId(req))
+        ]);
+        res.status(200).json({ status: 'success', data: { assets, trailers }, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProductAudiences = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<{ preview: PreviewAudience[]; private: PrivateAudience[] }>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const audiences = await assetVisibilityService.getAudiences(actor.tenantId, getProductId(req));
+        res.status(200).json({ status: 'success', data: audiences, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+    const getProductPlanPricing = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<PlanPricing>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const pricing = await assetVisibilityService.getPlanPricing(actor.tenantId, getProductId(req), getPlanId(req));
+        res.status(200).json({ status: 'success', data: pricing, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
     const submitOfferSubmission = async (
       req: ApiRequest,
       res: Response<ApiResponse<PublisherMarketplaceJobDetail>>,
@@ -1209,6 +1261,21 @@ export function createPublisherRouter(
       '/products/:productId/resource-tree',
       authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
       getProductResourceTree
+    );
+    router.get(
+      '/products/:productId/assets',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      getProductAssets
+    );
+    router.get(
+      '/products/:productId/audiences',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      getProductAudiences
+    );
+    router.get(
+      '/products/:productId/plans/:planId/pricing',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      getProductPlanPricing
     );
     router.get(
       '/offers/:offerId/resource-tree',
