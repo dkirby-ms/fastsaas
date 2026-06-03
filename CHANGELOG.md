@@ -1,3 +1,9 @@
+## [0.15.0](https://github.com/dkirby-ms/fastsaas/compare/v0.14.4...v0.15.0) (2026-06-03)
+
+### Features
+
+* add listing asset and audience visibility ([#124](https://github.com/dkirby-ms/fastsaas/issues/124)) ([643f37c](https://github.com/dkirby-ms/fastsaas/commit/643f37cfaec712d83b22dff83c998f2069dc4421)), closes [#103](https://github.com/dkirby-ms/fastsaas/issues/103)
+
 ## [0.14.4](https://github.com/dkirby-ms/fastsaas/compare/v0.14.3...v0.14.4) (2026-06-03)
 
 ### Bug Fixes
