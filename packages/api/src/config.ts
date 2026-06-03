@@ -1,3 +1,5 @@
+export type MarketplaceWebhookAuthMode = 'jwt' | 'none';
+
 export interface ApiConfig {
   port: number;
   apiVersion: string;
@@ -23,8 +25,9 @@ export interface ApiConfig {
     clientSecret: string;
     tokenScope: string;
     productIngestionBaseUrl: string;
-    webhookSecret: string;
-    webhookTimestampToleranceMs: number;
+    jwksUri: string;
+    expectedAudience: string;
+    webhookAuthMode: MarketplaceWebhookAuthMode;
   };
   database: {
     url?: string;
@@ -75,37 +78,40 @@ function isLocalEnvironment(nodeEnv: string): boolean {
   return nodeEnv === 'development' || nodeEnv === 'test';
 }
 
+function parseMarketplaceWebhookAuthMode(value: string | undefined): MarketplaceWebhookAuthMode {
+  const normalized = value?.trim().toLowerCase() ?? 'jwt';
+
+  switch (normalized) {
+    case 'jwt':
+    case 'none':
+      return normalized;
+    default:
+      throw new Error('MARKETPLACE_WEBHOOK_AUTH_MODE must be one of: jwt, none');
+  }
+}
+
 function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   clientSecret: string;
-  webhookSecret: string;
 } {
   // MARKETPLACE_CLIENT_SECRET is shared across marketplace integrations.
   // Product Ingestion uses it as the OAuth client_secret while fulfillment keeps its direct bearer behavior.
   const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
-  const webhookSecret = env.MARKETPLACE_WEBHOOK_SECRET?.trim();
 
   if (isLocalEnvironment(nodeEnv)) {
     return {
-      clientSecret: clientSecret || 'local-marketplace-client-secret',
-      webhookSecret: webhookSecret || 'local-marketplace-webhook-secret'
+      clientSecret: clientSecret || 'local-marketplace-client-secret'
     };
   }
 
-  const missingSecrets = [
-    !clientSecret ? 'MARKETPLACE_CLIENT_SECRET' : undefined,
-    !webhookSecret ? 'MARKETPLACE_WEBHOOK_SECRET' : undefined
-  ].filter((value): value is string => Boolean(value));
-
-  if (missingSecrets.length > 0) {
+  if (!clientSecret) {
     throw new Error(
-      `Missing required marketplace secrets for NODE_ENV=${nodeEnv}: ${missingSecrets.join(', ')}. ` +
+      `Missing required marketplace secrets for NODE_ENV=${nodeEnv}: MARKETPLACE_CLIENT_SECRET. ` +
         'Fallback values are only allowed in development and test environments.'
     );
   }
 
   return {
-    clientSecret: clientSecret as string,
-    webhookSecret: webhookSecret as string
+    clientSecret
   };
 }
 
@@ -127,6 +133,11 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const resolvedClientId = azureClientId ?? 'local-dev-client';
   const multiTenantAuthority = isMultiTenantAuthority(resolvedTenantId);
   const marketplaceSecrets = resolveMarketplaceSecrets(env, nodeEnv);
+  const marketplaceWebhookAuthMode = parseMarketplaceWebhookAuthMode(env.MARKETPLACE_WEBHOOK_AUTH_MODE);
+
+  if (marketplaceWebhookAuthMode === 'none' && nodeEnv === 'production') {
+    throw new Error('MARKETPLACE_WEBHOOK_AUTH_MODE=none is not allowed in production');
+  }
 
   return {
     port: Number(env.API_PORT ?? 3000),
@@ -161,8 +172,9 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       tokenScope: env.MARKETPLACE_TOKEN_SCOPE?.trim() || 'https://graph.microsoft.com/.default',
       productIngestionBaseUrl:
         normalizeUrl(env.MARKETPLACE_PRODUCT_INGESTION_BASE_URL ?? 'https://graph.microsoft.com/rp/product-ingestion'),
-      webhookSecret: marketplaceSecrets.webhookSecret,
-      webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
+      jwksUri: env.MARKETPLACE_JWKS_URI?.trim() || 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
+      expectedAudience: env.MARKETPLACE_EXPECTED_AUDIENCE?.trim() || (env.MARKETPLACE_CLIENT_ID?.trim() || 'local-marketplace-client-id'),
+      webhookAuthMode: marketplaceWebhookAuthMode
     },
     database: {
       url: env.DATABASE_URL

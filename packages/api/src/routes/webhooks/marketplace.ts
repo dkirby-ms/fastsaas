@@ -116,22 +116,16 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    * /api/webhooks/marketplace:
    *   post:
    *     summary: Process Azure Marketplace subscription webhooks
-   *     description: Validates the signed Azure Marketplace webhook payload and applies the requested subscription lifecycle transition.
+   *     description: Applies the requested subscription lifecycle transition. By default, marketplace webhooks must present a Microsoft Entra Bearer token whose issuer, audience, signature, and expiry are validated before the webhook is processed.
    *     tags:
    *       - Webhooks
    *     parameters:
    *       - in: header
-   *         name: x-ms-marketplace-timestamp
-   *         required: true
+   *         name: Authorization
+   *         required: false
    *         schema:
    *           type: string
-   *         description: Request timestamp used for replay-window validation and signature generation.
-   *       - in: header
-   *         name: x-ms-marketplace-signature
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: HMAC SHA-256 signature of `<timestamp>.<raw body>` using the configured webhook secret.
+   *         description: Bearer token issued by Microsoft Entra ID for the configured marketplace tenant and audience. Optional only when `MARKETPLACE_WEBHOOK_AUTH_MODE=none`.
    *       - in: header
    *         name: x-ms-marketplace-event-id
    *         required: false
@@ -180,7 +174,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *       400:
    *         description: Webhook body is invalid
    *       401:
-   *         description: Missing or invalid webhook signature or timestamp headers
+   *         description: Missing, invalid, or expired Microsoft Entra Bearer token
    *       404:
    *         description: Marketplace subscription not found
    *       409:
