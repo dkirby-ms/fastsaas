@@ -1,3 +1,9 @@
+## [0.14.4](https://github.com/dkirby-ms/fastsaas/compare/v0.14.3...v0.14.4) (2026-06-03)
+
+### Bug Fixes
+
+* rename .squad/ files to remove colons for Windows compatibility ([7ceaaf6](https://github.com/dkirby-ms/fastsaas/commit/7ceaaf6e5a398c7d8d9bbeb306e0bc56c7c74282))
+
 ## [0.14.3](https://github.com/dkirby-ms/fastsaas/compare/v0.14.2...v0.14.3) (2026-06-03)
 
 ### Bug Fixes
