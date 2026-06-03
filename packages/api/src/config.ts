@@ -26,6 +26,8 @@ export interface ApiConfig {
     tokenScope: string;
     productIngestionBaseUrl: string;
     webhookSecret: string;
+    jwksUri: string;
+    expectedAudience: string;
     webhookAuthMode: MarketplaceWebhookAuthMode;
     webhookTimestampToleranceMs: number;
   };
@@ -178,6 +180,8 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       productIngestionBaseUrl:
         normalizeUrl(env.MARKETPLACE_PRODUCT_INGESTION_BASE_URL ?? 'https://graph.microsoft.com/rp/product-ingestion'),
       webhookSecret: marketplaceSecrets.webhookSecret,
+      jwksUri: env.MARKETPLACE_JWKS_URI?.trim() || 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
+      expectedAudience: env.MARKETPLACE_EXPECTED_AUDIENCE?.trim() || (env.MARKETPLACE_CLIENT_ID?.trim() || 'local-marketplace-client-id'),
       webhookAuthMode: parseMarketplaceWebhookAuthMode(env.MARKETPLACE_WEBHOOK_AUTH_MODE),
       webhookTimestampToleranceMs: Number(env.MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS ?? 5 * 60 * 1000)
     },

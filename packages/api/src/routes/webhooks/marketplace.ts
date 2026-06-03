@@ -116,7 +116,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    * /api/webhooks/marketplace:
    *   post:
    *     summary: Process Azure Marketplace subscription webhooks
-   *     description: Applies the requested subscription lifecycle transition. When webhook signature headers are present, the API validates them with the configured webhook secret; otherwise the webhook can still be processed in callback mode and downstream services validate marketplace operations via the fulfillment API.
+   *     description: Applies the requested subscription lifecycle transition. When webhook signature headers are present, the API validates them with the configured webhook secret; otherwise callback mode requires a Microsoft Entra Bearer token whose issuer, audience, signature, and expiry are validated before the webhook is processed.
    *     tags:
    *       - Webhooks
    *     parameters:

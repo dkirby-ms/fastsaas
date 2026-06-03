@@ -1,0 +1,144 @@
+name: Create issue for CI failures
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  create-issue:
+    if: github.event.workflow_run.conclusion == 'failure' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.event == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update squad issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          GH_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          GH_RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GH_RUN_ID: ${{ github.event.workflow_run.id }}
+          GH_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          GH_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_RUN_TIMESTAMP: ${{ github.event.workflow_run.updated_at }}
+          GH_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          GH_TRIGGER_ACTOR: ${{ github.event.workflow_run.triggering_actor.login || github.event.workflow_run.actor.login || github.actor }}
+        run: |
+          set -euo pipefail
+
+          ensure_label() {
+            local name="$1"
+            local color="$2"
+            local description="$3"
+
+            if jq -e --arg name "$name" '.[] | select(.name == $name)' <<<"$labels_json" >/dev/null; then
+              return
+            fi
+
+            gh api --method POST "repos/$GH_REPO/labels" \
+              -f name="$name" \
+              -f color="$color" \
+              -f description="$description" >/dev/null
+
+            labels_json=$(gh api "repos/$GH_REPO/labels?per_page=100")
+          }
+
+          workflow_name=${GH_WORKFLOW_NAME:-CI}
+          branch=${GH_RUN_BRANCH:-unknown}
+          run_url=${GH_RUN_URL:-https://github.com/$GH_REPO/actions/runs/$GH_RUN_ID}
+          timestamp=${GH_RUN_TIMESTAMP:-unknown}
+          short_sha=$(printf '%s' "${GH_RUN_SHA:-unknown}" | cut -c1-7)
+          actor=${GH_TRIGGER_ACTOR:-unknown}
+
+          labels_json=$(gh api "repos/$GH_REPO/labels?per_page=100")
+          ensure_label squad 9B8FCC 'Squad triage inbox — Lead will assign to a member'
+          ensure_label squad:eecom 9B8FCC 'Assigned to EECOM (Backend/API)'
+          ensure_label squad:fido 9B8FCC 'Assigned to FIDO (Frontend/UI)'
+
+          jobs_json=$(gh api "repos/$GH_REPO/actions/runs/$GH_RUN_ID/jobs?per_page=100")
+          failed_jobs_json=$(jq '[.jobs[] | select(.conclusion == "failure")]' <<<"$jobs_json")
+          primary_job_name=$(jq -r 'if length > 0 then .[0].name else "Unknown job" end' <<<"$failed_jobs_json")
+          primary_step_name=$(jq -r 'if length > 0 then ((.[0].steps // []) | map(select(.conclusion == "failure"))[0].name // "Unknown step") else "Unknown step" end' <<<"$failed_jobs_json")
+
+          failed_jobs=$(jq -r '
+            if length == 0 then
+              "- Unable to determine the failed job from the workflow metadata."
+            else
+              map(
+                "- Job: `\(.name)`\n  - Failed step: `\(((.steps // []) | map(select(.conclusion == \"failure\"))[0].name) // \"Unknown step\")`"
+              ) | join("\n")
+            end
+          ' <<<"$failed_jobs_json")
+
+          log_text=$(gh run view "$GH_RUN_ID" --repo "$GH_REPO" --log-failed 2>/dev/null || true)
+          error_snippet=$(printf '%s\n' "$log_text" | awk 'BEGIN { IGNORECASE = 1; count = 0 } /error|fail|exception|ELIFECYCLE|ERR!/ { print; count++; if (count >= 12) exit }')
+          if [ -z "$error_snippet" ]; then
+            error_snippet=$(printf '%s\n' "$log_text" | awk 'NF { lines[++count] = $0 } END { start = count > 12 ? count - 11 : 1; for (i = start; i <= count; i++) print lines[i] }')
+          fi
+          if [ -z "$error_snippet" ]; then
+            error_snippet='No failing log snippet was available from the workflow run.'
+          fi
+
+          classification_text=$(printf '%s\n%s\n%s' "$primary_job_name" "$failed_jobs" "$error_snippet" | tr '[:upper:]' '[:lower:]')
+          owner_label=
+          if grep -Eiq 'packages/portal|@fastsaas/portal|next\.js|next build|react|tailwind|portal' <<<"$classification_text"; then
+            owner_label='squad:fido'
+          elif grep -Eiq 'packages/api|@fastsaas/api|prisma|kysely|express|vitest|api' <<<"$classification_text"; then
+            owner_label='squad:eecom'
+          fi
+
+          workflow_slug=$(printf '%s' "$workflow_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+          branch_slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+          failure_marker="<!-- ci-failure-key:${workflow_slug}:${branch_slug} -->"
+          title="CI failure: ${workflow_name} on ${branch}"
+
+          printf -v body '%s\n' \
+            "$failure_marker" \
+            "# ${workflow_name} failure" \
+            '' \
+            '## Summary' \
+            "- Workflow run: [${workflow_name} #${GH_RUN_NUMBER} (attempt ${GH_RUN_ATTEMPT})](${run_url})" \
+            "- Branch: \`${branch}\`" \
+            "- Commit: \`${short_sha}\`" \
+            "- Triggered by: \`${actor}\`" \
+            "- Failed job: \`${primary_job_name}\`" \
+            "- Failed step: \`${primary_step_name}\`" \
+            "- Timestamp: \`${timestamp}\`" \
+            '' \
+            '## Failed jobs and steps' \
+            "$failed_jobs" \
+            '' \
+            '## Error snippet' \
+            '```text' \
+            "$error_snippet" \
+            '```'
+
+          existing_issue_number=$(gh issue list --repo "$GH_REPO" --label squad --state open --limit 100 --json number,body | jq -r --arg marker "$failure_marker" '.[] | select((.body // "") | contains($marker)) | .number' | head -n 1)
+
+          if [ -n "$existing_issue_number" ]; then
+            gh api --method PATCH "repos/$GH_REPO/issues/$existing_issue_number" \
+              -f title="$title" \
+              -f body="$body" >/dev/null
+
+            printf -v comment_body '%s\n' \
+              'Another failed run matched this CI incident.' \
+              '' \
+              "- Workflow run: ${run_url}" \
+              "- Timestamp: \`${timestamp}\`"
+            gh issue comment "$existing_issue_number" --repo "$GH_REPO" --body "$comment_body" >/dev/null
+            exit 0
+          fi
+
+          create_args=(--repo "$GH_REPO" --title "$title" --label squad --body "$body")
+          if [ -n "$owner_label" ]; then
+            create_args+=(--label "$owner_label")
+          fi
+
+          gh issue create "${create_args[@]}" >/dev/null
