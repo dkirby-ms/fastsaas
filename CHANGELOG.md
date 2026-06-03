@@ -1,3 +1,9 @@
+## [0.14.2](https://github.com/dkirby-ms/fastsaas/compare/v0.14.1...v0.14.2) (2026-06-03)
+
+### Bug Fixes
+
+* **infra:** provision secrets via Bicep params instead of post-deploy mutation ([#122](https://github.com/dkirby-ms/fastsaas/issues/122)) ([79e3e2e](https://github.com/dkirby-ms/fastsaas/commit/79e3e2e20972a7bf71aeb36b648530687f8945b2))
+
 ## [0.14.1](https://github.com/dkirby-ms/fastsaas/compare/v0.14.0...v0.14.1) (2026-06-02)
 
 ### Bug Fixes
