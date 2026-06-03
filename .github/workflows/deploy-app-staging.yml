@@ -121,6 +121,25 @@ jobs:
             --file packages/portal/Dockerfile \
             .
 
+      - name: Validate existing images for skipBuild
+        if: env.SKIP_BUILD == 'true'
+        shell: bash
+        env:
+          ACR_NAME: ${{ steps.registry.outputs.acr_name }}
+        run: |
+          for repository in fastsaas-api fastsaas-portal; do
+            tag=$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository "$repository" \
+              --query "[?@=='$IMAGE_TAG'] | [0]" \
+              -o tsv)
+
+            if [ "$tag" != "$IMAGE_TAG" ]; then
+              echo "skipBuild=true requires an existing image tag. Could not find $repository:$IMAGE_TAG in ACR $ACR_NAME." >&2
+              exit 1
+            fi
+          done
+
       - name: Resolve container app targets
         run: |
           echo "API_APP_NAME=${ENVIRONMENT_NAME}-api" >> "$GITHUB_ENV"

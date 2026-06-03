@@ -1211,7 +1211,7 @@ This runs as a standalone local process (not inside Copilot) that:
 |-------|------|-----|
 | **In-session** | You're at the keyboard | "Ralph, go" — active loop while work exists |
 | **Local watchdog** | You're away but machine is on | `npx @bradygaster/squad-cli watch --interval 10` |
-| **Cloud heartbeat** | Fully unattended | `squad-heartbeat.yml` — event-based only (cron disabled) |
+| **Cloud heartbeat** | Fully unattended | `squad-heartbeat.yml` — scheduled every 5 minutes (or manual dispatch) |
 
 ### Ralph State
 

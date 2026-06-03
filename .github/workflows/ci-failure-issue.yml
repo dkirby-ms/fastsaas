@@ -95,7 +95,9 @@ jobs:
 
           workflow_slug=$(printf '%s' "$workflow_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
           branch_slug=$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
-          failure_marker="<!-- ci-failure-key:${workflow_slug}:${branch_slug} -->"
+          job_slug=$(printf '%s' "$primary_job_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+          step_slug=$(printf '%s' "$primary_step_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')
+          failure_marker="<!-- ci-failure-key:${workflow_slug}:${branch_slug}:${job_slug}:${step_slug} -->"
           title="CI failure: ${workflow_name} on ${branch}"
 
           printf -v body '%s\n' \
