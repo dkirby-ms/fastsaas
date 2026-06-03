@@ -1,7 +1,9 @@
 'use client';
 
-import { signOut, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { CustomerSubscriptionGate } from '@/components/customer-subscription-gate';
 import { SidebarNav } from '@/components/sidebar-nav';
+import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { getPortalRole } from '@/lib/roles';
 import { usePortalShellStore } from '@/lib/store';
@@ -48,18 +50,12 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <ThemeToggle />
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: '/sign-in' })}
-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-brand-400 dark:hover:text-brand-300"
-              >
-                Sign out
-              </button>
+              <SignOutButton />
             </div>
           </header>
 
           <main className="flex-1" role="main">
-            {children}
+            <CustomerSubscriptionGate>{children}</CustomerSubscriptionGate>
           </main>
         </div>
       </div>

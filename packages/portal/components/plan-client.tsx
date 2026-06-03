@@ -29,7 +29,6 @@ export function PlanClient() {
   if (!plansQuery.data) return <LoadingPanel label="Loading your plan options" />;
 
   const { currentPlanId, availablePlans } = plansQuery.data;
-  const hasActiveSubscription = Boolean(currentPlanId);
 
   return (
     <section className="space-y-6">
@@ -39,19 +38,12 @@ export function PlanClient() {
         <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Upgrade or downgrade between curated plans now. The API client already normalizes user-friendly errors so the real backend can slot in later without changing these screens.</p>
       </header>
 
-      {!hasActiveSubscription ? (
-        <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 bg-brand-50/40 dark:bg-brand-500/5 px-6 py-5 text-sm text-slate-700 dark:text-slate-200 shadow-panel">
-          <p className="font-semibold text-slate-950 dark:text-slate-50">No active subscription yet</p>
-          <p className="mt-2">You can review available plans here, but plan changes stay disabled until this tenant has an active Marketplace subscription.</p>
-        </div>
-      ) : null}
-
       {updatePlanMutation.isError ? <ErrorAlert message={getErrorMessage(updatePlanMutation.error, 'We could not update your subscription plan.')} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-3">
         {availablePlans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
-          const isDisabled = !hasActiveSubscription || isCurrent || updatePlanMutation.isPending;
+          const isDisabled = isCurrent || updatePlanMutation.isPending;
           return (
             <article key={plan.id} className={clsx('flex h-full flex-col rounded-3xl border bg-white dark:bg-slate-900 p-6 shadow-panel', plan.recommended ? 'border-brand-500 ring-1 ring-brand-200 dark:ring-brand-500/40' : 'border-slate-200 dark:border-slate-700')}>
               <div className="flex items-start justify-between gap-3">
@@ -67,8 +59,8 @@ export function PlanClient() {
                   <li key={feature.label} className="flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3"><span className={clsx('h-2.5 w-2.5 rounded-full', feature.included ? 'bg-emerald-50 dark:bg-emerald-500/100' : 'bg-slate-300')} aria-hidden="true" /><span>{feature.label}</span></li>
                 ))}
               </ul>
-              <button type="button" disabled={isDisabled} onClick={() => updatePlanMutation.mutate(plan.id)} className={clsx('mt-8 rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', isCurrent || !hasActiveSubscription ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-brand-600 text-white hover:bg-brand-700')}>
-                {isCurrent ? 'Current plan' : !hasActiveSubscription ? 'Requires active subscription' : updatePlanMutation.isPending ? 'Updating…' : `Switch to ${plan.name}`}
+              <button type="button" disabled={isDisabled} onClick={() => updatePlanMutation.mutate(plan.id)} className={clsx('mt-8 rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', isCurrent ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-brand-600 text-white hover:bg-brand-700')}>
+                {isCurrent ? 'Current plan' : updatePlanMutation.isPending ? 'Updating…' : `Switch to ${plan.name}`}
               </button>
             </article>
           );

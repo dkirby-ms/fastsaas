@@ -45,6 +45,10 @@ interface MockPortalState {
 }
 
 const storageKey = 'fastsaas.portal.mock-state';
+const legacyPlaceholderNames = new Set(['Alex Customer']);
+const legacyPlaceholderEmails = new Set(['alex.customer@fastsaas.dev']);
+const legacyPlaceholderCompanies = new Set(['Northwind Traders']);
+const legacyPlaceholderUserIds = new Set(['cust_001']);
 
 const defaultActions = (state: NonNullable<DashboardData['subscription']>['state']): PortalAction[] => {
   if (state === 'canceled') {
@@ -256,26 +260,72 @@ function defaultCustomerSettings(): SettingsData {
   };
 }
 
-function syncCustomerProfile(state: MockPortalState, session: PortalSession): MockPortalState {
-  const sessionName = session?.user?.name?.trim() ?? '';
-  const sessionEmail = session?.user?.email?.trim() ?? '';
-  const displayName = sessionName || state.settings.displayName || state.dashboard.user.name;
-  const email = sessionEmail || state.settings.email || state.dashboard.user.email;
-  const company = state.settings.company || state.dashboard.user.company;
+function isLegacyPlaceholder(value: string, placeholders: Set<string>) {
+  return placeholders.has(value.trim());
+}
+
+function clearLegacyCustomerProfile(state: MockPortalState): MockPortalState {
+  const shouldClearName = isLegacyPlaceholder(state.dashboard.user.name, legacyPlaceholderNames)
+    || isLegacyPlaceholder(state.settings.displayName, legacyPlaceholderNames);
+  const shouldClearEmail = isLegacyPlaceholder(state.dashboard.user.email, legacyPlaceholderEmails)
+    || isLegacyPlaceholder(state.settings.email, legacyPlaceholderEmails);
+  const shouldClearCompany = isLegacyPlaceholder(state.dashboard.user.company, legacyPlaceholderCompanies)
+    || isLegacyPlaceholder(state.settings.company, legacyPlaceholderCompanies);
+  const shouldClearUserId = shouldClearEmail && legacyPlaceholderUserIds.has(state.dashboard.user.id);
+
+  if (!shouldClearName && !shouldClearEmail && !shouldClearCompany && !shouldClearUserId) {
+    return state;
+  }
 
   return {
     ...state,
     dashboard: {
       ...state.dashboard,
       user: {
-        id: email || session?.tenantId || state.dashboard.user.id || 'customer-user',
+        ...state.dashboard.user,
+        id: shouldClearUserId ? '' : state.dashboard.user.id,
+        name: shouldClearName ? '' : state.dashboard.user.name,
+        email: shouldClearEmail ? '' : state.dashboard.user.email,
+        company: shouldClearCompany ? '' : state.dashboard.user.company,
+      },
+    },
+    settings: {
+      ...state.settings,
+      displayName: shouldClearName ? '' : state.settings.displayName,
+      email: shouldClearEmail ? '' : state.settings.email,
+      company: shouldClearCompany ? '' : state.settings.company,
+    },
+  };
+}
+
+function syncCustomerProfile(state: MockPortalState, session: PortalSession): MockPortalState {
+  const sanitizedState = clearLegacyCustomerProfile(state);
+  const sessionName = session?.user?.name?.trim() ?? '';
+  const sessionEmail = session?.user?.email?.trim() ?? '';
+  const hasSubscriptionProfile = getCurrentCustomerSubscription(sanitizedState) !== null;
+  const displayName = hasSubscriptionProfile
+    ? sessionName || sanitizedState.settings.displayName || sanitizedState.dashboard.user.name
+    : sessionName;
+  const email = hasSubscriptionProfile
+    ? sessionEmail || sanitizedState.settings.email || sanitizedState.dashboard.user.email
+    : sessionEmail;
+  const company = hasSubscriptionProfile
+    ? sanitizedState.settings.company || sanitizedState.dashboard.user.company
+    : '';
+
+  return {
+    ...sanitizedState,
+    dashboard: {
+      ...sanitizedState.dashboard,
+      user: {
+        id: email || session?.tenantId || sanitizedState.dashboard.user.id || 'customer-user',
         name: displayName,
         email,
         company,
       },
     },
     settings: {
-      ...state.settings,
+      ...sanitizedState.settings,
       displayName,
       email,
       company,
@@ -386,7 +436,7 @@ function hydrateState(saved: string | null): MockPortalState {
     const parsed = JSON.parse(saved) as Partial<MockPortalState>;
     const base = defaultState();
 
-    return withPublisherCounts({
+    return clearLegacyCustomerProfile(withPublisherCounts({
       dashboard: parsed.dashboard ?? base.dashboard,
       plans: parsed.plans ?? base.plans,
       settings: parsed.settings ?? base.settings,
@@ -396,7 +446,7 @@ function hydrateState(saved: string | null): MockPortalState {
         tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
         products: parsed.publisher?.products ?? base.publisher.products,
       },
-    });
+    }));
   } catch {
     return defaultState();
   }
@@ -597,11 +647,24 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
 
   if (path === '/portal/settings' && method === 'PUT') {
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as SettingsData;
-    if (!payload.email?.includes('@')) throw new ApiError('Enter a valid billing email address.', 400, 'invalid_email');
-    state.settings = payload;
-    state.dashboard.user.name = payload.displayName;
-    state.dashboard.user.email = payload.email;
-    state.dashboard.user.company = payload.company;
+    const hasSubscriptionProfile = getCurrentCustomerSubscription(state) !== null;
+    const nextSettings: SettingsData = hasSubscriptionProfile
+      ? payload
+      : {
+          ...payload,
+          displayName: state.settings.displayName,
+          email: state.settings.email,
+          company: state.settings.company,
+        };
+
+    if (hasSubscriptionProfile && !nextSettings.email?.includes('@')) {
+      throw new ApiError('Enter a valid billing email address.', 400, 'invalid_email');
+    }
+
+    state.settings = nextSettings;
+    state.dashboard.user.name = nextSettings.displayName;
+    state.dashboard.user.email = nextSettings.email;
+    state.dashboard.user.company = nextSettings.company;
     writeState(state);
     return state.settings as T;
   }
