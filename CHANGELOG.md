@@ -1,3 +1,9 @@
+## [0.17.2](https://github.com/dkirby-ms/fastsaas/compare/v0.17.1...v0.17.2) (2026-06-03)
+
+### Bug Fixes
+
+* **ci:** fix jq quoting in ci-failure-issue workflow ([9c60746](https://github.com/dkirby-ms/fastsaas/commit/9c6074690f7b73586df1b84f9d1373efc36f3b3f))
+
 ## [0.17.1](https://github.com/dkirby-ms/fastsaas/compare/v0.17.0...v0.17.1) (2026-06-03)
 
 ### Bug Fixes
