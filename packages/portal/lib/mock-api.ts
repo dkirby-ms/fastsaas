@@ -46,7 +46,7 @@ interface MockPortalState {
 
 const storageKey = 'fastsaas.portal.mock-state';
 
-const defaultActions = (state: DashboardData['subscription']['state']): PortalAction[] => {
+const defaultActions = (state: NonNullable<DashboardData['subscription']>['state']): PortalAction[] => {
   if (state === 'canceled') {
     return [{ id: 'resume', label: 'Resume subscription', description: 'Reactivate the subscription and restore access right away.', tone: 'default' }];
   }
@@ -204,20 +204,13 @@ function defaultPublisherProducts(): MockPublisherProduct[] {
 
 const defaultState = (): MockPortalState => ({
   dashboard: {
-    user: { id: 'cust_001', name: 'Alex Customer', email: 'alex.customer@fastsaas.dev', company: 'Northwind Traders' },
-    subscription: { tenantId: 'tenant_northwind', state: 'active', planId: 'growth', planName: 'Growth', billingCycle: 'annual', renewalDate: '2026-07-15', amount: '$249' },
-    usage: { activeMembers: 18, seatsPurchased: 25, apiRequestsThisMonth: 184203 },
-    actions: defaultActions('active'),
+    user: { id: 'customer-user', name: '', email: '', company: '' },
+    subscription: null,
+    usage: null,
+    actions: [],
   },
-  plans: {
-    currentPlanId: 'growth',
-    availablePlans: [
-      { id: 'starter', name: 'Starter', description: 'Core workflow automation for small teams.', priceMonthly: '$79', features: [{ label: 'Up to 10 team members', included: true }, { label: 'Email support', included: true }, { label: 'Single environment', included: true }] },
-      { id: 'growth', name: 'Growth', description: 'Balanced controls for scaling product teams.', priceMonthly: '$249', recommended: true, features: [{ label: 'Up to 25 team members', included: true }, { label: 'Priority support', included: true }, { label: 'Advanced analytics', included: true }] },
-      { id: 'scale', name: 'Scale', description: 'Enterprise-ready governance and visibility.', priceMonthly: '$499', features: [{ label: 'Unlimited team members', included: true }, { label: 'Dedicated success manager', included: true }, { label: 'Custom usage exports', included: true }] },
-    ],
-  },
-  settings: { displayName: 'Alex Customer', email: 'alex.customer@fastsaas.dev', company: 'Northwind Traders', timezone: 'America/Chicago', notificationsEnabled: true },
+  plans: defaultCustomerPlans(),
+  settings: defaultCustomerSettings(),
   subscriptions: [],
   publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants(), products: defaultPublisherProducts() },
 });
@@ -236,6 +229,137 @@ function parseMoney(value: string): number {
 
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
+}
+
+type PortalSession = Awaited<ReturnType<typeof getSession>>;
+
+const DEFAULT_SEAT_COUNT = 10;
+
+function defaultCustomerPlans(): PlansResponse {
+  return {
+    currentPlanId: null,
+    availablePlans: [
+      { id: 'starter', name: 'Starter', description: 'Core workflow automation for small teams.', priceMonthly: '$79', features: [{ label: 'Up to 10 team members', included: true }, { label: 'Email support', included: true }, { label: 'Single environment', included: true }] },
+      { id: 'growth', name: 'Growth', description: 'Balanced controls for scaling product teams.', priceMonthly: '$249', recommended: true, features: [{ label: 'Up to 25 team members', included: true }, { label: 'Priority support', included: true }, { label: 'Advanced analytics', included: true }] },
+      { id: 'scale', name: 'Scale', description: 'Enterprise-ready governance and visibility.', priceMonthly: '$499', features: [{ label: 'Unlimited team members', included: true }, { label: 'Dedicated success manager', included: true }, { label: 'Custom usage exports', included: true }] },
+    ],
+  };
+}
+
+function defaultCustomerSettings(): SettingsData {
+  return {
+    displayName: '',
+    email: '',
+    company: '',
+    timezone: 'America/Chicago',
+    notificationsEnabled: true,
+  };
+}
+
+function syncCustomerProfile(state: MockPortalState, session: PortalSession): MockPortalState {
+  const sessionName = session?.user?.name?.trim() ?? '';
+  const sessionEmail = session?.user?.email?.trim() ?? '';
+  const displayName = sessionName || state.settings.displayName || state.dashboard.user.name;
+  const email = sessionEmail || state.settings.email || state.dashboard.user.email;
+  const company = state.settings.company || state.dashboard.user.company;
+
+  return {
+    ...state,
+    dashboard: {
+      ...state.dashboard,
+      user: {
+        id: email || session?.tenantId || state.dashboard.user.id || 'customer-user',
+        name: displayName,
+        email,
+        company,
+      },
+    },
+    settings: {
+      ...state.settings,
+      displayName,
+      email,
+      company,
+    },
+  };
+}
+
+function getCurrentCustomerSubscription(state: MockPortalState): Subscription | null {
+  return [...state.subscriptions].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null;
+}
+
+function mapCustomerSubscriptionState(status: Subscription['status']): NonNullable<DashboardData['subscription']>['state'] {
+  switch (status) {
+    case 'PendingActivation':
+      return 'trialing';
+    case 'Suspended':
+      return 'suspended';
+    case 'Unsubscribed':
+      return 'canceled';
+    default:
+      return 'active';
+  }
+}
+
+function formatRenewalDate(subscription: Subscription, dashboardState: NonNullable<DashboardData['subscription']>['state']) {
+  if (dashboardState === 'canceled') {
+    return 'Ended';
+  }
+
+  const renewal = new Date(subscription.updatedAt || subscription.createdAt);
+  renewal.setUTCMonth(renewal.getUTCMonth() + 1);
+
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(renewal);
+}
+
+function buildCustomerDashboard(state: MockPortalState): DashboardData {
+  const currentSubscription = getCurrentCustomerSubscription(state);
+
+  if (!currentSubscription) {
+    return {
+      user: state.dashboard.user,
+      subscription: null,
+      usage: null,
+      actions: [],
+    };
+  }
+
+  const plan = state.plans.availablePlans.find((option) => option.id === currentSubscription.planId);
+  const dashboardState = mapCustomerSubscriptionState(currentSubscription.status);
+  const seatsPurchased = currentSubscription.seats;
+
+  return {
+    user: state.dashboard.user,
+    subscription: {
+      tenantId: currentSubscription.tenantId,
+      state: dashboardState,
+      planId: currentSubscription.planId,
+      planName:
+        typeof currentSubscription.metadata.planName === 'string'
+          ? currentSubscription.metadata.planName
+          : plan?.name ?? currentSubscription.planId,
+      billingCycle:
+        currentSubscription.metadata.billingCycle === 'annual'
+          ? 'annual'
+          : 'monthly',
+      renewalDate: formatRenewalDate(currentSubscription, dashboardState),
+      amount: plan?.priceMonthly ?? '$0',
+    },
+    usage: {
+      activeMembers: dashboardState === 'canceled' ? 0 : Math.max(1, Math.min(seatsPurchased, Math.round(seatsPurchased * 0.7))),
+      seatsPurchased,
+      apiRequestsThisMonth: dashboardState === 'canceled' ? 0 : seatsPurchased * 5200,
+    },
+    actions: dashboardState === 'trialing' ? [] : defaultActions(dashboardState),
+  };
+}
+
+function buildCustomerPlans(state: MockPortalState): PlansResponse {
+  const currentSubscription = getCurrentCustomerSubscription(state);
+
+  return {
+    ...state.plans,
+    currentPlanId: currentSubscription && currentSubscription.status !== 'Unsubscribed' ? currentSubscription.planId : null,
+  };
 }
 
 function withPublisherCounts(state: MockPortalState): MockPortalState {
@@ -353,10 +477,10 @@ function resolveMockPlanId(marketplaceToken: string, state: MockPortalState): st
     return 'scale';
   }
 
-  return state.plans.currentPlanId;
+  return state.plans.availablePlans.find((plan) => plan.recommended)?.id ?? state.plans.availablePlans[0]?.id ?? 'starter';
 }
 
-function buildMockSubscription(state: MockPortalState, marketplaceToken: string): Subscription {
+function buildMockSubscription(state: MockPortalState, marketplaceToken: string, session: PortalSession): Subscription {
   if (marketplaceToken.toLowerCase().includes('invalid')) {
     throw new ApiError('The Marketplace token is invalid or expired.', 400, 'MARKETPLACE_TOKEN_INVALID');
   }
@@ -379,23 +503,25 @@ function buildMockSubscription(state: MockPortalState, marketplaceToken: string)
   const uniqueId = Date.now().toString(36);
   const planId = resolveMockPlanId(marketplaceToken, state);
   const selectedPlan = state.plans.availablePlans.find((plan) => plan.id === planId);
-  const seats = marketplaceToken.includes('10') ? 10 : marketplaceToken.includes('50') ? 50 : state.dashboard.usage.seatsPurchased;
+  const seats = marketplaceToken.includes('10') ? 10 : marketplaceToken.includes('50') ? 50 : getCurrentCustomerSubscription(state)?.seats ?? DEFAULT_SEAT_COUNT;
+  const tenantId = session?.tenantId ?? 'mock-tenant';
 
   return {
     id: `sub-${uniqueId}`,
-    tenantId: state.dashboard.subscription.tenantId,
+    tenantId,
     marketplaceSubscriptionId: `mp-${uniqueId}`,
     planId,
     seats,
     status: 'PendingActivation',
     offerId: `offer-${planId}`,
     purchaserTenantId: `purchaser-${uniqueId}`,
-    beneficiaryTenantId: state.dashboard.subscription.tenantId,
+    beneficiaryTenantId: tenantId,
     correlationId: `mock-correlation-${uniqueId}`,
     metadata: {
       marketplaceToken,
       planName: selectedPlan?.name ?? planId,
       company: state.settings.company,
+      billingCycle: 'monthly',
     },
     createdAt: now,
     updatedAt: now,
@@ -419,32 +545,50 @@ function buildMockSubscription(state: MockPortalState, marketplaceToken: string)
 export async function mockRequest<T>(path: string, init?: RequestInit): Promise<T> {
   await wait();
   const method = init?.method ?? 'GET';
-  const state = readState();
+  const session = await getSession();
+  const state = syncCustomerProfile(readState(), session);
+  writeState(state);
 
   if (path.startsWith('/publisher')) {
     await assertPublisherAccess();
   }
 
   if (path === '/portal/dashboard' && method === 'GET') {
-    return state.dashboard as T;
+    return buildCustomerDashboard(state) as T;
   }
 
   if (path === '/portal/plans' && method === 'GET') {
-    return state.plans as T;
+    return buildCustomerPlans(state) as T;
   }
 
   if (path === '/portal/plans' && method === 'POST') {
     const body = JSON.parse((init?.body as string | undefined) ?? '{}') as { planId?: string };
     const selectedPlan = state.plans.availablePlans.find((plan) => plan.id === body.planId);
+    const currentSubscription = getCurrentCustomerSubscription(state);
+
     if (!selectedPlan) throw new ApiError('The plan you selected is no longer available.', 404, 'plan_not_found');
+    if (!currentSubscription || currentSubscription.status === 'Unsubscribed') {
+      throw new ApiError('No active subscription is available to change plans.', 409, 'subscription_required', 'Subscribe in Azure Marketplace before changing plans.');
+    }
+
+    const subscriptionIndex = state.subscriptions.findIndex((entry) => entry.id === currentSubscription.id);
+    if (subscriptionIndex == -1) {
+      throw new ApiError('The requested subscription could not be found.', 404, 'NOT_FOUND');
+    }
+
     state.plans.currentPlanId = selectedPlan.id;
-    state.dashboard.subscription.planId = selectedPlan.id;
-    state.dashboard.subscription.planName = selectedPlan.name;
-    state.dashboard.subscription.amount = selectedPlan.priceMonthly;
-    state.dashboard.subscription.state = 'active';
-    state.dashboard.actions = defaultActions('active');
+    state.subscriptions[subscriptionIndex] = {
+      ...currentSubscription,
+      planId: selectedPlan.id,
+      offerId: `offer-${selectedPlan.id}`,
+      updatedAt: new Date().toISOString(),
+      metadata: {
+        ...currentSubscription.metadata,
+        planName: selectedPlan.name,
+      },
+    };
     writeState(state);
-    return state.plans as T;
+    return buildCustomerPlans(state) as T;
   }
 
   if (path === '/portal/settings' && method === 'GET') {
@@ -464,13 +608,24 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
 
   if (path.startsWith('/portal/actions/') && method === 'POST') {
     const actionId = decodePathSegment(path.split('/').pop());
-    if (actionId === 'resume') state.dashboard.subscription.state = 'active';
-    else if (actionId === 'suspend') state.dashboard.subscription.state = 'suspended';
-    else if (actionId === 'cancel') state.dashboard.subscription.state = 'canceled';
+    const currentSubscription = getCurrentCustomerSubscription(state);
+
+    if (!currentSubscription) {
+      throw new ApiError('No subscription is available for lifecycle actions.', 409, 'subscription_required', 'Subscribe in Azure Marketplace before managing lifecycle actions.');
+    }
+
+    const subscriptionIndex = state.subscriptions.findIndex((entry) => entry.id === currentSubscription.id);
+    if (subscriptionIndex == -1) {
+      throw new ApiError('The requested subscription could not be found.', 404, 'NOT_FOUND');
+    }
+
+    if (actionId === 'resume') state.subscriptions[subscriptionIndex] = { ...currentSubscription, status: 'Active', updatedAt: new Date().toISOString() };
+    else if (actionId === 'suspend') state.subscriptions[subscriptionIndex] = { ...currentSubscription, status: 'Suspended', updatedAt: new Date().toISOString() };
+    else if (actionId === 'cancel') state.subscriptions[subscriptionIndex] = { ...currentSubscription, status: 'Unsubscribed', updatedAt: new Date().toISOString() };
     else throw new ApiError('That subscription action is not supported yet.', 400, 'invalid_action');
-    state.dashboard.actions = defaultActions(state.dashboard.subscription.state);
+
     writeState(state);
-    return state.dashboard as T;
+    return buildCustomerDashboard(state) as T;
   }
 
   if (path === '/v1/subscriptions' && method === 'POST') {
@@ -480,7 +635,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       throw new ApiError('marketplaceToken is required', 400, 'BAD_REQUEST', 'The Marketplace redirect is missing its token.');
     }
 
-    const subscription = buildMockSubscription(state, body.marketplaceToken.trim());
+    const subscription = buildMockSubscription(state, body.marketplaceToken.trim(), session);
     state.subscriptions = [subscription, ...state.subscriptions];
     writeState(state);
     return subscription as T;
@@ -537,12 +692,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     };
 
     state.subscriptions[subscriptionIndex] = next;
-    state.dashboard.subscription.tenantId = next.tenantId;
-    state.dashboard.subscription.planId = next.planId;
-    state.dashboard.subscription.planName = typeof next.metadata.planName === 'string' ? next.metadata.planName : next.planId;
-    state.dashboard.subscription.state = 'active';
-    state.dashboard.usage.seatsPurchased = next.seats;
-    state.dashboard.actions = defaultActions('active');
+    state.plans.currentPlanId = next.planId;
     writeState(state);
     return next as T;
   }

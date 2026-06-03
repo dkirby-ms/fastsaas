@@ -161,3 +161,7 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - `.github/workflows/deploy-app-staging.yml` now resolves `PORTAL_URL` from the non-secret GitHub Actions variable `PORTAL_PUBLIC_URL` when present, and falls back to the Azure Container Apps default FQDN when it is unset.
 - The staging deploy workflow trims a trailing slash from `PORTAL_PUBLIC_URL`, uses the resolved URL for portal health checks, and still verifies the ACA hostname separately when a custom domain override is active.
 - Manual custom-domain staging still requires the Entra redirect URI to match `NEXTAUTH_URL`; the workflow comment documenting that requirement lives beside the `PORTAL_PUBLIC_URL` resolution logic.
+### 2026-06-03T18:21:29.489+00:00
+- `.github/workflows/deploy-app-staging.yml` must provision staging secrets with `az containerapp secret set` before updating either Container App, because the generated env var payloads in `infrastructure/env/.generated-staging-*.env.json` include `secretref:` values that depend on those secrets already existing.
+- Staging app rollouts should use a single `az containerapp update` call per app that combines `--image` and `--set-env-vars`, eliminating the stale-config window and reducing deploy-time restarts from two revisions to one.
+- Key paths for this sequencing pattern are `.github/workflows/deploy-app-staging.yml`, `infrastructure/env/staging-api.env`, and `infrastructure/env/staging-portal.env`.

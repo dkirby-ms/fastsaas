@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
+import Link from 'next/link';
 import type { DashboardData, PortalAction } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
@@ -9,7 +10,7 @@ import { LoadingPanel } from '@/components/loading-panel';
 import { portalApi } from '@/lib/api-client';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
-const stateTone: Record<DashboardData['subscription']['state'], string> = {
+const stateTone: Record<NonNullable<DashboardData['subscription']>['state'], string> = {
   active: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   trialing: 'bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300',
   past_due: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300',
@@ -44,13 +45,57 @@ export function DashboardClient() {
   if (!dashboardQuery.data) return <LoadingPanel label="Loading your subscription overview" />;
 
   const { subscription, usage, actions, user } = dashboardQuery.data;
+  const firstName = user.name.trim().split(/\s+/).find(Boolean) ?? 'there';
+
+  if (!subscription || !usage) {
+    return (
+      <section className="space-y-6">
+        <header className="rounded-3xl bg-slate-950 dark:bg-slate-900 px-6 py-8 text-white shadow-panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Subscription status</p>
+          <h1 className="mt-3 text-3xl font-semibold">No active subscription</h1>
+          <p className="mt-3 max-w-2xl text-sm text-slate-300 dark:text-slate-400">
+            Hi {firstName}, your account is signed in but there is not an active Marketplace subscription attached to it yet.
+          </p>
+        </header>
+
+        <article className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Get started with FastSaaS</h2>
+              <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                Subscribe in Azure Marketplace or ask your publisher contact to assign a subscription to this tenant. Once a subscription is active, usage, billing, and lifecycle controls will appear here.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/plan" className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
+                Review plans
+              </Link>
+              <Link href="/settings" className="rounded-full border border-slate-300 dark:border-slate-600 px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-300">
+                Review account settings
+              </Link>
+            </div>
+          </div>
+          <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+              <dt className="text-sm text-slate-500 dark:text-slate-400">Signed-in contact</dt>
+              <dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.email || 'No email on file'}</dd>
+            </div>
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+              <dt className="text-sm text-slate-500 dark:text-slate-400">Organization</dt>
+              <dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.company || 'Update your company details in settings'}</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">
       <header className="grid gap-4 rounded-3xl bg-slate-950 dark:bg-slate-900 px-6 py-8 text-white shadow-panel lg:grid-cols-[2fr,1fr] lg:items-end">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Subscription status</p>
-          <h1 className="mt-3 text-3xl font-semibold">Welcome back, {user.name.split(' ')[0]}</h1>
+          <h1 className="mt-3 text-3xl font-semibold">Welcome back, {firstName}</h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-300 dark:text-slate-400">Keep tabs on your subscription, billing cadence, and key lifecycle actions from one place.</p>
         </div>
         <dl className="rounded-3xl bg-white/10 dark:bg-white/5 p-5 backdrop-blur">

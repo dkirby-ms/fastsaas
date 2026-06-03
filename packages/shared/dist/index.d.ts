@@ -27,8 +27,8 @@ export interface PortalAction {
 }
 export interface DashboardData {
     user: PortalUser;
-    subscription: SubscriptionSummary;
-    usage: UsageSummary;
+    subscription: SubscriptionSummary | null;
+    usage: UsageSummary | null;
     actions: PortalAction[];
 }
 export interface PlanFeature {
@@ -44,7 +44,7 @@ export interface PlanOption {
     features: PlanFeature[];
 }
 export interface PlansResponse {
-    currentPlanId: string;
+    currentPlanId: string | null;
     availablePlans: PlanOption[];
 }
 export interface SettingsData {
