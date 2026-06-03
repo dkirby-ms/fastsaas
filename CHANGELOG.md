@@ -1,3 +1,9 @@
+## [0.17.4](https://github.com/dkirby-ms/fastsaas/compare/v0.17.3...v0.17.4) (2026-06-03)
+
+### Bug Fixes
+
+* **api:** add retry for Docker container port collision in tests ([66bad6a](https://github.com/dkirby-ms/fastsaas/commit/66bad6a13cef5f44c9738f1796fb08f789bd9b79))
+
 ## [0.17.3](https://github.com/dkirby-ms/fastsaas/compare/v0.17.2...v0.17.3) (2026-06-03)
 
 ### Bug Fixes
