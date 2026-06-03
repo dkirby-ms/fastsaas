@@ -133,6 +133,11 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const resolvedClientId = azureClientId ?? 'local-dev-client';
   const multiTenantAuthority = isMultiTenantAuthority(resolvedTenantId);
   const marketplaceSecrets = resolveMarketplaceSecrets(env, nodeEnv);
+  const marketplaceWebhookAuthMode = parseMarketplaceWebhookAuthMode(env.MARKETPLACE_WEBHOOK_AUTH_MODE);
+
+  if (marketplaceWebhookAuthMode === 'none' && nodeEnv === 'production') {
+    throw new Error('MARKETPLACE_WEBHOOK_AUTH_MODE=none is not allowed in production');
+  }
 
   return {
     port: Number(env.API_PORT ?? 3000),
@@ -169,7 +174,7 @@ export function createConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
         normalizeUrl(env.MARKETPLACE_PRODUCT_INGESTION_BASE_URL ?? 'https://graph.microsoft.com/rp/product-ingestion'),
       jwksUri: env.MARKETPLACE_JWKS_URI?.trim() || 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
       expectedAudience: env.MARKETPLACE_EXPECTED_AUDIENCE?.trim() || (env.MARKETPLACE_CLIENT_ID?.trim() || 'local-marketplace-client-id'),
-      webhookAuthMode: parseMarketplaceWebhookAuthMode(env.MARKETPLACE_WEBHOOK_AUTH_MODE)
+      webhookAuthMode: marketplaceWebhookAuthMode
     },
     database: {
       url: env.DATABASE_URL

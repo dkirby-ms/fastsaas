@@ -91,15 +91,25 @@ describe('createConfig auth defaults', () => {
     expect(config.metering.marketplaceEndpoint).toBe('https://marketplace.example.test/api/usageEvent?api-version=2018-08-31');
   });
 
-  it('accepts an explicit marketplace webhook auth mode', () => {
+  it('accepts an explicit marketplace webhook auth mode outside production', () => {
     const config = createConfig({
-      NODE_ENV: 'production',
+      NODE_ENV: 'test',
       ENTRA_CLIENT_ID: 'fastsaas-api-client',
-      MARKETPLACE_CLIENT_SECRET: 'shared-client-secret',
       MARKETPLACE_WEBHOOK_AUTH_MODE: 'none'
     });
 
     expect(config.marketplace.webhookAuthMode).toBe('none');
+  });
+
+  it('throws when marketplace webhook auth mode is none in production', () => {
+    expect(() =>
+      createConfig({
+        NODE_ENV: 'production',
+        ENTRA_CLIENT_ID: 'fastsaas-api-client',
+        MARKETPLACE_CLIENT_SECRET: 'shared-client-secret',
+        MARKETPLACE_WEBHOOK_AUTH_MODE: 'none'
+      })
+    ).toThrow('MARKETPLACE_WEBHOOK_AUTH_MODE=none is not allowed in production');
   });
 
   it('accepts explicit marketplace webhook audience and JWKS overrides', () => {
