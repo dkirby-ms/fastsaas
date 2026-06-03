@@ -10,7 +10,12 @@ export const PRODUCT_INGESTION_SCHEMAS = {
   plan: 'https://schema.mp.microsoft.com/schema/plan/2022-03-01-preview2',
   submission: 'https://schema.mp.microsoft.com/schema/submission/2022-03-01-preview2',
   listing: 'https://schema.mp.microsoft.com/schema/listing/2022-03-01-preview5',
+  listingAsset: 'https://schema.mp.microsoft.com/schema/listing-asset/2022-03-01-preview5',
+  listingTrailer: 'https://schema.mp.microsoft.com/schema/listing-trailer/2022-03-01-preview5',
   property: 'https://schema.mp.microsoft.com/schema/property/2022-03-01-preview5',
+  previewAudience: 'https://schema.mp.microsoft.com/schema/preview-audience/2022-03-01-preview2',
+  privateAudience: 'https://schema.mp.microsoft.com/schema/private-audiences/2022-03-01-preview2',
+  priceAndAvailabilityOffer: 'https://schema.mp.microsoft.com/schema/price-and-availability-offer/2022-03-01-preview4',
   priceAndAvailabilityPlan: 'https://schema.mp.microsoft.com/schema/price-and-availability-plan/2022-03-01-preview4',
   softwareAsAServiceTechnicalConfiguration:
     'https://schema.mp.microsoft.com/schema/software-as-a-service-technical-configuration/2022-03-01-preview3'
@@ -141,6 +146,30 @@ export interface ListingResource extends ProductIngestionBaseResource {
   description?: string;
 }
 
+
+export interface ListingAssetResource extends ProductIngestionBaseResource {
+  $schema: typeof PRODUCT_INGESTION_SCHEMAS.listingAsset | string;
+  product: ProductIngestionResourceReference;
+  listing?: ProductIngestionResourceReference;
+  assetType?: string;
+  url?: string;
+  fileSasUri?: string;
+  description?: string;
+  displayOrder?: number;
+}
+
+export interface ListingTrailerResource extends ProductIngestionBaseResource {
+  $schema: typeof PRODUCT_INGESTION_SCHEMAS.listingTrailer | string;
+  product: ProductIngestionResourceReference;
+  listing?: ProductIngestionResourceReference;
+  trailerType?: string;
+  url?: string;
+  videoUrl?: string;
+  fileSasUri?: string;
+  thumbnailUrl?: string;
+  duration?: number;
+}
+
 export interface PropertyResource extends ProductIngestionBaseResource {
   $schema: typeof PRODUCT_INGESTION_SCHEMAS.property | string;
   product: ProductIngestionResourceReference;
@@ -149,6 +178,35 @@ export interface PropertyResource extends ProductIngestionBaseResource {
   industries?: Record<string, string[]>;
   termsConditions?: boolean | string;
   privacyPolicyLink?: string;
+}
+
+
+export interface PreviewAudienceResource extends ProductIngestionBaseResource {
+  $schema: typeof PRODUCT_INGESTION_SCHEMAS.previewAudience | string;
+  product: ProductIngestionResourceReference;
+  audienceType?: string;
+  description?: string;
+  count?: number;
+  members?: unknown[];
+}
+
+export interface PrivateAudienceResource extends ProductIngestionBaseResource {
+  $schema: typeof PRODUCT_INGESTION_SCHEMAS.privateAudience | string;
+  product: ProductIngestionResourceReference;
+  plan?: ProductIngestionResourceReference;
+  audienceType?: string;
+  description?: string;
+  segmentDescription?: string;
+  members?: unknown[];
+}
+
+export interface PriceAndAvailabilityOfferResource extends ProductIngestionBaseResource {
+  $schema: typeof PRODUCT_INGESTION_SCHEMAS.priceAndAvailabilityOffer | string;
+  product: ProductIngestionResourceReference;
+  markets?: string[];
+  pricing?: Record<string, unknown>;
+  billingTerms?: Array<Record<string, unknown>>;
+  availability?: Record<string, unknown>;
 }
 
 export interface PriceAndAvailabilityPlanResource extends ProductIngestionBaseResource {
@@ -181,7 +239,12 @@ export type ProductIngestionResource =
   | PlanResource
   | SubmissionResource
   | ListingResource
+  | ListingAssetResource
+  | ListingTrailerResource
   | PropertyResource
+  | PreviewAudienceResource
+  | PrivateAudienceResource
+  | PriceAndAvailabilityOfferResource
   | PriceAndAvailabilityPlanResource
   | SoftwareAsAServiceTechnicalConfigurationResource
   | UnknownProductIngestionResource;

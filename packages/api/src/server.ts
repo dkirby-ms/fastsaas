@@ -59,6 +59,7 @@ import { PublisherService } from './services/publisher-service';
 import { SubmissionMonitoringService } from './services/submission-monitoring-service';
 import { SubscriptionService } from './services/subscription-service';
 import { TenantMemberService } from './services/tenant-member-service';
+import { AssetVisibilityService } from './services/asset-visibility-service';
 
 function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
@@ -191,6 +192,13 @@ async function bootstrap(): Promise<void> {
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'submission-monitoring' })
   });
+  const assetVisibilityService = new AssetVisibilityService({
+    repository: productCatalogRepository,
+    partnerCenterRepository,
+    authProvider: partnerCenterAuthService,
+    tokenProvider: marketplaceOAuthService,
+    logger: logger.child({ component: 'asset-visibility' })
+  });
   const app = createApp(config, {
     ...meteringRuntime,
     subscriptionRepository,
@@ -201,6 +209,7 @@ async function bootstrap(): Promise<void> {
     jobPollingService,
     productCatalogService,
     submissionMonitoringService,
+    assetVisibilityService,
     tenantMemberService
   });
 

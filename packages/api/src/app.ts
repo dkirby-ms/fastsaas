@@ -18,6 +18,7 @@ import type { PublisherService } from './services/publisher-service';
 import type { SubmissionMonitoringService } from './services/submission-monitoring-service';
 import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
+import type { AssetVisibilityService } from './services/asset-visibility-service';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
@@ -27,6 +28,7 @@ export interface AppDependencies extends MeteringRuntimeDependencies {
   jobPollingService?: JobPollingService;
   productCatalogService?: ProductCatalogService;
   submissionMonitoringService?: SubmissionMonitoringService;
+  assetVisibilityService?: AssetVisibilityService;
   tenantMemberService?: TenantMemberService;
 }
 
@@ -69,6 +71,7 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.jobPollingService,
       dependencies.productCatalogService,
       dependencies.submissionMonitoringService,
+      dependencies.assetVisibilityService,
       dependencies.tenantMemberService
     )
   );
