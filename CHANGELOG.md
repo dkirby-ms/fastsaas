@@ -1,3 +1,9 @@
+## [0.16.4](https://github.com/dkirby-ms/fastsaas/compare/v0.16.3...v0.16.4) (2026-06-03)
+
+### Performance Improvements
+
+* **docker:** consolidate layers from ~34 to ~15 per image ([782b4b5](https://github.com/dkirby-ms/fastsaas/commit/782b4b550718bf1cf0760973eb034d107dc8dfed))
+
 ## [0.16.3](https://github.com/dkirby-ms/fastsaas/compare/v0.16.2...v0.16.3) (2026-06-03)
 
 ### Bug Fixes
