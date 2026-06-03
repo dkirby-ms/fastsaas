@@ -1,3 +1,9 @@
+## [0.17.5](https://github.com/dkirby-ms/fastsaas/compare/v0.17.4...v0.17.5) (2026-06-03)
+
+### Bug Fixes
+
+* **api:** return null subscription instead of 404 for portal dashboard ([0d11dfb](https://github.com/dkirby-ms/fastsaas/commit/0d11dfbcbb1ee3425d9ec47e5f52509a16d7b1d2))
+
 ## [0.17.4](https://github.com/dkirby-ms/fastsaas/compare/v0.17.3...v0.17.4) (2026-06-03)
 
 ### Bug Fixes
