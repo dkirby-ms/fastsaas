@@ -22,6 +22,7 @@ import type {
   PublisherProductSummary,
 } from '@/lib/publisher/types';
 import { hasPublisherAccess } from '@/lib/roles';
+import { writeMockSubscriptionGateCookie } from '@/lib/subscription-gate-cookie';
 
 interface MockPublisherProduct extends PublisherProductDetail {
   assets: ListingAsset[];
@@ -464,7 +465,9 @@ function readState(): MockPortalState {
 
 function writeState(state: MockPortalState) {
   if (isBrowser()) {
-    window.localStorage.setItem(storageKey, JSON.stringify(withPublisherCounts(state)));
+    const nextState = withPublisherCounts(state);
+    window.localStorage.setItem(storageKey, JSON.stringify(nextState));
+    writeMockSubscriptionGateCookie(getCurrentCustomerSubscription(nextState));
   }
 }
 
