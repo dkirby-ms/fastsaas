@@ -27,10 +27,10 @@ export function ProductAudiencesClient({ productId }: ProductAudiencesClientProp
 
   return (
     <section className="space-y-6">
-      <header className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-panel">
+      <header className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-6 shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Audiences</p>
-        <h2 className="mt-3 text-2xl font-semibold text-slate-950">Preview and private visibility</h2>
-        <p className="mt-3 max-w-3xl text-sm text-slate-500">Track which preview programs and private segments are currently available for the selected listing.</p>
+        <h2 className="mt-3 text-2xl font-semibold text-slate-950 dark:text-slate-50">Preview and private visibility</h2>
+        <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Track which preview programs and private segments are currently available for the selected listing.</p>
       </header>
 
       <div className="grid gap-6 xl:grid-cols-2">

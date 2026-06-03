@@ -157,3 +157,7 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - `deploy-app-staging.yml` must render `infrastructure/env/staging-api.env` and `infrastructure/env/staging-portal.env` before the Bicep deployment so Container Apps are created with all startup env vars and secret refs already present.
 - Runtime secret values for staging Container Apps should flow into `infrastructure/bicep/main.bicep` via secure object parameters plus non-secret secret-ref metadata, avoiding post-deploy `az containerapp secret set` / `az containerapp update` race windows while keeping deployment history masked.
 - Portal staging must set `USE_MOCK_API=false` in `infrastructure/env/staging-portal.env`; `packages/portal/lib/api-client.ts` and `packages/portal/lib/publisher-admin-api.ts` otherwise fall back to mock mode when the flag is missing or not equal to `false`.
+### 2026-06-03T15:45:53.746+00:00
+- `.github/workflows/deploy-app-staging.yml` now resolves `PORTAL_URL` from the non-secret GitHub Actions variable `PORTAL_PUBLIC_URL` when present, and falls back to the Azure Container Apps default FQDN when it is unset.
+- The staging deploy workflow trims a trailing slash from `PORTAL_PUBLIC_URL`, uses the resolved URL for portal health checks, and still verifies the ACA hostname separately when a custom domain override is active.
+- Manual custom-domain staging still requires the Entra redirect URI to match `NEXTAUTH_URL`; the workflow comment documenting that requirement lives beside the `PORTAL_PUBLIC_URL` resolution logic.

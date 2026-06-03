@@ -2,6 +2,7 @@
 
 import { signOut, useSession } from 'next-auth/react';
 import { SidebarNav } from '@/components/sidebar-nav';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { getPortalRole } from '@/lib/roles';
 import { usePortalShellStore } from '@/lib/store';
 
@@ -15,18 +16,18 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
   const portalSubtitle = portalRole === 'publisher' ? 'Marketplace operations' : 'Customer self-service';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-4 lg:flex-row lg:px-6">
-        <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-panel lg:w-72 lg:flex-none">
+        <aside className="rounded-3xl border border-slate-200 bg-white p-5 shadow-panel dark:border-slate-700 dark:bg-slate-900 lg:w-72 lg:flex-none">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">FastSaaS</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">FastSaaS</p>
               <h1 className="mt-2 text-lg font-semibold">{portalTitle}</h1>
-              <p className="mt-1 text-sm text-slate-500">{portalSubtitle}</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{portalSubtitle}</p>
             </div>
             <button
               type="button"
-              className="rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 lg:hidden"
+              className="rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300 lg:hidden"
               onClick={toggleSidebar}
               aria-expanded={sidebarOpen}
               aria-controls="portal-navigation"
@@ -40,18 +41,21 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <header className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+          <header className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-panel dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm text-slate-500">Signed in as</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Signed in as</p>
               <h2 className="text-xl font-semibold">{userName}</h2>
             </div>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: '/sign-in' })}
-              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700"
-            >
-              Sign out
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: '/sign-in' })}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-brand-400 dark:hover:text-brand-300"
+              >
+                Sign out
+              </button>
+            </div>
           </header>
 
           <main className="flex-1" role="main">

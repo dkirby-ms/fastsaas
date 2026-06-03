@@ -35,7 +35,9 @@ export function SidebarNav() {
             href={item.href}
             className={clsx(
               'block rounded-2xl px-4 py-3 text-sm font-medium transition',
-              isActive ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+              isActive
+                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20 dark:bg-brand-500 dark:shadow-brand-500/20'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50',
             )}
             aria-current={isActive ? 'page' : undefined}
           >

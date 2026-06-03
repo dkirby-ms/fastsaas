@@ -39,28 +39,28 @@ export function PublisherProductLayoutClient({ productId, children }: PublisherP
 
   return (
     <section className="space-y-6">
-      <header className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-panel">
+      <header className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-6 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Marketplace product</p>
-            <h1 className="mt-3 text-3xl font-semibold text-slate-950">{product.alias}</h1>
-            <p className="mt-3 max-w-3xl text-sm text-slate-500">Offer {product.externalOfferId} • Durable product {product.durableProductId}</p>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">{product.alias}</h1>
+            <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Offer {product.externalOfferId} • Durable product {product.durableProductId}</p>
           </div>
           <ReadOnlySyncBadge />
         </div>
 
         <dl className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <dt className="text-sm text-slate-500">Product type</dt>
-            <dd className="mt-2 font-semibold text-slate-950">{product.productType}</dd>
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Product type</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{product.productType}</dd>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <dt className="text-sm text-slate-500">Lifecycle state</dt>
-            <dd className="mt-2 font-semibold text-slate-950">{formatLifecycleState(product.lifecycleState)}</dd>
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Lifecycle state</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{formatLifecycleState(product.lifecycleState)}</dd>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <dt className="text-sm text-slate-500">Last synced</dt>
-            <dd className="mt-2 font-semibold text-slate-950">{product.lastSyncedAt}</dd>
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Last synced</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{product.lastSyncedAt}</dd>
           </div>
         </dl>
       </header>
