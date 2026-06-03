@@ -28,6 +28,25 @@ param postgresAdministratorLogin string = 'fastsaasadmin'
 @description('Administrator password for PostgreSQL Flexible Server.')
 param postgresAdminPassword string
 
+@description('Plain runtime environment variables applied to the API container app at creation time.')
+param apiRuntimeEnvVars array = []
+
+@description('Secret-backed runtime environment variable references applied to the API container app at creation time.')
+param apiRuntimeSecretEnvVarRefs array = []
+
+@secure()
+@description('Secret values for API runtime secret references, keyed by Container App secret name.')
+param apiRuntimeSecretValues object = {}
+
+@description('Plain runtime environment variables applied to the portal container app at creation time.')
+param portalRuntimeEnvVars array = []
+
+@description('Secret-backed runtime environment variable references applied to the portal container app at creation time.')
+param portalRuntimeSecretEnvVarRefs array = []
+
+@secure()
+@description('Secret values for portal runtime secret references, keyed by Container App secret name.')
+param portalRuntimeSecretValues object = {}
 
 @description('Optional tags to apply to all resources.')
 param tags object = {}
@@ -314,8 +333,9 @@ resource portalRegistryIdentity 'Microsoft.ManagedIdentity/userAssignedIdentitie
 
 var apiRegistryPrincipalId = deployContainerApps ? apiRegistryIdentity!.properties.principalId : ''
 var portalRegistryPrincipalId = deployContainerApps ? portalRegistryIdentity!.properties.principalId : ''
-var apiUrl = deployContainerApps ? 'https://${apiApp!.outputs.fqdn}' : ''
-var portalUrl = deployContainerApps ? 'https://${portalApp!.outputs.fqdn}' : ''
+var containerAppsDefaultDomain = managedEnvironment.outputs.defaultDomain
+var apiUrl = deployContainerApps ? 'https://${apiAppName}.${containerAppsDefaultDomain}' : ''
+var portalUrl = deployContainerApps ? 'https://${portalAppName}.${containerAppsDefaultDomain}' : ''
 
 resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployContainerApps) {
   name: guid(resourceGroup().id, registryName, apiIdentityName, acrPullRoleDefinitionId)
@@ -342,7 +362,7 @@ var apiImage = '${containerRegistry.outputs.loginServer}/fastsaas-api:${apiImage
 var portalImage = '${containerRegistry.outputs.loginServer}/fastsaas-portal:${portalImageTag}'
 var databaseUrl = 'postgresql://${postgres.outputs.administratorLogin}:${uriComponent(postgresAdminPassword)}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?sslmode=require'
 var redisUrl = '${redis.outputs.hostname}:${redis.outputs.sslPort},password=${redisPrimaryKey},ssl=True,abortConnect=False'
-var apiEnvVars = [
+var defaultApiEnvVars = [
   {
     name: 'API_PORT'
     value: '3000'
@@ -352,8 +372,9 @@ var apiEnvVars = [
     value: 'production'
   }
 ]
+var apiEnvVars = empty(apiRuntimeEnvVars) ? defaultApiEnvVars : apiRuntimeEnvVars
 
-var portalEnvVars = [
+var defaultPortalEnvVars = [
   {
     name: 'USE_MOCK_API'
     value: string(useMockApi)
@@ -363,8 +384,9 @@ var portalEnvVars = [
     value: useMockApi ? '' : apiUrl
   }
 ]
+var portalEnvVars = empty(portalRuntimeEnvVars) ? defaultPortalEnvVars : portalRuntimeEnvVars
 
-var apiSecretEnvVars = [
+var platformApiSecretEnvVars = [
   {
     name: 'DATABASE_URL'
     secretName: 'database-url'
@@ -376,6 +398,17 @@ var apiSecretEnvVars = [
     value: redisUrl
   }
 ]
+var apiRuntimeSecretEnvVars = [for item in apiRuntimeSecretEnvVarRefs: {
+  name: item.name
+  secretName: item.secretName
+  value: apiRuntimeSecretValues[item.secretName]
+}]
+var portalSecretEnvVars = [for item in portalRuntimeSecretEnvVarRefs: {
+  name: item.name
+  secretName: item.secretName
+  value: portalRuntimeSecretValues[item.secretName]
+}]
+var apiSecretEnvVars = concat(platformApiSecretEnvVars, apiRuntimeSecretEnvVars)
 
 module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
   name: 'apiApp'
@@ -406,6 +439,7 @@ module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
     registryServer: containerRegistry.outputs.loginServer
     managedIdentityResourceId: portalRegistryIdentity.id
     envVars: portalEnvVars
+    secretEnvVars: portalSecretEnvVars
     tags: mergedTags
   }
 }
