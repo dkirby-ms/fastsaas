@@ -240,22 +240,6 @@ jobs:
           Path(os.environ['PORTAL_SECRETS_FILE']).write_text(json.dumps(portal_secrets, indent=2) + '\n')
           PY
 
-      - name: Update API container app image
-        run: |
-          # Update the existing Container App in place so ingress settings like custom domains stay intact.
-          az containerapp update \
-            --name "$API_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --image "$API_IMAGE"
-
-      - name: Update portal container app image
-        run: |
-          # Update the existing Container App in place so ingress settings like custom domains stay intact.
-          az containerapp update \
-            --name "$PORTAL_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --image "$PORTAL_IMAGE"
-
       - name: Provision API secrets
         shell: bash
         env:
@@ -281,11 +265,12 @@ jobs:
           ], check=True)
           PY
 
-      - name: Configure API environment
+      - name: Update API container app
         shell: bash
         env:
           APP_NAME: ${{ env.API_APP_NAME }}
           ENV_FILE: infrastructure/env/.generated-staging-api.env.json
+          IMAGE: ${{ env.API_IMAGE }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -294,13 +279,20 @@ jobs:
           import subprocess
 
           env_entries = json.loads(Path(os.environ['ENV_FILE']).read_text())
-          subprocess.run([
+          command = [
               'az', 'containerapp', 'update',
               '--name', os.environ['APP_NAME'],
               '--resource-group', os.environ['RESOURCE_GROUP'],
-              '--set-env-vars',
-              *[f"{item['name']}={item['value']}" for item in env_entries],
-          ], check=True)
+              '--image', os.environ['IMAGE'],
+          ]
+          if env_entries:
+              command.extend([
+                  '--set-env-vars',
+                  *[f"{item['name']}={item['value']}" for item in env_entries],
+              ])
+
+          # Apply the new image and env vars in one revision so the app never boots with stale config.
+          subprocess.run(command, check=True)
           PY
 
       - name: Provision portal secrets
@@ -328,11 +320,12 @@ jobs:
           ], check=True)
           PY
 
-      - name: Configure portal environment
+      - name: Update portal container app
         shell: bash
         env:
           APP_NAME: ${{ env.PORTAL_APP_NAME }}
           ENV_FILE: infrastructure/env/.generated-staging-portal.env.json
+          IMAGE: ${{ env.PORTAL_IMAGE }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -341,13 +334,20 @@ jobs:
           import subprocess
 
           env_entries = json.loads(Path(os.environ['ENV_FILE']).read_text())
-          subprocess.run([
+          command = [
               'az', 'containerapp', 'update',
               '--name', os.environ['APP_NAME'],
               '--resource-group', os.environ['RESOURCE_GROUP'],
-              '--set-env-vars',
-              *[f"{item['name']}={item['value']}" for item in env_entries],
-          ], check=True)
+              '--image', os.environ['IMAGE'],
+          ]
+          if env_entries:
+              command.extend([
+                  '--set-env-vars',
+                  *[f"{item['name']}={item['value']}" for item in env_entries],
+              ])
+
+          # Apply the new image and env vars in one revision so the app never boots with stale config.
+          subprocess.run(command, check=True)
           PY
 
       - name: Read container app endpoints
