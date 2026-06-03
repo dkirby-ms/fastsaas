@@ -17,8 +17,7 @@ describe('API startup validation', () => {
         API_PORT: '0',
         AUTH_BYPASS_ENABLED: 'false',
         ENTRA_CLIENT_ID: 'fastsaas-api-client',
-        MARKETPLACE_CLIENT_SECRET: '',
-        MARKETPLACE_WEBHOOK_SECRET: ''
+        MARKETPLACE_CLIENT_SECRET: ''
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -40,6 +39,6 @@ describe('API startup validation', () => {
 
     expect(exitCode).toBe(1);
     expect(output).toContain('Failed to start API server');
-    expect(output).toContain('Missing required marketplace secrets for NODE_ENV=production: MARKETPLACE_CLIENT_SECRET, MARKETPLACE_WEBHOOK_SECRET');
+    expect(output).toContain('Missing required marketplace secrets for NODE_ENV=production: MARKETPLACE_CLIENT_SECRET');
   });
 });

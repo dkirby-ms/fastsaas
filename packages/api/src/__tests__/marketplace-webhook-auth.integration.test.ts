@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -11,7 +10,6 @@ import { createApp } from '../app';
 import { createConfig, type MarketplaceWebhookAuthMode } from '../config';
 import type { SubscriptionService } from '../services/subscription-service';
 
-const webhookSecret = 'local-marketplace-webhook-secret';
 const marketplaceClientId = 'marketplace-client-id';
 const marketplaceTenantId = '11111111-2222-3333-4444-555555555555';
 
@@ -46,7 +44,6 @@ function createHarness(authMode: MarketplaceWebhookAuthMode, overrides: Record<s
       MARKETPLACE_CLIENT_ID: marketplaceClientId,
       MARKETPLACE_TENANT_ID: marketplaceTenantId,
       MARKETPLACE_WEBHOOK_AUTH_MODE: authMode,
-      MARKETPLACE_WEBHOOK_SECRET: webhookSecret,
       ...overrides
     }),
     {
@@ -60,10 +57,6 @@ function createHarness(authMode: MarketplaceWebhookAuthMode, overrides: Record<s
     app,
     processMarketplaceWebhook
   };
-}
-
-function signBody(body: string, timestamp: string): string {
-  return createHmac('sha256', webhookSecret).update(timestamp, 'utf8').update('.', 'utf8').update(body).digest('hex');
 }
 
 async function startMarketplaceJwksServer(keys: Record<string, unknown>[]): Promise<string> {
@@ -148,8 +141,8 @@ afterEach(async () => {
 });
 
 describe('marketplace webhook auth', () => {
-  it('rejects callback mode requests when no HMAC or bearer token is present', async () => {
-    const { app, processMarketplaceWebhook } = createHarness('callback');
+  it('rejects jwt mode requests when no bearer token is present', async () => {
+    const { app, processMarketplaceWebhook } = createHarness('jwt');
     const body = JSON.stringify({
       action: 'Suspend',
       marketplaceSubscriptionId: 'marketplace-sub-123'
@@ -162,9 +155,9 @@ describe('marketplace webhook auth', () => {
     expect(processMarketplaceWebhook).not.toHaveBeenCalled();
   });
 
-  it('accepts bearer-authenticated marketplace webhooks in callback mode', async () => {
+  it('accepts bearer-authenticated marketplace webhooks in jwt mode', async () => {
     const { jwksUri, token } = await createBearerToken({});
-    const { app, processMarketplaceWebhook } = createHarness('callback', {
+    const { app, processMarketplaceWebhook } = createHarness('jwt', {
       MARKETPLACE_JWKS_URI: jwksUri
     });
     const body = JSON.stringify({
@@ -190,9 +183,9 @@ describe('marketplace webhook auth', () => {
     );
   });
 
-  it('rejects bearer tokens with an unexpected audience in callback mode', async () => {
+  it('rejects bearer tokens with an unexpected audience in jwt mode', async () => {
     const { jwksUri, token } = await createBearerToken({ audience: 'wrong-audience' });
-    const { app, processMarketplaceWebhook } = createHarness('callback', {
+    const { app, processMarketplaceWebhook } = createHarness('jwt', {
       MARKETPLACE_JWKS_URI: jwksUri
     });
     const body = JSON.stringify({
@@ -211,8 +204,8 @@ describe('marketplace webhook auth', () => {
     expect(processMarketplaceWebhook).not.toHaveBeenCalled();
   });
 
-  it('rejects missing signature headers in hmac mode', async () => {
-    const { app, processMarketplaceWebhook } = createHarness('hmac');
+  it('allows unauthenticated marketplace webhooks in none mode', async () => {
+    const { app, processMarketplaceWebhook } = createHarness('none');
     const body = JSON.stringify({
       action: 'Suspend',
       marketplaceSubscriptionId: 'marketplace-sub-123'
@@ -220,45 +213,7 @@ describe('marketplace webhook auth', () => {
 
     const response = await request(app).post('/api/webhooks/marketplace').set('Content-Type', 'application/json').send(body);
 
-    expect(response.status).toBe(401);
-    expect(response.body.error.message).toBe('Marketplace webhook timestamp header is required');
-    expect(processMarketplaceWebhook).not.toHaveBeenCalled();
-  });
-
-  it('validates signed webhooks in callback mode when signature headers are present', async () => {
-    const { app, processMarketplaceWebhook } = createHarness('callback');
-    const timestamp = new Date().toISOString();
-    const body = JSON.stringify({
-      action: 'Suspend',
-      marketplaceSubscriptionId: 'marketplace-sub-123'
-    });
-
-    const response = await request(app)
-      .post('/api/webhooks/marketplace')
-      .set('Content-Type', 'application/json')
-      .set('x-ms-marketplace-timestamp', timestamp)
-      .set('x-ms-marketplace-signature', signBody(body, timestamp))
-      .send(body);
-
     expect(response.status).toBe(202);
     expect(processMarketplaceWebhook).toHaveBeenCalledOnce();
-  });
-
-  it('rejects partially signed webhooks in callback mode', async () => {
-    const { app, processMarketplaceWebhook } = createHarness('callback');
-    const body = JSON.stringify({
-      action: 'Suspend',
-      marketplaceSubscriptionId: 'marketplace-sub-123'
-    });
-
-    const response = await request(app)
-      .post('/api/webhooks/marketplace')
-      .set('Content-Type', 'application/json')
-      .set('x-ms-marketplace-timestamp', '2026-06-03T20:11:42.315+00:00')
-      .send(body);
-
-    expect(response.status).toBe(401);
-    expect(response.body.error.message).toBe('Marketplace webhook signature header is required');
-    expect(processMarketplaceWebhook).not.toHaveBeenCalled();
   });
 });

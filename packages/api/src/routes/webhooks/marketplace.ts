@@ -116,22 +116,16 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    * /api/webhooks/marketplace:
    *   post:
    *     summary: Process Azure Marketplace subscription webhooks
-   *     description: Applies the requested subscription lifecycle transition. When webhook signature headers are present, the API validates them with the configured webhook secret; otherwise callback mode requires a Microsoft Entra Bearer token whose issuer, audience, signature, and expiry are validated before the webhook is processed.
+   *     description: Applies the requested subscription lifecycle transition. By default, marketplace webhooks must present a Microsoft Entra Bearer token whose issuer, audience, signature, and expiry are validated before the webhook is processed.
    *     tags:
    *       - Webhooks
    *     parameters:
    *       - in: header
-   *         name: x-ms-marketplace-timestamp
+   *         name: Authorization
    *         required: false
    *         schema:
    *           type: string
-   *         description: Optional request timestamp used for replay-window validation and signature generation when Partner Center webhook signing is enabled.
-   *       - in: header
-   *         name: x-ms-marketplace-signature
-   *         required: false
-   *         schema:
-   *           type: string
-   *         description: Optional HMAC SHA-256 signature of `<timestamp>.<raw body>` using the configured webhook secret when Partner Center webhook signing is enabled.
+   *         description: Bearer token issued by Microsoft Entra ID for the configured marketplace tenant and audience. Optional only when `MARKETPLACE_WEBHOOK_AUTH_MODE=none`.
    *       - in: header
    *         name: x-ms-marketplace-event-id
    *         required: false
@@ -180,7 +174,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *       400:
    *         description: Webhook body is invalid
    *       401:
-   *         description: Invalid signed webhook headers when strict HMAC auth is enabled or when a partially signed request is received
+   *         description: Missing, invalid, or expired Microsoft Entra Bearer token
    *       404:
    *         description: Marketplace subscription not found
    *       409:

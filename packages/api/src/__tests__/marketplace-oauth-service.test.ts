@@ -13,6 +13,21 @@ function createLogger() {
   } as never;
 }
 
+function createMarketplaceConfig() {
+  return {
+    baseUrl: 'https://marketplaceapi.microsoft.com',
+    apiVersion: '2018-08-31',
+    clientId: 'marketplace-client-id',
+    tenantId: 'marketplace-tenant-id',
+    clientSecret: 'marketplace-client-secret',
+    tokenScope: 'https://graph.microsoft.com/.default',
+    productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
+    jwksUri: 'https://login.microsoftonline.com/common/discovery/v2.0/keys',
+    expectedAudience: 'marketplace-client-id',
+    webhookAuthMode: 'jwt' as const
+  };
+}
+
 describe('MarketplaceOAuthService', () => {
   it('caches access tokens until they near expiration', async () => {
     const fetchMock = vi
@@ -26,18 +41,7 @@ describe('MarketplaceOAuthService', () => {
 
     const service = new MarketplaceOAuthService({
       logger: createLogger(),
-      marketplace: {
-        baseUrl: 'https://marketplaceapi.microsoft.com',
-        apiVersion: '2018-08-31',
-        clientId: 'marketplace-client-id',
-        tenantId: 'marketplace-tenant-id',
-        clientSecret: 'marketplace-client-secret',
-        tokenScope: 'https://graph.microsoft.com/.default',
-        productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
-        webhookSecret: 'marketplace-webhook-secret',
-        webhookAuthMode: 'callback',
-        webhookTimestampToleranceMs: 300000
-      },
+      marketplace: createMarketplaceConfig(),
       fetchImpl: fetchMock,
       now: () => new Date('2026-06-02T16:16:43Z')
     });
@@ -66,18 +70,7 @@ describe('MarketplaceOAuthService', () => {
 
     const service = new MarketplaceOAuthService({
       logger: createLogger(),
-      marketplace: {
-        baseUrl: 'https://marketplaceapi.microsoft.com',
-        apiVersion: '2018-08-31',
-        clientId: 'marketplace-client-id',
-        tenantId: 'marketplace-tenant-id',
-        clientSecret: 'marketplace-client-secret',
-        tokenScope: 'https://graph.microsoft.com/.default',
-        productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
-        webhookSecret: 'marketplace-webhook-secret',
-        webhookAuthMode: 'callback',
-        webhookTimestampToleranceMs: 300000
-      },
+      marketplace: createMarketplaceConfig(),
       fetchImpl: fetchMock,
       now: () => nowValues.shift() ?? new Date('2026-06-02T16:17:20Z')
     });
@@ -90,18 +83,7 @@ describe('MarketplaceOAuthService', () => {
   it('surfaces Azure AD error details when token exchange fails', async () => {
     const service = new MarketplaceOAuthService({
       logger: createLogger(),
-      marketplace: {
-        baseUrl: 'https://marketplaceapi.microsoft.com',
-        apiVersion: '2018-08-31',
-        clientId: 'marketplace-client-id',
-        tenantId: 'marketplace-tenant-id',
-        clientSecret: 'marketplace-client-secret',
-        tokenScope: 'https://graph.microsoft.com/.default',
-        productIngestionBaseUrl: 'https://graph.microsoft.com/rp/product-ingestion',
-        webhookSecret: 'marketplace-webhook-secret',
-        webhookAuthMode: 'callback',
-        webhookTimestampToleranceMs: 300000
-      },
+      marketplace: createMarketplaceConfig(),
       fetchImpl: vi.fn(async () =>
         new Response(
           JSON.stringify({
