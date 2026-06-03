@@ -8,6 +8,7 @@ import { createMeteringRuntime } from './metering/runtime';
 import { requestLogger } from './middleware/request-logger';
 import { buildOpenApiSpec } from './openapi';
 import { healthRouter } from './routes/health';
+import { createPortalRouter } from './routes/portal';
 import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
@@ -51,6 +52,11 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   }
 
   app.use(healthRouter);
+
+  if (dependencies.subscriptionService) {
+    app.use('/portal', createPortalRouter(config, dependencies.subscriptionService, dependencies.tenantMemberService));
+  }
+
   app.get('/openapi.json', (_req, res) => {
     res.status(200).json(openApiSpec);
   });
