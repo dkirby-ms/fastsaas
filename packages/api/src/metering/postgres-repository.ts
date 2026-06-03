@@ -79,6 +79,30 @@ const CLAIMED_USAGE_EVENT_COLUMNS = `
   claim_expires_at AS "leaseExpiresAt"
 `;
 
+const CLAIMED_USAGE_EVENT_COLUMNS_WITH_TARGET_ALIAS = `
+  usage_events.id,
+  tenant_id AS "tenantId",
+  event_id AS "eventId",
+  subscription_id AS "subscriptionId",
+  plan_id AS "planId",
+  dimension_id AS "dimensionId",
+  quantity,
+  event_timestamp AS timestamp,
+  idempotency_key AS "idempotencyKey",
+  status,
+  retry_count AS "retryCount",
+  next_attempt_at AS "nextAttemptAt",
+  submitted_at AS "submittedAt",
+  last_error_code AS "lastErrorCode",
+  last_error_message AS "lastErrorMessage",
+  last_http_status AS "lastHttpStatus",
+  metadata,
+  created_at AS "createdAt",
+  updated_at AS "updatedAt",
+  claim_token AS "claimToken",
+  claim_expires_at AS "leaseExpiresAt"
+`;
+
 const DEAD_LETTER_COLUMNS = `
   id,
   usage_event_id AS "usageEventId",
@@ -295,7 +319,7 @@ export class PostgresUsageEventRepository implements UsageEventRepository {
           updated_at = $1::timestamptz
       FROM candidate
       WHERE usage_events.id = candidate.id
-      RETURNING ${CLAIMED_USAGE_EVENT_COLUMNS}
+      RETURNING ${CLAIMED_USAGE_EVENT_COLUMNS_WITH_TARGET_ALIAS}
     `, nowIso, limit, claimToken, leaseExpiresAt));
 
     return rows.map((row) => mapClaimedUsageEventRow(row));
