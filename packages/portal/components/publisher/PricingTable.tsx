@@ -1,4 +1,4 @@
-import type { BillingTerm, Market, PlanPricing } from '@/lib/publisher/types';
+import type { BillingTerm, Market, PlanPricing } from '@fastsaas/shared';
 
 interface PricingTableProps {
   pricing: PlanPricing;

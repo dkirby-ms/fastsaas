@@ -1,4 +1,4 @@
-import type { ListingTrailer } from '@/lib/publisher/types';
+import type { ListingTrailer } from '@fastsaas/shared';
 
 interface VideoPlayerProps {
   trailer: ListingTrailer;

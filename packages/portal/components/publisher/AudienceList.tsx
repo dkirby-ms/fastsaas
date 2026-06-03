@@ -1,4 +1,4 @@
-import type { PreviewAudience, PrivateAudience } from '@/lib/publisher/types';
+import type { PreviewAudience, PrivateAudience } from '@fastsaas/shared';
 
 type AudienceItem = PreviewAudience | PrivateAudience;
 

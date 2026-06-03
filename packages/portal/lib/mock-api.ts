@@ -15,13 +15,11 @@ import type {
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
+import type { ListingAsset, ListingTrailer, PlanPricing } from '@fastsaas/shared';
 import type {
-  PlanPricing,
   ProductAudiencesResponse,
   PublisherProductDetail,
   PublisherProductSummary,
-  ListingAsset,
-  ListingTrailer,
 } from '@/lib/publisher/types';
 import { hasPublisherAccess } from '@/lib/roles';
 

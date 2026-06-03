@@ -1,4 +1,4 @@
-import type { ListingAsset } from '@/lib/publisher/types';
+import type { ListingAsset } from '@fastsaas/shared';
 
 interface AssetGalleryProps {
   assets: ListingAsset[];

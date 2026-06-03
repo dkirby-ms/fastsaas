@@ -17,8 +17,8 @@ import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
 import { customerApiPaths, publisherAdminMockPaths } from '@/lib/api-paths';
 import { getPublisherApiBaseUrl, publisherAdminPaths } from '@/lib/publisher-admin-api';
+import type { PlanPricing } from '@fastsaas/shared';
 import type {
-  PlanPricing,
   ProductAssetsResponse,
   ProductAudiencesResponse,
   PublisherProductDetail,
