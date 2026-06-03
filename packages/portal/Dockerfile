@@ -19,9 +19,9 @@ ARG API_BASE_URL=http://api:3000
 ARG APP_NAME=portal
 ARG HEALTH_PATH=/health
 
-ENV API_BASE_URL=${API_BASE_URL}
-ENV APP_NAME=${APP_NAME}
-ENV HEALTH_PATH=${HEALTH_PATH}
+ENV API_BASE_URL=${API_BASE_URL} \
+    APP_NAME=${APP_NAME} \
+    HEALTH_PATH=${HEALTH_PATH}
 
 RUN NEXTAUTH_SECRET=build-only-secret \
     ENTRA_TENANT_ID=build-tenant \
@@ -29,19 +29,21 @@ RUN NEXTAUTH_SECRET=build-only-secret \
     ENTRA_CLIENT_SECRET=build-secret \
     ENTRA_API_CLIENT_ID=build-api-client \
     npm run build --workspace=@fastsaas/portal
+RUN mkdir -p /app/release/packages/portal/.next \
+    && cp -R /app/packages/portal/.next/standalone/. /app/release/ \
+    && cp -R /app/packages/portal/.next/static /app/release/packages/portal/.next/static
 
 FROM node:22-alpine AS runner
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
-ENV PORT=3001
-ENV API_BASE_URL=http://api:3000
-ENV APP_NAME=portal
-ENV HEALTH_PATH=/health
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3001 \
+    API_BASE_URL=http://api:3000 \
+    APP_NAME=portal \
+    HEALTH_PATH=/health
 
-COPY --from=builder /app/packages/portal/.next/standalone ./
-COPY --from=builder /app/packages/portal/.next/static ./packages/portal/.next/static
+COPY --from=builder /app/release/ ./
 
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+(process.env.HEALTH_PATH || '/health')).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
