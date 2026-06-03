@@ -18,10 +18,27 @@ import { KyselyAuditLogRepository } from '../repositories/audit-log-repository';
 import { AuditService, createAuditLoggingMiddleware, waitForAuditLogFlush } from '../services/audit-service';
 import { PostgresTestDatabase } from './postgres-test-db';
 
-let jwksServer: Server;
+let jwksServer: Server | undefined;
 let signingKey: KeyLike;
 let config: ApiConfig;
-let postgres: PostgresTestDatabase;
+let postgres: PostgresTestDatabase | undefined;
+
+async function closeServer(server: Server | undefined): Promise<void> {
+  if (!server || !server.listening) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
 
 beforeAll(async () => {
   postgres = await PostgresTestDatabase.start();
@@ -63,21 +80,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await new Promise<void>((resolve, reject) => {
-    jwksServer.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-
-  await postgres.destroy();
+  await closeServer(jwksServer);
+  await postgres?.destroy();
 });
 
 beforeEach(async () => {
+  if (!postgres) {
+    throw new Error('PostgreSQL test database was not initialized');
+  }
+
   await postgres.resetAuditLogs();
 });
 
@@ -111,6 +122,10 @@ async function waitForAuditLogCount(service: AuditService, tenantId: string, exp
 }
 
 function buildAuditApp() {
+  if (!postgres) {
+    throw new Error('PostgreSQL test database was not initialized');
+  }
+
   const repository = new KyselyAuditLogRepository(postgres.db);
   const service = new AuditService(repository, {
     info() {},
