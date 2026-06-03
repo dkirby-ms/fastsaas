@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
 
 import type { UsageEventIngestRequest } from '@fastsaas/shared';
 import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
@@ -30,6 +31,9 @@ const POSTGRES_IMAGE = 'postgres:16-alpine';
 const APP_DB_NAME = 'fastsaas_rls_test';
 const APP_DB_USER = 'fastsaas_app';
 const APP_DB_PASSWORD = 'fastsaas_app';
+const DOCKER_RUN_MAX_ATTEMPTS = 3;
+const DOCKER_RETRY_DELAY_MS = 1_500;
+const execFileAsync = promisify(execFile);
 const dockerAvailable = canUseDocker();
 
 if (!dockerAvailable) {
@@ -164,8 +168,22 @@ function canUseDocker(): boolean {
   }
 }
 
-function execDocker(args: string[]): string {
-  return execFileSync('docker', args, { encoding: 'utf8' }).trim();
+async function execDocker(args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('docker', args, { timeout: 120_000 });
+  return stdout.trim();
+}
+
+function getDockerErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return '';
+  }
+
+  const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '';
+  return `${error.message}\n${stderr}`;
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return getDockerErrorMessage(error).includes('address already in use');
 }
 
 function sleep(ms: number): Promise<void> {
@@ -292,21 +310,40 @@ async function seedPreMigrationData(pool: Pool): Promise<void> {
 }
 
 async function createTestDatabase(): Promise<TestDatabase> {
-  const containerName = `fastsaas-rls-${randomUUID().slice(0, 8)}`;
-  execDocker([
-    'run',
-    '--rm',
-    '--detach',
-    '--name',
-    containerName,
-    '--env',
-    'POSTGRES_PASSWORD=postgres',
-    '--publish',
-    '127.0.0.1::5432',
-    POSTGRES_IMAGE
-  ]);
+  let containerName = '';
 
-  const portOutput = execDocker(['port', containerName, '5432/tcp']);
+  for (let attempt = 1; attempt <= DOCKER_RUN_MAX_ATTEMPTS; attempt += 1) {
+    containerName = `fastsaas-rls-${randomUUID().slice(0, 8)}`;
+
+    try {
+      await execDocker([
+        'run',
+        '--rm',
+        '--detach',
+        '--name',
+        containerName,
+        '--env',
+        'POSTGRES_PASSWORD=postgres',
+        '--publish',
+        '127.0.0.1::5432',
+        POSTGRES_IMAGE
+      ]);
+      break;
+    } catch (error) {
+      await execDocker(['rm', '--force', containerName]).catch(() => undefined);
+
+      if (!isAddressInUseError(error) || attempt === DOCKER_RUN_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      console.warn(
+        `Docker assigned a conflicting host port while starting ${containerName}; retrying (${attempt}/${DOCKER_RUN_MAX_ATTEMPTS})...`
+      );
+      await sleep(DOCKER_RETRY_DELAY_MS);
+    }
+  }
+
+  const portOutput = await execDocker(['port', containerName, '5432/tcp']);
   const portMatch = portOutput.match(/:(\d+)\s*$/);
   if (!portMatch) {
     throw new Error(`Unable to resolve PostgreSQL port from: ${portOutput}`);
@@ -317,32 +354,54 @@ async function createTestDatabase(): Promise<TestDatabase> {
   await waitForQuery(adminUrl);
 
   const bootstrapPool = new Pool({ connectionString: adminUrl });
-  await bootstrapPool.query(`CREATE ROLE ${APP_DB_USER} LOGIN PASSWORD '${APP_DB_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE`);
-  await bootstrapPool.query(`CREATE DATABASE ${APP_DB_NAME} OWNER ${APP_DB_USER}`);
-  await bootstrapPool.end();
+
+  try {
+    await bootstrapPool.query(`CREATE ROLE ${APP_DB_USER} LOGIN PASSWORD '${APP_DB_PASSWORD}' NOSUPERUSER NOCREATEDB NOCREATEROLE`);
+    await bootstrapPool.query(`CREATE DATABASE ${APP_DB_NAME} OWNER ${APP_DB_USER}`);
+  } finally {
+    await bootstrapPool.end();
+  }
 
   const adminPool = new Pool({ connectionString: `postgresql://postgres:postgres@127.0.0.1:${port}/${APP_DB_NAME}` });
-  await adminPool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
 
-  const databaseUrl = `postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@127.0.0.1:${port}/${APP_DB_NAME}`;
-  const appPool = new Pool({ connectionString: databaseUrl });
-  await initializeBaseSchema(appPool);
-  await seedPreMigrationData(appPool);
+  try {
+    await adminPool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
 
-  const db = createDatabase(databaseUrl);
-  const result = await migrateToLatest(db);
-  await db.destroy();
+    const databaseUrl = `postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@127.0.0.1:${port}/${APP_DB_NAME}`;
+    const appPool = new Pool({ connectionString: databaseUrl });
 
-  return {
-    adminPool,
-    appPool,
-    databaseUrl,
-    migrationNames: (result.results ?? []).map((migration) => migration.migrationName),
-    async stop() {
-      await Promise.allSettled([adminPool.end(), appPool.end()]);
-      execDocker(['rm', '--force', containerName]);
+    try {
+      await initializeBaseSchema(appPool);
+      await seedPreMigrationData(appPool);
+
+      const db = createDatabase(databaseUrl);
+      const result = await (async () => {
+        try {
+          return await migrateToLatest(db);
+        } finally {
+          await db.destroy();
+        }
+      })();
+
+      return {
+        adminPool,
+        appPool,
+        databaseUrl,
+        migrationNames: (result.results ?? []).map((migration) => migration.migrationName),
+        async stop() {
+          await Promise.allSettled([adminPool.end(), appPool.end()]);
+          await execDocker(['rm', '--force', containerName]).catch(() => undefined);
+        }
+      };
+    } catch (error) {
+      await appPool.end().catch(() => undefined);
+      throw error;
     }
-  };
+  } catch (error) {
+    await adminPool.end().catch(() => undefined);
+    await execDocker(['rm', '--force', containerName]).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function withTenantSession<T>(

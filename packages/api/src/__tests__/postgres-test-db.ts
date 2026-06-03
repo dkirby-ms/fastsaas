@@ -12,10 +12,68 @@ import { migrateToLatest } from '../db/migrator';
 
 const execFileAsync = promisify(execFile);
 const POSTGRES_IMAGE = 'postgres:16-alpine';
+const DOCKER_RUN_MAX_ATTEMPTS = 3;
+const DOCKER_RETRY_DELAY_MS = 1_500;
 
 async function runDockerCommand(args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('docker', args, { timeout: 120_000 });
   return stdout.trim();
+}
+
+function getDockerErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return '';
+  }
+
+  const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '';
+  return `${error.message}\n${stderr}`;
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return getDockerErrorMessage(error).includes('address already in use');
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startPostgresContainer(): Promise<string> {
+  for (let attempt = 1; attempt <= DOCKER_RUN_MAX_ATTEMPTS; attempt += 1) {
+    const containerName = `fastsaas-audit-${randomUUID()}`;
+
+    try {
+      await runDockerCommand([
+        'run',
+        '--rm',
+        '--detach',
+        '--name',
+        containerName,
+        '--env',
+        'POSTGRES_DB=fastsaas',
+        '--env',
+        'POSTGRES_USER=postgres',
+        '--env',
+        'POSTGRES_PASSWORD=postgres',
+        '--publish-all',
+        POSTGRES_IMAGE
+      ]);
+
+      return containerName;
+    } catch (error) {
+      await runDockerCommand(['rm', '--force', containerName]).catch(() => undefined);
+
+      if (!isAddressInUseError(error) || attempt === DOCKER_RUN_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      console.warn(
+        `Docker assigned a conflicting host port while starting ${containerName}; retrying (${attempt}/${DOCKER_RUN_MAX_ATTEMPTS})...`
+      );
+      await sleep(DOCKER_RETRY_DELAY_MS);
+    }
+  }
+
+  throw new Error('PostgreSQL test container could not be started');
 }
 
 async function waitForDatabase(connectionString: string): Promise<void> {
@@ -45,23 +103,9 @@ export class PostgresTestDatabase {
   ) {}
 
   static async start(): Promise<PostgresTestDatabase> {
-    const containerName = `fastsaas-audit-${randomUUID()}`;
-
-    await runDockerCommand([
-      'run',
-      '--rm',
-      '--detach',
-      '--name',
-      containerName,
-      '--env',
-      'POSTGRES_DB=fastsaas',
-      '--env',
-      'POSTGRES_USER=postgres',
-      '--env',
-      'POSTGRES_PASSWORD=postgres',
-      '--publish-all',
-      POSTGRES_IMAGE
-    ]);
+    const containerName = await startPostgresContainer();
+    let adminDb: Kysely<Database> | undefined;
+    let db: Kysely<Database> | undefined;
 
     try {
       const port = await runDockerCommand([
@@ -73,7 +117,7 @@ export class PostgresTestDatabase {
       const adminConnectionString = `postgres://postgres:postgres@127.0.0.1:${port}/fastsaas`;
       await waitForDatabase(adminConnectionString);
 
-      const adminDb = createDatabase(adminConnectionString);
+      adminDb = createDatabase(adminConnectionString);
       await migrateToLatest(adminDb);
       await sql.raw(`
         DO $$
@@ -89,10 +133,11 @@ export class PostgresTestDatabase {
       await sql.raw('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE audit_logs TO fastsaas_app').execute(adminDb);
 
       const connectionString = `postgres://fastsaas_app:fastsaas@127.0.0.1:${port}/fastsaas`;
-      const db = createDatabase(connectionString);
+      db = createDatabase(connectionString);
 
       return new PostgresTestDatabase(containerName, adminConnectionString, connectionString, adminDb, db);
     } catch (error) {
+      await Promise.allSettled([adminDb?.destroy(), db?.destroy()]);
       await runDockerCommand(['rm', '--force', containerName]).catch(() => undefined);
       throw error;
     }
