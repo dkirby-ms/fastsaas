@@ -71,9 +71,7 @@ jobs:
             if length == 0 then
               "- Unable to determine the failed job from the workflow metadata."
             else
-              map(
-                "- Job: `\(.name)`\n  - Failed step: `\(((.steps // []) | map(select(.conclusion == \"failure\"))[0].name) // \"Unknown step\")`"
-              ) | join("\n")
+              .[] | "- Job: `\(.name)`\n  - Failed step: `\(((.steps // []) | map(select(.conclusion == "failure"))[0].name) // "Unknown step")`"
             end
           ' <<<"$failed_jobs_json")
 
