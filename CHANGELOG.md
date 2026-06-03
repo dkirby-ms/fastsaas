@@ -1,3 +1,9 @@
+## [0.17.1](https://github.com/dkirby-ms/fastsaas/compare/v0.17.0...v0.17.1) (2026-06-03)
+
+### Bug Fixes
+
+* **api:** support configurable webhook auth modes ([#130](https://github.com/dkirby-ms/fastsaas/issues/130)) ([36c0841](https://github.com/dkirby-ms/fastsaas/commit/36c0841bb41d17adf1a2ae2005d54eb1256fa15a))
+
 ## [0.17.0](https://github.com/dkirby-ms/fastsaas/compare/v0.16.4...v0.17.0) (2026-06-03)
 
 ### Features
