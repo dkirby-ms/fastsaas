@@ -1,16 +1,7 @@
 'use client';
 
+import type { ResolvedTheme, Theme, ThemeContextValue } from '@fastsaas/shared';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-
-type Theme = 'light' | 'dark' | 'system';
-type ResolvedTheme = Exclude<Theme, 'system'>;
-
-type ThemeContextValue = {
-  theme: Theme;
-  resolvedTheme: ResolvedTheme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
-};
 
 const STORAGE_KEY = 'fastsaas-theme';
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
