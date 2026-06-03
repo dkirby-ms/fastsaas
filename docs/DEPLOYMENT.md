@@ -60,8 +60,8 @@ FastSaaS uses a two-phase Bicep deployment approach:
 
 **Phase 2: Application Deployment**
 - Builds container images in Azure Container Registry
-- Deploys Container Apps with valid image references (set `deployContainerApps=true`)
-- Enables safe rollback by redeploying with previous image tags
+- Updates the existing Container Apps in place with new image tags and reapplies runtime config
+- Preserves ingress settings such as custom domains while still supporting rollback to a previous image tag
 
 ## Deployment Workflows
 
@@ -93,7 +93,7 @@ gh workflow run deploy-infra-staging.yml \
 
 ### 2. Application Deployment (`.github/workflows/deploy-app-staging.yml`)
 
-Builds container images and deploys to Azure Container Apps. Run this **after** infrastructure deployment or to roll out new versions.
+Builds container images and updates the existing Azure Container Apps in place. Run this **after** infrastructure deployment or to roll out new versions.
 
 ```bash
 gh workflow run deploy-app-staging.yml \
@@ -107,9 +107,11 @@ gh workflow run deploy-app-staging.yml \
 
 **Workflow:**
 1. **Build** — Creates Docker images in Azure Container Registry for API and portal
-2. **Deploy** — Deploys Bicep template with Container Apps + image references
-3. **Configure** — Applies environment variables to Container Apps post-deployment
+2. **Update images** — Runs `az containerapp update --image` against the existing API and portal apps
+3. **Configure** — Reapplies Container App secrets and environment variables from the checked-in staging env files
 4. **Verify** — Runs health checks against API and portal endpoints
+
+> This workflow assumes the staging Container Apps already exist. It intentionally avoids redeploying the Container App Bicep resources so custom domains remain attached.
 
 **Options:**
 - `imageTag` — Optional custom image tag (defaults to commit SHA)

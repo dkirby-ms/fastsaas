@@ -37,7 +37,6 @@ jobs:
       RESOURCE_GROUP: ${{ inputs.resourceGroup || 'rg-fastsaas-staging' }}
       LOCATION: ${{ inputs.location || 'centralus' }}
       ENVIRONMENT_NAME: ${{ inputs.environmentName || 'staging' }}
-      POSTGRES_ADMIN_PASSWORD: ${{ secrets.STAGING_POSTGRES_ADMIN_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -119,10 +118,31 @@ jobs:
             --file packages/portal/Dockerfile \
             .
 
-      - name: Render container app runtime parameters
+      - name: Resolve container app targets
+        run: |
+          echo "API_APP_NAME=${ENVIRONMENT_NAME}-api" >> "$GITHUB_ENV"
+          echo "PORTAL_APP_NAME=${ENVIRONMENT_NAME}-portal" >> "$GITHUB_ENV"
+          echo "API_IMAGE=${{ steps.registry.outputs.acr_login_server }}/fastsaas-api:${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "PORTAL_IMAGE=${{ steps.registry.outputs.acr_login_server }}/fastsaas-portal:${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Ensure container apps exist
+        shell: bash
+        run: |
+          for app_name in "$API_APP_NAME" "$PORTAL_APP_NAME"; do
+            if ! az containerapp show --resource-group "$RESOURCE_GROUP" --name "$app_name" >/dev/null; then
+              echo "Container App $app_name does not exist in $RESOURCE_GROUP." >&2
+              echo "This workflow now performs in-place updates to preserve custom domains, so the staging apps must already exist before rerunning it." >&2
+              exit 1
+            fi
+          done
+
+      - name: Render container app runtime config
         shell: bash
         env:
-          PARAMETER_FILE: infrastructure/bicep/.generated-staging-app.parameters.json
+          API_ENV_FILE: infrastructure/env/.generated-staging-api.env.json
+          API_SECRETS_FILE: infrastructure/env/.generated-staging-api.secrets.json
+          PORTAL_ENV_FILE: infrastructure/env/.generated-staging-portal.env.json
+          PORTAL_SECRETS_FILE: infrastructure/env/.generated-staging-portal.secrets.json
           API_ENTRA_CLIENT_ID: ${{ secrets.API_ENTRA_CLIENT_ID }}
           ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
           MARKETPLACE_CLIENT_SECRET: ${{ secrets.MARKETPLACE_CLIENT_SECRET }}
@@ -132,24 +152,28 @@ jobs:
           PORTAL_NEXTAUTH_SECRET: ${{ secrets.PORTAL_NEXTAUTH_SECRET }}
           PORTAL_PUBLIC_URL: ${{ vars.PORTAL_PUBLIC_URL }}
         run: |
-          DEFAULT_DOMAIN=$(az containerapp env show \
+          API_FQDN=$(az containerapp show \
             --resource-group "$RESOURCE_GROUP" \
-            --name "${ENVIRONMENT_NAME}-cae" \
-            --query properties.defaultDomain \
+            --name "$API_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+          PORTAL_FQDN=$(az containerapp show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$PORTAL_APP_NAME" \
+            --query properties.configuration.ingress.fqdn \
             -o tsv)
 
-          if [ -z "$DEFAULT_DOMAIN" ]; then
-            echo "Could not resolve the Container Apps environment domain for ${ENVIRONMENT_NAME}-cae." >&2
+          if [ -z "$API_FQDN" ] || [ -z "$PORTAL_FQDN" ]; then
+            echo "Could not resolve the Container App ingress FQDNs for $API_APP_NAME and $PORTAL_APP_NAME." >&2
             exit 1
           fi
 
-          ACA_API_URL="https://${ENVIRONMENT_NAME}-api.${DEFAULT_DOMAIN}"
-          ACA_PORTAL_URL="https://${ENVIRONMENT_NAME}-portal.${DEFAULT_DOMAIN}"
           PORTAL_PUBLIC_URL="${PORTAL_PUBLIC_URL%/}"
+          export API_BASE_URL="https://${API_FQDN}"
+          export PORTAL_URL="${PORTAL_PUBLIC_URL:-https://${PORTAL_FQDN}}"
+          export PORTAL_URL="${PORTAL_URL%/}"
 
-          export API_BASE_URL="$ACA_API_URL"
-          export PORTAL_URL="${PORTAL_PUBLIC_URL:-$ACA_PORTAL_URL}"
-
+          # Keep the checked-in env files as the source of truth for post-deploy config.
           # If PORTAL_PUBLIC_URL is set, NEXTAUTH_URL and the Entra redirect URI must use that same public host.
           python3 - <<'PY'
           from pathlib import Path
@@ -158,7 +182,6 @@ jobs:
           import re
 
           pattern = re.compile(r'\{\{([A-Z0-9_]+)\}\}')
-          parameter_file = Path(os.environ['PARAMETER_FILE'])
           secret_values = {
               'marketplace-client-secret': os.environ.get('MARKETPLACE_CLIENT_SECRET'),
               'marketplace-webhook-secret': os.environ.get('MARKETPLACE_WEBHOOK_SECRET'),
@@ -177,10 +200,9 @@ jobs:
                   raise SystemExit(f'Missing value for placeholder {name}')
               return resolved
 
-          def render_env_file(path: str) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, str]]:
-              plain_env_vars: list[dict[str, str]] = []
-              secret_env_var_refs: list[dict[str, str]] = []
-              secret_env_values: dict[str, str] = {}
+          def render_env_file(path: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+              env_vars: list[dict[str, str]] = []
+              app_secret_values: dict[str, str] = {}
 
               for raw_line in Path(path).read_text().splitlines():
                   line = raw_line.strip()
@@ -191,62 +213,153 @@ jobs:
 
                   key, value = line.split('=', 1)
                   value = pattern.sub(replace, value)
+                  env_vars.append({
+                      'name': key,
+                      'value': value,
+                  })
 
                   if value.startswith('secretref:'):
                       secret_name = value.removeprefix('secretref:')
                       secret_value = secret_values.get(secret_name)
                       if not secret_value:
                           raise SystemExit(f'No GitHub Actions secret mapped for {secret_name}')
-                      secret_env_var_refs.append({
-                          'name': key,
-                          'secretName': secret_name,
-                      })
-                      secret_env_values[secret_name] = secret_value
-                      continue
+                      app_secret_values[secret_name] = secret_value
 
-                  plain_env_vars.append({
-                      'name': key,
-                      'value': value,
-                  })
+              secrets = [
+                  {'name': name, 'value': value}
+                  for name, value in sorted(app_secret_values.items())
+              ]
+              return env_vars, secrets
 
-              return plain_env_vars, secret_env_var_refs, secret_env_values
+          api_env_vars, api_secrets = render_env_file('infrastructure/env/staging-api.env')
+          portal_env_vars, portal_secrets = render_env_file('infrastructure/env/staging-portal.env')
 
-          api_env_vars, api_secret_env_var_refs, api_secret_values = render_env_file('infrastructure/env/staging-api.env')
-          portal_env_vars, portal_secret_env_var_refs, portal_secret_values = render_env_file('infrastructure/env/staging-portal.env')
-
-          parameter_file.write_text(json.dumps({
-              '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#',
-              'contentVersion': '1.0.0.0',
-              'parameters': {
-                  'apiRuntimeEnvVars': {'value': api_env_vars},
-                  'apiRuntimeSecretEnvVarRefs': {'value': api_secret_env_var_refs},
-                  'apiRuntimeSecretValues': {'value': api_secret_values},
-                  'portalRuntimeEnvVars': {'value': portal_env_vars},
-                  'portalRuntimeSecretEnvVarRefs': {'value': portal_secret_env_var_refs},
-                  'portalRuntimeSecretValues': {'value': portal_secret_values},
-              },
-          }, indent=2) + '\n')
+          Path(os.environ['API_ENV_FILE']).write_text(json.dumps(api_env_vars, indent=2) + '\n')
+          Path(os.environ['API_SECRETS_FILE']).write_text(json.dumps(api_secrets, indent=2) + '\n')
+          Path(os.environ['PORTAL_ENV_FILE']).write_text(json.dumps(portal_env_vars, indent=2) + '\n')
+          Path(os.environ['PORTAL_SECRETS_FILE']).write_text(json.dumps(portal_secrets, indent=2) + '\n')
           PY
 
-      - name: Deploy container apps
+      - name: Update API container app image
         run: |
-          az deployment group create \
+          # Update the existing Container App in place so ingress settings like custom domains stay intact.
+          az containerapp update \
+            --name "$API_APP_NAME" \
             --resource-group "$RESOURCE_GROUP" \
-            --name "staging-app-${GITHUB_RUN_ID}" \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/bicep/main.parameters.example.json \
-            --parameters @infrastructure/bicep/.generated-staging-app.parameters.json \
-            --parameters location="$LOCATION" environmentName="$ENVIRONMENT_NAME" deployContainerApps=true useMockApi=false usePrivateEndpoints=false apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+            --image "$API_IMAGE"
 
-      - name: Read deployment outputs
+      - name: Update portal container app image
+        run: |
+          # Update the existing Container App in place so ingress settings like custom domains stay intact.
+          az containerapp update \
+            --name "$PORTAL_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$PORTAL_IMAGE"
+
+      - name: Provision API secrets
+        shell: bash
+        env:
+          APP_NAME: ${{ env.API_APP_NAME }}
+          SECRETS_FILE: infrastructure/env/.generated-staging-api.secrets.json
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+
+          secret_entries = json.loads(Path(os.environ['SECRETS_FILE']).read_text())
+          if not secret_entries:
+              raise SystemExit(0)
+
+          subprocess.run([
+              'az', 'containerapp', 'secret', 'set',
+              '--name', os.environ['APP_NAME'],
+              '--resource-group', os.environ['RESOURCE_GROUP'],
+              '--secrets',
+              *[f"{item['name']}={item['value']}" for item in secret_entries],
+          ], check=True)
+          PY
+
+      - name: Configure API environment
+        shell: bash
+        env:
+          APP_NAME: ${{ env.API_APP_NAME }}
+          ENV_FILE: infrastructure/env/.generated-staging-api.env.json
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+
+          env_entries = json.loads(Path(os.environ['ENV_FILE']).read_text())
+          subprocess.run([
+              'az', 'containerapp', 'update',
+              '--name', os.environ['APP_NAME'],
+              '--resource-group', os.environ['RESOURCE_GROUP'],
+              '--set-env-vars',
+              *[f"{item['name']}={item['value']}" for item in env_entries],
+          ], check=True)
+          PY
+
+      - name: Provision portal secrets
+        shell: bash
+        env:
+          APP_NAME: ${{ env.PORTAL_APP_NAME }}
+          SECRETS_FILE: infrastructure/env/.generated-staging-portal.secrets.json
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+
+          secret_entries = json.loads(Path(os.environ['SECRETS_FILE']).read_text())
+          if not secret_entries:
+              raise SystemExit(0)
+
+          subprocess.run([
+              'az', 'containerapp', 'secret', 'set',
+              '--name', os.environ['APP_NAME'],
+              '--resource-group', os.environ['RESOURCE_GROUP'],
+              '--secrets',
+              *[f"{item['name']}={item['value']}" for item in secret_entries],
+          ], check=True)
+          PY
+
+      - name: Configure portal environment
+        shell: bash
+        env:
+          APP_NAME: ${{ env.PORTAL_APP_NAME }}
+          ENV_FILE: infrastructure/env/.generated-staging-portal.env.json
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+
+          env_entries = json.loads(Path(os.environ['ENV_FILE']).read_text())
+          subprocess.run([
+              'az', 'containerapp', 'update',
+              '--name', os.environ['APP_NAME'],
+              '--resource-group', os.environ['RESOURCE_GROUP'],
+              '--set-env-vars',
+              *[f"{item['name']}={item['value']}" for item in env_entries],
+          ], check=True)
+          PY
+
+      - name: Read container app endpoints
         id: deployment
         shell: bash
         env:
-          DEPLOYMENT_NAME: staging-app-${{ github.run_id }}
           PORTAL_PUBLIC_URL: ${{ vars.PORTAL_PUBLIC_URL }}
         run: |
-          API_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.apiUrl.value -o tsv)
-          ACA_PORTAL_URL=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name "$DEPLOYMENT_NAME" --query properties.outputs.portalUrl.value -o tsv)
+          API_FQDN=$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$API_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)
+          PORTAL_FQDN=$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$PORTAL_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)
+          API_URL="https://${API_FQDN}"
+          ACA_PORTAL_URL="https://${PORTAL_FQDN}"
           PORTAL_PUBLIC_URL="${PORTAL_PUBLIC_URL%/}"
           PORTAL_URL="${PORTAL_PUBLIC_URL:-$ACA_PORTAL_URL}"
 
@@ -291,6 +404,11 @@ jobs:
             check_health "Portal ACA" "$ACA_PORTAL_URL"
           fi
 
-      - name: Clean generated deployment parameters
+      - name: Clean generated deployment config
         if: always()
-        run: rm -f infrastructure/bicep/.generated-staging-app.parameters.json
+        run: |
+          rm -f \
+            infrastructure/env/.generated-staging-api.env.json \
+            infrastructure/env/.generated-staging-api.secrets.json \
+            infrastructure/env/.generated-staging-portal.env.json \
+            infrastructure/env/.generated-staging-portal.secrets.json

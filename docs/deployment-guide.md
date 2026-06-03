@@ -10,16 +10,22 @@ This runbook covers the staging deployment path introduced for issue #5. The cur
 
 ## GitHub Actions deployment
 1. Push the branch with the infrastructure changes.
-2. Trigger `Deploy staging` from the Actions tab or run:
+2. Trigger the infrastructure bootstrap workflow from the Actions tab or run:
    ```bash
-   gh workflow run deploy-staging.yml \
+   gh workflow run deploy-infra-staging.yml \
      -f resourceGroup=rg-fastsaas-staging \
      -f location=eastus \
      -f environmentName=staging
    ```
-3. The workflow bootstraps ACR, PostgreSQL, Redis, and the Container Apps environment.
-4. The workflow builds and pushes `fastsaas-api:<sha>` and `fastsaas-portal:<sha>`.
-5. The workflow redeploys the Bicep template with the new image tags and verifies `https://<app>/health` for both services.
+3. Trigger the application workflow:
+   ```bash
+   gh workflow run deploy-app-staging.yml \
+     -f resourceGroup=rg-fastsaas-staging \
+     -f location=eastus \
+     -f environmentName=staging
+   ```
+4. The application workflow builds and pushes `fastsaas-api:<sha>` and `fastsaas-portal:<sha>`.
+5. The application workflow updates the existing Container Apps in place with the new image tags, reapplies runtime config, and verifies `https://<app>/health` for both services.
 
 ## Manual deployment
 1. Create or confirm the resource group:
@@ -49,28 +55,34 @@ This runbook covers the staging deployment path introduced for issue #5. The cur
    docker build --file packages/portal/Dockerfile --target runtime --build-arg SERVICE_NAME=portal --build-arg SERVICE_PORT=3001 --tag "$ACR_LOGIN_SERVER/fastsaas-portal:$IMAGE_TAG" .
    docker push "$ACR_LOGIN_SERVER/fastsaas-portal:$IMAGE_TAG"
    ```
-5. Deploy the container apps with the chosen tag:
+5. Update the existing container apps with the chosen tag:
    ```bash
-   az deployment group create \
+   ACR_LOGIN_SERVER=$(az acr show --resource-group rg-fastsaas-staging --name "$ACR_NAME" --query loginServer -o tsv)
+
+   az containerapp update \
      --resource-group rg-fastsaas-staging \
-     --name staging-release \
-     --template-file infrastructure/bicep/main.bicep \
-     --parameters @infrastructure/bicep/main.parameters.example.json \
-     --parameters location=eastus environmentName=staging deployContainerApps=true apiImageTag="$IMAGE_TAG" portalImageTag="$IMAGE_TAG" postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD"
+     --name staging-api \
+     --image "$ACR_LOGIN_SERVER/fastsaas-api:$IMAGE_TAG"
+
+   az containerapp update \
+     --resource-group rg-fastsaas-staging \
+     --name staging-portal \
+     --image "$ACR_LOGIN_SERVER/fastsaas-portal:$IMAGE_TAG"
    ```
 
 ## Verification
-- Read deployment outputs:
+- Read the active Container App endpoints:
   ```bash
-  az deployment group show --resource-group rg-fastsaas-staging --name staging-release --query properties.outputs
+  az containerapp show --resource-group rg-fastsaas-staging --name staging-api --query properties.configuration.ingress.fqdn -o tsv
+  az containerapp show --resource-group rg-fastsaas-staging --name staging-portal --query properties.configuration.ingress.fqdn -o tsv
   ```
 - Verify the API health endpoint:
   ```bash
-  curl --fail --show-error --silent "$(az deployment group show --resource-group rg-fastsaas-staging --name staging-release --query properties.outputs.apiUrl.value -o tsv)/health"
+  curl --fail --show-error --silent "https://$(az containerapp show --resource-group rg-fastsaas-staging --name staging-api --query properties.configuration.ingress.fqdn -o tsv)/health"
   ```
 - Verify the portal health endpoint:
   ```bash
-  curl --fail --show-error --silent "$(az deployment group show --resource-group rg-fastsaas-staging --name staging-release --query properties.outputs.portalUrl.value -o tsv)/health"
+  curl --fail --show-error --silent "https://$(az containerapp show --resource-group rg-fastsaas-staging --name staging-portal --query properties.configuration.ingress.fqdn -o tsv)/health"
   ```
 - Confirm the local development stack renders the placeholders:
   ```bash
