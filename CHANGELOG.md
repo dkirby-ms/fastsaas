@@ -1,3 +1,9 @@
+## [0.16.2](https://github.com/dkirby-ms/fastsaas/compare/v0.16.1...v0.16.2) (2026-06-03)
+
+### Bug Fixes
+
+* atomic container app update — image+env in single call ([0775015](https://github.com/dkirby-ms/fastsaas/commit/07750155f782bb28a160d6780376ffbbdd25db77))
+
 ## [0.16.1](https://github.com/dkirby-ms/fastsaas/compare/v0.16.0...v0.16.1) (2026-06-03)
 
 ### Bug Fixes
