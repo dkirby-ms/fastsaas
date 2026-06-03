@@ -1,3 +1,9 @@
+## [0.16.3](https://github.com/dkirby-ms/fastsaas/compare/v0.16.2...v0.16.3) (2026-06-03)
+
+### Bug Fixes
+
+* **portal:** remove mock data for unsubscribed users, show subscribe CTA ([9172f1c](https://github.com/dkirby-ms/fastsaas/commit/9172f1c6dda7a8eb87765ec2abbc01a0719d6dc1))
+
 ## [0.16.2](https://github.com/dkirby-ms/fastsaas/compare/v0.16.1...v0.16.2) (2026-06-03)
 
 ### Bug Fixes
