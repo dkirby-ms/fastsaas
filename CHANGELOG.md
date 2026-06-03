@@ -1,3 +1,9 @@
+## [0.17.3](https://github.com/dkirby-ms/fastsaas/compare/v0.17.2...v0.17.3) (2026-06-03)
+
+### Bug Fixes
+
+* **api:** fix flaky audit-logging test teardown ([de8b3ba](https://github.com/dkirby-ms/fastsaas/commit/de8b3ba1775df1effecbc6787d8cef93fab4d075))
+
 ## [0.17.2](https://github.com/dkirby-ms/fastsaas/compare/v0.17.1...v0.17.2) (2026-06-03)
 
 ### Bug Fixes

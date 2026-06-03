@@ -1,7 +1,7 @@
 {
   "name": "fastsaas",
   "private": true,
-  "version": "0.17.2",
+  "version": "0.17.3",
   "packageManager": "npm@10.9.2",
   "workspaces": [
     "packages/*"
