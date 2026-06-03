@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { SettingsData } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
@@ -10,6 +11,8 @@ import { portalApi } from '@/lib/api-client';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
 const emptySettings: SettingsData = { displayName: '', email: '', company: '', timezone: 'America/Chicago', notificationsEnabled: true };
+const profileFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:bg-slate-800/70 dark:disabled:text-slate-400';
+const preferenceFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
 export function SettingsClient() {
   const queryClient = useQueryClient();
@@ -60,17 +63,17 @@ export function SettingsClient() {
         <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Profile</h2>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="displayName">Display name</label><input id="displayName" value={formState.displayName} onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="email">Billing email</label><input id="email" type="email" value={formState.email} onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="company">Company</label><input id="company" value={formState.company} onChange={(event) => setFormState((current) => ({ ...current, company: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
+            <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="displayName">Display name</label><input id="displayName" value={formState.displayName} onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))} className={profileFieldClassName} required /></div>
+            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="email">Billing email</label><input id="email" type="email" value={formState.email} onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))} className={profileFieldClassName} required /></div>
+            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="company">Company</label><input id="company" value={formState.company} onChange={(event) => setFormState((current) => ({ ...current, company: event.target.value }))} className={profileFieldClassName} required /></div>
           </div>
         </section>
 
         <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
           <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Preferences</h2>
           <div className="mt-6 space-y-5">
-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="timezone">Timezone</label><select id="timezone" value={formState.timezone} onChange={(event) => setFormState((current) => ({ ...current, timezone: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="America/Chicago">America/Chicago</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="Asia/Singapore">Asia/Singapore</option></select></div>
-            <label className="flex items-start gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4 text-sm text-slate-600 dark:text-slate-400" htmlFor="notificationsEnabled"><input id="notificationsEnabled" type="checkbox" checked={formState.notificationsEnabled} onChange={(event) => setFormState((current) => ({ ...current, notificationsEnabled: event.target.checked }))} className="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500" /><span><span className="block font-medium text-slate-900 dark:text-slate-100">Billing and renewal notifications</span>Keep email reminders enabled for renewals, seat changes, and payment issues.</span></label>
+            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="timezone">Timezone</label><select id="timezone" value={formState.timezone} onChange={(event) => setFormState((current) => ({ ...current, timezone: event.target.value }))} className={preferenceFieldClassName}><option value="America/Chicago">America/Chicago</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="Asia/Singapore">Asia/Singapore</option></select></div>
+            <label className={clsx('flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-400')} htmlFor="notificationsEnabled"><input id="notificationsEnabled" type="checkbox" checked={formState.notificationsEnabled} onChange={(event) => setFormState((current) => ({ ...current, notificationsEnabled: event.target.checked }))} className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600" /><span><span className="block font-medium text-slate-900 dark:text-slate-100">Billing and renewal notifications</span>Keep email reminders enabled for renewals, seat changes, and payment issues.</span></label>
           </div>
           <button type="submit" disabled={updateSettingsMutation.isPending} className="mt-6 rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">{updateSettingsMutation.isPending ? 'Saving…' : 'Save settings'}</button>
         </section>
