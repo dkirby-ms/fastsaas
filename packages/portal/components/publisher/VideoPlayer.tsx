@@ -18,8 +18,8 @@ export function VideoPlayer({ trailer }: VideoPlayerProps) {
   const duration = formatDuration(trailer.duration);
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-panel">
-      <div className="aspect-video bg-slate-950">
+    <article className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-panel">
+      <div className="aspect-video bg-slate-950 dark:bg-slate-900">
         <video className="h-full w-full" controls preload="metadata" poster={trailer.thumbnailUrl}>
           <source src={trailer.url} />
           Your browser does not support embedded video playback.
@@ -27,11 +27,11 @@ export function VideoPlayer({ trailer }: VideoPlayerProps) {
       </div>
       <div className="space-y-3 p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-slate-950">{trailer.resourceName}</h3>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{trailer.trailerType}</span>
-          {duration ? <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">{duration}</span> : null}
+          <h3 className="text-base font-semibold text-slate-950 dark:text-slate-50">{trailer.resourceName}</h3>
+          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 dark:text-slate-400">{trailer.trailerType}</span>
+          {duration ? <span className="rounded-full bg-brand-50 dark:bg-brand-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700 dark:text-brand-300">{duration}</span> : null}
         </div>
-        <a href={trailer.url} target="_blank" rel="noreferrer" className="inline-flex text-sm font-semibold text-brand-700 transition hover:text-brand-800">
+        <a href={trailer.url} target="_blank" rel="noreferrer" className="inline-flex text-sm font-semibold text-brand-700 dark:text-brand-300 transition hover:text-brand-800 dark:hover:text-brand-200">
           Open trailer in a new tab
         </a>
       </div>

@@ -58,7 +58,7 @@ export function AuthForm({ callbackUrl = '/dashboard', autoSignIn = false }: { c
       >
         {isSubmitting ? 'Redirecting…' : 'Continue with Microsoft Entra'}
       </button>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         You will be redirected to your Microsoft Entra sign-in page and returned here with an access token for the FastSaaS API.
       </p>
     </div>
