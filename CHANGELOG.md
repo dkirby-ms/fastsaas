@@ -1,3 +1,9 @@
+## [0.14.3](https://github.com/dkirby-ms/fastsaas/compare/v0.14.2...v0.14.3) (2026-06-03)
+
+### Bug Fixes
+
+* qualify ambiguous id column in metering claimDueBatch query ([ca9015f](https://github.com/dkirby-ms/fastsaas/commit/ca9015f5db1bb3c4485835163aeeac96cb193234))
+
 ## [0.14.2](https://github.com/dkirby-ms/fastsaas/compare/v0.14.1...v0.14.2) (2026-06-03)
 
 ### Bug Fixes
