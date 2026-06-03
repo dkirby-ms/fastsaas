@@ -1,3 +1,9 @@
+## [0.16.0](https://github.com/dkirby-ms/fastsaas/compare/v0.15.0...v0.16.0) (2026-06-03)
+
+### Features
+
+* dark mode toggle + NEXTAUTH_URL custom domain fix ([#125](https://github.com/dkirby-ms/fastsaas/issues/125)) ([7d3b809](https://github.com/dkirby-ms/fastsaas/commit/7d3b809dc8752299cfa44e63de1a4af3b11be6ce)), closes [#84](https://github.com/dkirby-ms/fastsaas/issues/84) [#84](https://github.com/dkirby-ms/fastsaas/issues/84)
+
 ## [0.15.0](https://github.com/dkirby-ms/fastsaas/compare/v0.14.4...v0.15.0) (2026-06-03)
 
 ### Features
