@@ -1420,3 +1420,30 @@ Keep `/publisher/partner-center/*` for connection lifecycle. Move offer operatio
 - **What:** All `.squad/` log/orchestration filenames must use hyphens instead of colons in timestamps (e.g., `2026-05-31T21-35-32.766Z` not `2026-05-31T21:35:32.766Z`). Colons are illegal on NTFS/Windows.
 - **Why:** User reported `git pull` failures on Windows due to invalid paths.
 
+### PR #124 Review: Strict Type Sharing in Monorepo
+- **Date:** 2026-06-03T15:06:44.720+00:00
+- **Status:** Active
+- **Decision:** All domain and marketplace types must be defined exactly once in `@fastsaas/shared`. Frontend (FIDO) must never duplicate types that the backend (EECOM) has exported to `shared`.
+- **Rationale:** Prevents drift between backend API implementations and portal consumption. A clean `npm run typecheck` is not sufficient if the workspaces are compiling against structural duplicates rather than a single source of truth.
+
+### FIDO Dark Mode Decision
+- **Date:** 2026-06-03T15:28:19.397+00:00
+- **Owner:** FIDO
+- **Related Issue:** #84
+- **Context:** The portal uses Tailwind v4 CSS-first theming (`@import "tailwindcss"` + `@theme`) and both customer and publisher experiences share the same shell in `packages/portal/`.
+- **Decision:** Implement dark mode with a class-based `<html class="dark">` approach, using `@custom-variant dark` in `packages/portal/app/globals.css`, an inline anti-FOUC theme bootstrap script in `packages/portal/app/layout.tsx`, and a shared `ThemeProvider` / `ThemeToggle` flow that persists the `fastsaas-theme` preference in localStorage while defaulting to `prefers-color-scheme`.
+- **Why:** This keeps Tailwind v4 configuration CSS-native, prevents first-paint theme flashes, and ensures the shared shell plus both portal surfaces stay in sync without duplicating theme logic across customer and publisher routes.
+- **Files:** `packages/portal/app/globals.css`, `packages/portal/app/layout.tsx`, `packages/portal/components/providers.tsx`, `packages/portal/components/theme-provider.tsx`, `packages/portal/components/theme-toggle.tsx`, `packages/portal/components/portal-shell.tsx`, `packages/portal/components/sidebar-nav.tsx`
+
+### GNC Decision: NEXTAUTH_URL custom domain override
+- **Date:** 2026-06-03T15:45:53.746+00:00
+- **Requester:** dkirby-ms
+- **Scope:** `.github/workflows/deploy-app-staging.yml`
+- **Decision:** Use a non-secret GitHub Actions variable named `PORTAL_PUBLIC_URL` to override the portal's public-facing URL during staging deployment. When the variable is unset, the workflow remains backward compatible by falling back to the Azure Container Apps generated FQDN.
+- **Why:** `NEXTAUTH_URL` must match the host customers actually use so Auth.js PKCE cookies are scoped to the same domain used for the Marketplace landing flow. The public URL is not sensitive, so a repository/environment variable is simpler than introducing a secret.
+- **Implementation Notes:**
+  - Resolve `PORTAL_URL` from `PORTAL_PUBLIC_URL` first, then ACA FQDN fallback.
+  - Trim a trailing slash before writing `NEXTAUTH_URL`.
+  - Health checks target the resolved portal URL and also probe the ACA hostname when the override is active.
+  - Entra redirect URIs must still be updated manually to the same public URL outside Bicep.
+
