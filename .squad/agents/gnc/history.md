@@ -153,3 +153,7 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 - Product imports that begin with a marketplace external ID must resolve the durable product ID through `GET /rp/product-ingestion/product?externalId=...` before calling `resource-tree/<durableId>`; tests should assert the two-step contract explicitly.
 ### 2026-06-02T13:32:38.823+00:00
 - Staging API secret provisioning in `.github/workflows/deploy-app-staging.yml` must stay mirrored with `infrastructure/env/staging-api.env`; new runtime secrets require both `az containerapp secret set` entries and matching `secretref:` env mappings for Container Apps to resolve them.
+### 2026-06-03T00:35:55.147+00:00
+- `deploy-app-staging.yml` must render `infrastructure/env/staging-api.env` and `infrastructure/env/staging-portal.env` before the Bicep deployment so Container Apps are created with all startup env vars and secret refs already present.
+- Runtime secret values for staging Container Apps should flow into `infrastructure/bicep/main.bicep` via secure object parameters plus non-secret secret-ref metadata, avoiding post-deploy `az containerapp secret set` / `az containerapp update` race windows while keeping deployment history masked.
+- Portal staging must set `USE_MOCK_API=false` in `infrastructure/env/staging-portal.env`; `packages/portal/lib/api-client.ts` and `packages/portal/lib/publisher-admin-api.ts` otherwise fall back to mock mode when the flag is missing or not equal to `false`.
