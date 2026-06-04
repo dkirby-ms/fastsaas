@@ -2,6 +2,7 @@ import { Migrator, type Kysely, type Migration, type MigrationProvider, type Mig
 import type { Logger } from 'pino';
 
 import type { Database } from './database';
+import * as coreTablesMigration from './migrations/20260530T000000_core_tables';
 import * as auditLogsMigration from './migrations/20260531T213532_audit_logs';
 import * as tenantRlsMigration from './migrations/20260531T213532_tenant_rls';
 import * as publisherPlansMigration from './migrations/20260601T004305_publisher_plans';
@@ -11,6 +12,7 @@ import * as marketplaceCatalogMigration from './migrations/20260602T120322_marke
 import * as marketplaceJobsMigration from './migrations/20260602T120322_marketplace_jobs';
 
 const MIGRATIONS: Record<string, Migration> = {
+  '20260530T000000_core_tables': coreTablesMigration,
   '20260531T213532_audit_logs': auditLogsMigration,
   '20260531T213532_tenant_rls': tenantRlsMigration,
   '20260601T004305_publisher_plans': publisherPlansMigration,
