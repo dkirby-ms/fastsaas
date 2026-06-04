@@ -82,9 +82,12 @@ async function createToken(options?: { issuer?: string; tenantId?: string }) {
 }
 
 describe('multi-tenant organizations authority', () => {
-  it('accepts access tokens issued by external organization tenants', async () => {
+  it.each([
+    'https://login.microsoftonline.com/550e8400-e29b-41d4-a716-446655440000/v2.0',
+    'https://sts.windows.net/550e8400-e29b-41d4-a716-446655440000/'
+  ])('accepts access tokens issued by external organization tenants for issuer %s', async (issuer) => {
     const tenantId = '550e8400-e29b-41d4-a716-446655440000';
-    const token = await createToken({ tenantId });
+    const token = await createToken({ issuer, tenantId });
     const response = await request(app)
       .get('/v1/auth/context')
       .set('Authorization', `Bearer ${token}`);
