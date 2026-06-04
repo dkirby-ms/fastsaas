@@ -1,10 +1,11 @@
 import type { AuthClaims } from '@fastsaas/shared';
 import type { NextFunction, Response } from 'express';
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from 'jose';
 
 import type { ApiConfig } from '../config';
 import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
+import { logger } from '../lib/logger';
 
 function getBearerToken(authorizationHeader?: string): string {
   if (!authorizationHeader) {
@@ -108,6 +109,84 @@ function buildDevAuthClaims(config: ApiConfig): AuthClaims {
   };
 }
 
+function isJwtClaimError(error: unknown): error is errors.JWTClaimValidationFailed | errors.JWTExpired {
+  return error instanceof errors.JWTClaimValidationFailed || error instanceof errors.JWTExpired;
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('code' in error)) {
+    return undefined;
+  }
+
+  return typeof error.code === 'string' ? error.code : undefined;
+}
+
+function getClaimExpectedValue(claim: string, config: ApiConfig): unknown {
+  switch (claim) {
+    case 'aud':
+      return config.auth.audience;
+    case 'iss':
+      return config.auth.issuer;
+    case 'exp':
+      return 'current time before token expiration';
+    case 'nbf':
+      return 'current time after token not-before';
+    default:
+      return undefined;
+  }
+}
+
+function getClaimActualValue(error: errors.JWTClaimValidationFailed | errors.JWTExpired): unknown {
+  const payload = error.payload as Record<string, unknown>;
+  return payload[error.claim];
+}
+
+function isJwksEndpointUnreachableError(error: unknown): boolean {
+  if (error instanceof errors.JWKSTimeout) {
+    return true;
+  }
+
+  const code = getErrorCode(error);
+  if (code && new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'EHOSTUNREACH']).has(code)) {
+    return true;
+  }
+
+  return Boolean(error && typeof error === 'object' && 'cause' in error && isJwksEndpointUnreachableError(error.cause));
+}
+
+function logTokenVerificationFailure(req: ApiRequest, error: unknown, config: ApiConfig): void {
+  const authLogger = req.log ?? logger;
+  const logContext: Record<string, unknown> = {
+    err: error,
+    errorName: error instanceof Error ? error.name : typeof error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    errorCode: getErrorCode(error),
+    requestId: req.id,
+    correlationId: req.correlationId
+  };
+
+  if (isJwtClaimError(error)) {
+    logContext.failedClaim = error.claim;
+    logContext.claimValidationReason = error.reason;
+    logContext.expectedClaimValue = getClaimExpectedValue(error.claim, config);
+    logContext.actualClaimValue = getClaimActualValue(error);
+  }
+
+  authLogger.warn(logContext, 'Bearer token verification failed');
+}
+
+function toAuthenticationError(error: unknown): AppError {
+  if (error instanceof AppError) {
+    return error;
+  }
+
+  if (isJwksEndpointUnreachableError(error)) {
+    return AppError.unauthorized('Token verification failed — JWKS endpoint unreachable');
+  }
+
+  return AppError.unauthorized('Bearer token is invalid or expired');
+}
+
 export function authenticateRequest(config: ApiConfig) {
   const jwks = config.auth.bypassEnabled ? undefined : createRemoteJWKSet(new URL(config.auth.jwksUri));
 
@@ -134,7 +213,11 @@ export function authenticateRequest(config: ApiConfig) {
       req.auth = payload as AuthClaims;
       next();
     } catch (error) {
-      next(error instanceof AppError ? error : AppError.unauthorized('Bearer token is invalid or expired'));
+      if (!(error instanceof AppError)) {
+        logTokenVerificationFailure(req, error, config);
+      }
+
+      next(toAuthenticationError(error));
     }
   };
 }
