@@ -1,3 +1,9 @@
+## [0.17.10](https://github.com/dkirby-ms/fastsaas/compare/v0.17.9...v0.17.10) (2026-06-04)
+
+### Bug Fixes
+
+* use Azure AD tokens for marketplace fulfillment ([#142](https://github.com/dkirby-ms/fastsaas/issues/142)) ([45f24e1](https://github.com/dkirby-ms/fastsaas/commit/45f24e172bb1467bb2953287e302e317f1d38e83)), closes [#141](https://github.com/dkirby-ms/fastsaas/issues/141) [#141](https://github.com/dkirby-ms/fastsaas/issues/141)
+
 ## [0.17.9](https://github.com/dkirby-ms/fastsaas/compare/v0.17.8...v0.17.9) (2026-06-04)
 
 ### Bug Fixes
