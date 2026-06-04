@@ -97,14 +97,32 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
   async resolveSubscription(marketplaceToken: string, requestId: string, correlationId: string): Promise<FulfillmentResolveResult> {
     const url = new URL('/api/saas/subscriptions/resolve', this.options.baseUrl);
     url.searchParams.set('api-version', this.options.apiVersion);
-    url.searchParams.set('token', marketplaceToken);
 
-    return this.request<FulfillmentResolveResult>(url, {
-      method: 'GET',
+    const response = await this.request<Record<string, unknown>>(url, {
+      method: 'POST',
       action: 'resolve',
       requestId,
-      correlationId
+      correlationId,
+      marketplaceToken
     });
+
+    return {
+      marketplaceSubscriptionId:
+        typeof response.id === 'string'
+          ? response.id
+          : typeof response.marketplaceSubscriptionId === 'string'
+            ? response.marketplaceSubscriptionId
+            : '',
+      planId: typeof response.planId === 'string' ? response.planId : '',
+      quantity: typeof response.quantity === 'number' ? response.quantity : 0,
+      offerId: typeof response.offerId === 'string' ? response.offerId : undefined,
+      purchaserTenantId: typeof response.purchaserTenantId === 'string' ? response.purchaserTenantId : undefined,
+      beneficiaryTenantId: typeof response.beneficiaryTenantId === 'string' ? response.beneficiaryTenantId : undefined,
+      metadata:
+        typeof response.metadata === 'object' && response.metadata !== null
+          ? (response.metadata as Record<string, unknown>)
+          : undefined
+    };
   }
 
   async activateSubscription(
@@ -245,6 +263,7 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
       action: string;
       requestId: string;
       correlationId: string;
+      marketplaceToken?: string;
       body?: Record<string, unknown>;
     }
   ): Promise<T> {
@@ -279,8 +298,9 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'x-request-id': options.requestId,
-        'x-correlation-id': options.correlationId
+        'x-ms-requestid': options.requestId,
+        'x-ms-correlationid': options.correlationId,
+        ...(options.marketplaceToken ? { 'x-ms-marketplace-token': options.marketplaceToken } : {})
       },
       body: options.body ? JSON.stringify(options.body) : undefined
     });
