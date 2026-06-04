@@ -172,3 +172,8 @@ GNC monitoring Phase 1.5 approvals and coordinating release automation unblock. 
 ### 2026-06-03T20:21:01.497+00:00
 - Microsoft Partner Center does not expose a webhook secret configuration, so FastSaaS marketplace webhooks should use only `MARKETPLACE_WEBHOOK_AUTH_MODE=jwt` (default) or `none`; the HMAC header path and `MARKETPLACE_WEBHOOK_SECRET` / `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS` settings are dead code and should stay removed.
 - `packages/api/src/routes/webhooks/marketplace.ts` now documents Microsoft Entra Bearer authentication for webhook ingress, while local/test coverage should focus on JWT validation and `none` mode rather than synthetic HMAC signatures.
+
+### 2026-06-04T13:20:25.015+00:00
+- Supply-chain hardening for GitHub Actions in this repo should pin every remote `uses:` entry in `.github/workflows/*.yml` to a full 40-character commit SHA and keep the human-readable major tag as an inline comment.
+- The canonical action refs currently used by FastSaaS workflows are `actions/checkout` (`v5`), `actions/setup-node` (`v5`), `actions/github-script` (`v8`), and `azure/login` (`v3`).
+- `.github/dependabot.yml` is the key path for keeping pinned GitHub Action SHAs fresh automatically, while `.github/workflows/ci.yml`, `release.yml`, `deploy-app-staging.yml`, and `deploy-infra-staging.yml` remain the highest-impact workflow files for CI/CD and Azure operations.
