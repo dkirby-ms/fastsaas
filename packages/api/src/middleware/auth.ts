@@ -1,6 +1,6 @@
 import type { AuthClaims } from '@fastsaas/shared';
 import type { NextFunction, Response } from 'express';
-import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from 'jose';
+import { createRemoteJWKSet, decodeJwt, errors, jwtVerify, type JWTPayload } from 'jose';
 
 import type { ApiConfig } from '../config';
 import { AppError } from '../errors/app-error';
@@ -144,6 +144,85 @@ function getClaimActualValue(error: errors.JWTClaimValidationFailed | errors.JWT
   return payload[error.claim];
 }
 
+type UnverifiedTokenClaims = Pick<JWTPayload, 'aud' | 'iss' | 'exp' | 'nbf'>;
+
+function getUnverifiedTokenClaims(token?: string): UnverifiedTokenClaims | undefined {
+  if (!token) {
+    return undefined;
+  }
+
+  try {
+    const payload = decodeJwt(token);
+    return {
+      aud: payload.aud,
+      iss: payload.iss,
+      exp: payload.exp,
+      nbf: payload.nbf
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function formatDiagnosticValue(value: unknown): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function buildClaimDiagnosticMessage(claim: string, expected: unknown, actual: unknown): string {
+  switch (claim) {
+    case 'aud':
+      return `Bearer token audience mismatch (expected: ${formatDiagnosticValue(expected)}, got: ${formatDiagnosticValue(actual)})`;
+    case 'iss':
+      return `Bearer token issuer mismatch (expected: ${formatDiagnosticValue(expected)}, got: ${formatDiagnosticValue(actual)})`;
+    case 'exp':
+      return `Bearer token expired (exp: ${formatDiagnosticValue(actual)})`;
+    case 'nbf':
+      return `Bearer token not yet valid (nbf: ${formatDiagnosticValue(actual)})`;
+    default:
+      return `Bearer token claim validation failed for ${claim} (expected: ${formatDiagnosticValue(expected)}, got: ${formatDiagnosticValue(actual)})`;
+  }
+}
+
+function buildTokenVerificationDiagnostics(error: unknown, config: ApiConfig, token?: string): Record<string, unknown> {
+  const diagnostics: Record<string, unknown> = {};
+  const unverifiedTokenClaims = getUnverifiedTokenClaims(token);
+
+  if (isJwtClaimError(error)) {
+    const expectedClaimValue = getClaimExpectedValue(error.claim, config);
+    const actualClaimValue = getClaimActualValue(error)
+      ?? unverifiedTokenClaims?.[error.claim as keyof UnverifiedTokenClaims];
+
+    diagnostics.failedClaim = error.claim;
+    diagnostics.claimValidationReason = error.reason;
+    diagnostics.expectedClaimValue = expectedClaimValue;
+    diagnostics.actualClaimValue = actualClaimValue;
+    diagnostics.diagnosticMessage = buildClaimDiagnosticMessage(error.claim, expectedClaimValue, actualClaimValue);
+  } else if (error instanceof Error) {
+    diagnostics.diagnosticMessage = error.message;
+  }
+
+  if (unverifiedTokenClaims) {
+    diagnostics.unverifiedTokenAudience = unverifiedTokenClaims.aud;
+    diagnostics.unverifiedTokenIssuer = unverifiedTokenClaims.iss;
+    diagnostics.unverifiedTokenExpiresAt = unverifiedTokenClaims.exp;
+    diagnostics.unverifiedTokenNotBefore = unverifiedTokenClaims.nbf;
+  }
+
+  return diagnostics;
+}
+
 function isJwksEndpointUnreachableError(error: unknown): boolean {
   if (error instanceof errors.JWKSTimeout) {
     return true;
@@ -157,7 +236,7 @@ function isJwksEndpointUnreachableError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'cause' in error && isJwksEndpointUnreachableError(error.cause));
 }
 
-function logTokenVerificationFailure(req: ApiRequest, error: unknown, config: ApiConfig): void {
+function logTokenVerificationFailure(req: ApiRequest, error: unknown, config: ApiConfig, token?: string): void {
   const authLogger = req.log ?? logger;
   const logContext: Record<string, unknown> = {
     err: error,
@@ -165,29 +244,25 @@ function logTokenVerificationFailure(req: ApiRequest, error: unknown, config: Ap
     errorMessage: error instanceof Error ? error.message : String(error),
     errorCode: getErrorCode(error),
     requestId: req.id,
-    correlationId: req.correlationId
+    correlationId: req.correlationId,
+    ...buildTokenVerificationDiagnostics(error, config, token)
   };
-
-  if (isJwtClaimError(error)) {
-    logContext.failedClaim = error.claim;
-    logContext.claimValidationReason = error.reason;
-    logContext.expectedClaimValue = getClaimExpectedValue(error.claim, config);
-    logContext.actualClaimValue = getClaimActualValue(error);
-  }
 
   authLogger.warn(logContext, 'Bearer token verification failed');
 }
 
-function toAuthenticationError(error: unknown): AppError {
+function toAuthenticationError(error: unknown, config: ApiConfig, token?: string): AppError {
   if (error instanceof AppError) {
     return error;
   }
 
+  const details = buildTokenVerificationDiagnostics(error, config, token);
+
   if (isJwksEndpointUnreachableError(error)) {
-    return AppError.unauthorized('Token verification failed — JWKS endpoint unreachable');
+    return AppError.unauthorized('Token verification failed — JWKS endpoint unreachable', details);
   }
 
-  return AppError.unauthorized('Bearer token is invalid or expired');
+  return AppError.unauthorized('Bearer token is invalid or expired', details);
 }
 
 export function authenticateRequest(config: ApiConfig) {
@@ -200,8 +275,10 @@ export function authenticateRequest(config: ApiConfig) {
       return;
     }
 
+    let token: string | undefined;
+
     try {
-      const token = getBearerToken(req.header('authorization'));
+      token = getBearerToken(req.header('authorization'));
       const { payload } = await jwtVerify(token, jwks!, {
         audience: config.auth.audience,
         algorithms: ['RS256']
@@ -217,10 +294,10 @@ export function authenticateRequest(config: ApiConfig) {
       next();
     } catch (error) {
       if (!(error instanceof AppError)) {
-        logTokenVerificationFailure(req, error, config);
+        logTokenVerificationFailure(req, error, config, token);
       }
 
-      next(toAuthenticationError(error));
+      next(toAuthenticationError(error, config, token));
     }
   };
 }

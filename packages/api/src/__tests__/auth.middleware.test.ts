@@ -134,6 +134,16 @@ describe('authenticateRequest', () => {
     const error = next.mock.calls[0]?.[0];
     expect(error).toBeInstanceOf(AppError);
     expect((error as AppError).message).toBe('Bearer token is invalid or expired');
+    expect((error as AppError).details).toEqual(
+      expect.objectContaining({
+        failedClaim: 'aud',
+        expectedClaimValue: config.auth.audience,
+        actualClaimValue: 'api://wrong-audience',
+        diagnosticMessage: `Bearer token audience mismatch (expected: ${JSON.stringify(config.auth.audience)}, got: api://wrong-audience)`,
+        unverifiedTokenAudience: 'api://wrong-audience',
+        unverifiedTokenIssuer: config.auth.issuer
+      })
+    );
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         errorName: 'JWTClaimValidationFailed',
@@ -141,6 +151,9 @@ describe('authenticateRequest', () => {
         failedClaim: 'aud',
         expectedClaimValue: config.auth.audience,
         actualClaimValue: 'api://wrong-audience',
+        unverifiedTokenAudience: 'api://wrong-audience',
+        unverifiedTokenIssuer: config.auth.issuer,
+        unverifiedTokenExpiresAt: expect.any(Number),
         requestId: 'req-123',
         correlationId: 'corr-123'
       }),
