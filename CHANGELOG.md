@@ -1,3 +1,10 @@
+## [0.17.7](https://github.com/dkirby-ms/fastsaas/compare/v0.17.6...v0.17.7) (2026-06-04)
+
+### Bug Fixes
+
+* **api:** align core tables migration types with test expectations ([8728707](https://github.com/dkirby-ms/fastsaas/commit/8728707291415daa2223838c02b587dc8303552b))
+* **api:** register core_tables migration in static migrator ([e5a8d73](https://github.com/dkirby-ms/fastsaas/commit/e5a8d73e8886e0a0688d1cee408b7ac21697d1cb))
+
 ## [0.17.6](https://github.com/dkirby-ms/fastsaas/compare/v0.17.5...v0.17.6) (2026-06-04)
 
 ### Bug Fixes
