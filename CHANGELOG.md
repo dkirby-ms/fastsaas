@@ -1,3 +1,9 @@
+## [0.17.6](https://github.com/dkirby-ms/fastsaas/compare/v0.17.5...v0.17.6) (2026-06-04)
+
+### Bug Fixes
+
+* **api:** add initial core tables migration ([1e459d4](https://github.com/dkirby-ms/fastsaas/commit/1e459d40a241ad41217dbf8213a1a192667e3185))
+
 ## [0.17.5](https://github.com/dkirby-ms/fastsaas/compare/v0.17.4...v0.17.5) (2026-06-03)
 
 ### Bug Fixes
