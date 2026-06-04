@@ -1,3 +1,9 @@
+## [0.17.8](https://github.com/dkirby-ms/fastsaas/compare/v0.17.7...v0.17.8) (2026-06-04)
+
+### Bug Fixes
+
+* **api:** rename core_tables migration to sort after existing executed migrations ([4919613](https://github.com/dkirby-ms/fastsaas/commit/491961387ccbc54176241e592cdd540e8814e444))
+
 ## [0.17.7](https://github.com/dkirby-ms/fastsaas/compare/v0.17.6...v0.17.7) (2026-06-04)
 
 ### Bug Fixes
