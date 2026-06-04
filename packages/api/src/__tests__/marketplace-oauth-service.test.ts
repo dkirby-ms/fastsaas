@@ -51,11 +51,11 @@ describe('MarketplaceOAuthService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes cached tokens when they are within the expiry buffer', async () => {
+  it('refreshes cached tokens when they are within the five-minute expiry buffer', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ access_token: 'oauth-token-1', expires_in: 90, token_type: 'Bearer' }), {
+        new Response(JSON.stringify({ access_token: 'oauth-token-1', expires_in: 330, token_type: 'Bearer' }), {
           status: 200,
           headers: { 'content-type': 'application/json' }
         })
@@ -66,7 +66,7 @@ describe('MarketplaceOAuthService', () => {
           headers: { 'content-type': 'application/json' }
         })
       );
-    const nowValues = [new Date('2026-06-02T16:16:43Z'), new Date('2026-06-02T16:17:20Z')];
+    const nowValues = [new Date('2026-06-02T16:16:43Z'), new Date('2026-06-02T16:17:14Z')];
 
     const service = new MarketplaceOAuthService({
       logger: createLogger(),

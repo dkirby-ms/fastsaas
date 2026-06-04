@@ -94,7 +94,7 @@ function resolveMarketplaceSecrets(env: NodeJS.ProcessEnv, nodeEnv: string): {
   clientSecret: string;
 } {
   // MARKETPLACE_CLIENT_SECRET is shared across marketplace integrations.
-  // Product Ingestion uses it as the OAuth client_secret while fulfillment keeps its direct bearer behavior.
+  // Fulfillment and Product Ingestion both exchange it for Azure AD access tokens with service-specific scopes.
   const clientSecret = env.MARKETPLACE_CLIENT_SECRET?.trim();
 
   if (isLocalEnvironment(nodeEnv)) {

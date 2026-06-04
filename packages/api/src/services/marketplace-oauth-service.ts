@@ -4,7 +4,7 @@ import type { ApiConfig } from '../config';
 import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
 import { PartnerCenterAuthError, type PartnerCenterAuthProvider, type PartnerCenterValidationResult } from './partner-center-auth';
 
-const TOKEN_REFRESH_BUFFER_MS = 60_000;
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60_000;
 
 interface TokenResponseShape {
   access_token?: unknown;
