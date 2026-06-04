@@ -2,6 +2,8 @@ import { URL } from 'node:url';
 
 import type { Logger } from 'pino';
 
+import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
+
 export interface FulfillmentResolveResult {
   marketplaceSubscriptionId: string;
   planId: string;
@@ -54,11 +56,24 @@ export class MarketplaceFulfillmentError extends Error {
   }
 }
 
+export const MARKETPLACE_FULFILLMENT_TOKEN_SCOPE = '20e940b3-4c77-4b0b-9a53-9e16a1b010a7/.default';
+
 interface MarketplaceHttpClientOptions {
   baseUrl: string;
   apiVersion: string;
-  clientSecret: string;
+  tokenProvider: MarketplaceBearerTokenProvider;
   logger: Logger;
+  fetchImpl?: typeof fetch;
+}
+
+function extractErrorStatusCode(error: unknown): number | undefined {
+  return typeof error === 'object' && error !== null && 'statusCode' in error && typeof error.statusCode === 'number'
+    ? error.statusCode
+    : undefined;
+}
+
+function extractErrorResponseBody(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'responseBody' in error ? error.responseBody : error;
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
@@ -73,7 +88,11 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 }
 
 export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentClient {
-  constructor(private readonly options: MarketplaceHttpClientOptions) {}
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(private readonly options: MarketplaceHttpClientOptions) {
+    this.fetchImpl = options.fetchImpl ?? fetch;
+  }
 
   async resolveSubscription(marketplaceToken: string, requestId: string, correlationId: string): Promise<FulfillmentResolveResult> {
     const url = new URL('/api/saas/subscriptions/resolve', this.options.baseUrl);
@@ -229,10 +248,36 @@ export class MarketplaceFulfillmentHttpClient implements MarketplaceFulfillmentC
       body?: Record<string, unknown>;
     }
   ): Promise<T> {
-    const response = await fetch(url, {
+    let accessToken: string;
+
+    try {
+      accessToken = await this.options.tokenProvider.getAccessToken();
+    } catch (error) {
+      const statusCode = extractErrorStatusCode(error) ?? 503;
+      const responseBody = extractErrorResponseBody(error);
+      this.options.logger.warn(
+        {
+          action: options.action,
+          correlationId: options.correlationId,
+          requestId: options.requestId,
+          statusCode,
+          responseBody
+        },
+        'Marketplace fulfillment token acquisition failed'
+      );
+
+      throw new MarketplaceFulfillmentError(
+        `Marketplace fulfillment ${options.action} request could not acquire an Azure AD access token`,
+        `${options.action}:acquire-access-token`,
+        statusCode,
+        responseBody
+      );
+    }
+
+    const response = await this.fetchImpl(url, {
       method: options.method,
       headers: {
-        Authorization: `Bearer ${this.options.clientSecret}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'x-request-id': options.requestId,
         'x-correlation-id': options.correlationId

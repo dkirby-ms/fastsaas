@@ -9,7 +9,7 @@ import { createDatabase, createPool, type Database } from './db/database';
 import { runWithSystemExecutionContext } from './db/execution-context';
 import { migrateToLatest } from './db/migrator';
 import { PgPoolSqlClient } from './db/sql-client-adapter';
-import { MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
+import { MARKETPLACE_FULFILLMENT_TOKEN_SCOPE, MarketplaceFulfillmentHttpClient } from './lib/marketplace-fulfillment';
 import { logger } from './lib/logger';
 import { SystemClock } from './metering/clock';
 import { createMeteringRuntime } from './metering/runtime';
@@ -130,10 +130,17 @@ async function bootstrap(): Promise<void> {
   const partnerCenterRepository = createPartnerCenterRepository(database);
   const marketplaceJobRepository = createMarketplaceJobRepository(database);
   const productCatalogRepository = createProductCatalogRepository(database);
+  const marketplaceFulfillmentOAuthService = new MarketplaceOAuthService({
+    logger: logger.child({ component: 'marketplace-fulfillment-oauth' }),
+    marketplace: {
+      ...config.marketplace,
+      tokenScope: MARKETPLACE_FULFILLMENT_TOKEN_SCOPE
+    }
+  });
   const fulfillmentClient = new MarketplaceFulfillmentHttpClient({
     baseUrl: config.marketplace.baseUrl,
     apiVersion: config.marketplace.apiVersion,
-    clientSecret: config.marketplace.clientSecret,
+    tokenProvider: marketplaceFulfillmentOAuthService,
     logger
   });
   const tenantMemberService = new TenantMemberService(tenantMemberRepository, logger.child({ component: 'tenant-members' }));
