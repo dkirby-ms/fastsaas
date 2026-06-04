@@ -1,3 +1,9 @@
+## [0.17.9](https://github.com/dkirby-ms/fastsaas/compare/v0.17.8...v0.17.9) (2026-06-04)
+
+### Bug Fixes
+
+* link /no-subscription page directly to marketplace offer ([#133](https://github.com/dkirby-ms/fastsaas/issues/133)) ([#135](https://github.com/dkirby-ms/fastsaas/issues/135)) ([929995a](https://github.com/dkirby-ms/fastsaas/commit/929995a381266cea1d53438e4109bf5537d2ea9b))
+
 ## [0.17.8](https://github.com/dkirby-ms/fastsaas/compare/v0.17.7...v0.17.8) (2026-06-04)
 
 ### Bug Fixes
