@@ -423,7 +423,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
    *       403:
    *         description: Token missing required scope or tenant management permission
    *       409:
-   *         description: A subscription already exists for the marketplace purchase or the requested state conflicts
+   *         description: The requested state conflicts with the current subscription lifecycle
    *       503:
    *         description: Marketplace fulfillment dependency is unavailable
    */

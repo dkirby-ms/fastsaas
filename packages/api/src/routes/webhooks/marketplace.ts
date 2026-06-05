@@ -1,4 +1,4 @@
-import type { ApiResponse, MarketplaceWebhookPayload, Subscription } from '@fastsaas/shared';
+import type { ApiResponse, MarketplaceWebhookIdentity, MarketplaceWebhookPayload, Subscription } from '@fastsaas/shared';
 import express, { Router, type Response } from 'express';
 
 import type { ApiConfig } from '../../config';
@@ -56,6 +56,22 @@ function readOptionalNumber(value: unknown, fieldName: string): number | undefin
   return value;
 }
 
+function readOptionalIdentity(value: unknown, fieldName: string): MarketplaceWebhookIdentity | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw AppError.badRequest(`${fieldName} must be an object when provided`);
+  }
+
+  return {
+    emailId: readOptionalString(value.emailId, `${fieldName}.emailId`),
+    objectId: readOptionalString(value.objectId, `${fieldName}.objectId`),
+    tenantId: readOptionalString(value.tenantId, `${fieldName}.tenantId`)
+  };
+}
+
 function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
   let parsed: unknown;
 
@@ -78,7 +94,8 @@ function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
   }
 
   const subscription = isRecord(candidate.subscription) ? candidate.subscription : undefined;
-  const beneficiary = subscription && isRecord(subscription.beneficiary) ? subscription.beneficiary : undefined;
+  const beneficiary = readOptionalIdentity(candidate.beneficiary ?? subscription?.beneficiary, 'beneficiary');
+  const purchaser = readOptionalIdentity(candidate.purchaser ?? subscription?.purchaser, 'purchaser');
   const details = candidate.details === undefined ? undefined : isRecord(candidate.details) ? candidate.details : null;
   if (details === null) {
     throw AppError.badRequest('details must be an object when provided');
@@ -88,8 +105,11 @@ function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
     action,
     marketplaceSubscriptionId: readString(candidate.marketplaceSubscriptionId ?? candidate.subscriptionId, 'marketplaceSubscriptionId'),
     operationId: readOptionalString(candidate.operationId ?? candidate.id, 'operationId'),
-    planId: readOptionalString(candidate.planId, 'planId'),
-    quantity: readOptionalNumber(candidate.quantity, 'quantity'),
+    offerId: readOptionalString(candidate.offerId ?? subscription?.offerId, 'offerId'),
+    planId: readOptionalString(candidate.planId ?? subscription?.planId, 'planId'),
+    quantity: readOptionalNumber(candidate.quantity ?? subscription?.quantity, 'quantity'),
+    beneficiary,
+    purchaser,
     beneficiaryTenantId: readOptionalString(
       candidate.beneficiaryTenantId ?? candidate.tenantId ?? beneficiary?.tenantId,
       'beneficiaryTenantId'
@@ -155,10 +175,32 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *               id:
    *                 type: string
    *                 description: Marketplace operation identifier. Accepted as an alias of operationId.
+   *               offerId:
+   *                 type: string
    *               planId:
    *                 type: string
    *               quantity:
    *                 type: number
+   *               beneficiary:
+   *                 type: object
+   *                 additionalProperties: false
+   *                 properties:
+   *                   emailId:
+   *                     type: string
+   *                   objectId:
+   *                     type: string
+   *                   tenantId:
+   *                     type: string
+   *               purchaser:
+   *                 type: object
+   *                 additionalProperties: false
+   *                 properties:
+   *                   emailId:
+   *                     type: string
+   *                   objectId:
+   *                     type: string
+   *                   tenantId:
+   *                     type: string
    *               beneficiaryTenantId:
    *                 type: string
    *               requestId:

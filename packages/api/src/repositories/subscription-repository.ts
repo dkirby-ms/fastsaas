@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Subscription, SubscriptionAuditEntry, SubscriptionStatus } from '@fastsaas/shared';
-import type { Kysely, Selectable, Transaction } from 'kysely';
+import { sql, type Kysely, type Selectable, type Transaction } from 'kysely';
 
 import type { Database } from '../db/database';
 import { withDatabaseRlsContext } from '../db/execution-context';
@@ -64,7 +64,7 @@ export interface RecordedWebhookEvent {
   correlationId: string;
   requestId: string;
   payload: Record<string, unknown>;
-  status: 'processed' | 'failed';
+  status: 'processing' | 'processed' | 'failed';
   errorMessage?: string;
   processedAt?: string;
 }
@@ -78,6 +78,7 @@ export interface SubscriptionRepository {
   findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null>;
   listByTenant(tenantId: string): Promise<Subscription[]>;
   listAll(): Promise<Subscription[]>;
+  startWebhookEventProcessing(event: RecordedWebhookEvent): Promise<boolean>;
   transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription>;
   recordWebhookEvent(event: RecordedWebhookEvent): Promise<void>;
   disconnect?(): Promise<void>;
@@ -193,6 +194,12 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
   }
 
   async createManagedSubscription(input: CreateManagedSubscriptionInput): Promise<Subscription> {
+    if (this.marketplaceIndex.has(input.marketplaceSubscriptionId)) {
+      const error = new Error('subscriptions_marketplace_subscription_id_key');
+      Object.assign(error, { code: '23505' });
+      throw error;
+    }
+
     const createdAt = input.auditEntry.createdAt;
     const subscription: Subscription = {
       id: randomUUID(),
@@ -279,6 +286,16 @@ export class InMemorySubscriptionRepository implements SubscriptionRepository {
 
   async findWebhookEventByIdempotencyKey(idempotencyKey: string): Promise<RecordedWebhookEvent | null> {
     return clone(this.webhookEvents.get(idempotencyKey) ?? null);
+  }
+
+  async startWebhookEventProcessing(event: RecordedWebhookEvent): Promise<boolean> {
+    const existing = this.webhookEvents.get(event.idempotencyKey);
+    if (existing && existing.status !== 'failed') {
+      return false;
+    }
+
+    this.webhookEvents.set(event.idempotencyKey, clone(event));
+    return true;
   }
 
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {
@@ -470,6 +487,44 @@ export class KyselySubscriptionRepository implements SubscriptionRepository {
         processedAt: event.processed_at?.toISOString()
       };
     });
+  }
+
+  async startWebhookEventProcessing(event: RecordedWebhookEvent): Promise<boolean> {
+    const claimed = await withDatabaseRlsContext(this.db, async (trx) => {
+      const started = await trx
+        .insertInto('marketplace_webhook_events')
+        .values({
+          idempotency_key: event.idempotencyKey,
+          marketplace_subscription_id: event.marketplaceSubscriptionId,
+          tenant_id: event.tenantId ?? null,
+          action: event.action,
+          correlation_id: event.correlationId,
+          request_id: event.requestId,
+          payload: event.payload,
+          status: event.status,
+          error_message: null,
+          processed_at: null
+        })
+        .onConflict((oc) =>
+          oc.column('idempotency_key').doUpdateSet({
+            marketplace_subscription_id: event.marketplaceSubscriptionId,
+            tenant_id: event.tenantId ?? null,
+            action: event.action,
+            correlation_id: event.correlationId,
+            request_id: event.requestId,
+            payload: event.payload,
+            status: event.status,
+            error_message: null,
+            processed_at: null
+          }).where(sql<boolean>`marketplace_webhook_events.status = 'failed'`)
+        )
+        .returning('idempotency_key')
+        .executeTakeFirst();
+
+      return Boolean(started);
+    });
+
+    return claimed;
   }
 
   async transitionSubscription(input: TransitionSubscriptionInput): Promise<Subscription> {

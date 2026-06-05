@@ -58,6 +58,7 @@ export interface SecurityHarness {
   marketplaceJobRepository: InMemoryMarketplaceJobRepository;
   productCatalogRepository: InMemoryProductCatalogRepository;
   createToken(options?: TokenOptions): Promise<string>;
+  setFulfillmentResolveOverride(marketplaceToken: string, override: FulfillmentResolveOverride): void;
   setProductIngestionConfigureResponses(statuses: ProductIngestionConfigureStatus[]): void;
   setProductIngestionJobStatus(jobId: string, statuses: ProductIngestionConfigureStatus[]): void;
   setProductIngestionJobDetail(jobId: string, detail: ProductIngestionConfigureDetail): void;
@@ -89,6 +90,8 @@ interface FulfillmentResolveOverride {
   planId?: string;
   quantity?: number;
   beneficiaryTenantId?: string;
+  purchaserTenantId?: string;
+  offerId?: string;
 }
 
 function createFulfillmentClient(overrides: Map<string, FulfillmentResolveOverride>): MarketplaceFulfillmentClient {
@@ -99,8 +102,8 @@ function createFulfillmentClient(overrides: Map<string, FulfillmentResolveOverri
         marketplaceSubscriptionId: `marketplace-${marketplaceToken}`,
         planId: override?.planId ?? 'basic',
         quantity: override?.quantity ?? 5,
-        offerId: 'offer-basic',
-        purchaserTenantId: `purchaser-${marketplaceToken}`,
+        offerId: override?.offerId ?? 'offer-basic',
+        purchaserTenantId: override?.purchaserTenantId ?? `purchaser-${marketplaceToken}`,
         beneficiaryTenantId: override?.beneficiaryTenantId ?? `beneficiary-${marketplaceToken}`,
         metadata: {
           fixture: 'security-suite'
@@ -456,6 +459,9 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     marketplaceJobRepository,
     productCatalogRepository,
     createToken,
+    setFulfillmentResolveOverride(marketplaceToken, override) {
+      fulfillmentOverrides.set(marketplaceToken, { ...override });
+    },
     setProductIngestionConfigureResponses(statuses) {
       productIngestionState.configureResponses = [...statuses];
     },

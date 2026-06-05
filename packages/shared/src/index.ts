@@ -230,12 +230,21 @@ export type MarketplaceWebhookAction =
   | 'ChangeQuantity'
   | 'Transfer';
 
+export interface MarketplaceWebhookIdentity {
+  emailId?: string;
+  objectId?: string;
+  tenantId?: string;
+}
+
 export interface MarketplaceWebhookPayload {
   action: MarketplaceWebhookAction;
   marketplaceSubscriptionId: string;
   operationId?: string;
+  offerId?: string;
   planId?: string;
   quantity?: number;
+  beneficiary?: MarketplaceWebhookIdentity;
+  purchaser?: MarketplaceWebhookIdentity;
   beneficiaryTenantId?: string;
   requestId?: string;
   correlationId?: string;

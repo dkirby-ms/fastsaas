@@ -125,6 +125,50 @@ describe('tenant isolation security catalog', () => {
     expect(ownerResponse.body.data.status).toBe('PendingActivation');
   });
 
+  it('forbids a purchaser tenant from retrieving an existing beneficiary-owned subscription via POST /v1/subscriptions', async () => {
+    const marketplaceToken = 'cross-tenant-duplicate-subscribe';
+    const beneficiaryTenantId = 'tenant-beneficiary-subscribe';
+    const purchaserTenantId = 'tenant-purchaser-subscribe';
+    harness.setFulfillmentResolveOverride(marketplaceToken, {
+      beneficiaryTenantId,
+      purchaserTenantId
+    });
+
+    const beneficiaryToken = await harness.createToken({
+      tenantId: beneficiaryTenantId,
+      scopes: [harness.config.auth.requiredScope],
+      roles: ['Owner']
+    });
+    const createResponse = await request(harness.app)
+      .post('/v1/subscriptions')
+      .set('Authorization', `Bearer ${beneficiaryToken}`)
+      .send({ marketplaceToken });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.tenantId).toBe(beneficiaryTenantId);
+
+    const purchaserToken = await harness.createToken({
+      tenantId: purchaserTenantId,
+      scopes: [harness.config.auth.requiredScope],
+      roles: ['Owner']
+    });
+    const duplicateResponse = await request(harness.app)
+      .post('/v1/subscriptions')
+      .set('Authorization', `Bearer ${purchaserToken}`)
+      .send({ marketplaceToken });
+
+    expect(duplicateResponse.status).toBe(403);
+    expect(duplicateResponse.body.error.code).toBe('AUTH_FORBIDDEN');
+    expect(duplicateResponse.body.error.message).toBe('The marketplace purchase belongs to a different tenant');
+
+    const purchaserListResponse = await request(harness.app)
+      .get('/v1/subscriptions')
+      .set('Authorization', `Bearer ${purchaserToken}`);
+
+    expect(purchaserListResponse.status).toBe(200);
+    expect(purchaserListResponse.body.data).toEqual([]);
+  });
+
   it('rejects cross-tenant metering submissions and preserves legitimate tenant submissions', async () => {
     const ownerTenantId = 'tenant-meter-owner';
     const attackerTenantId = 'tenant-meter-attacker';

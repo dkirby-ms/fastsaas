@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import type { MarketplaceWebhookPayload, Subscription, SubscriptionAuditEntry, SubscriptionStatus } from '@fastsaas/shared';
+import type {
+  MarketplaceWebhookIdentity,
+  MarketplaceWebhookPayload,
+  Subscription,
+  SubscriptionAuditEntry,
+  SubscriptionStatus
+} from '@fastsaas/shared';
 import type { Logger } from 'pino';
 
 import { AppError } from '../errors/app-error';
@@ -62,7 +68,7 @@ interface ProcessMarketplaceWebhookResult {
 
 type MarketplaceLifecycleAction = Extract<MarketplaceWebhookPayload['action'], 'Suspend' | 'Unsubscribe' | 'Reinstate'>;
 type MarketplaceOperationAction = Extract<MarketplaceWebhookPayload['action'], 'ChangePlan' | 'ChangeQuantity' | 'Transfer'>;
-type MarketplaceAcknowledgedNoopAction = Extract<MarketplaceWebhookPayload['action'], 'Subscribe' | 'Renew'>;
+type MarketplaceAcknowledgedNoopAction = Extract<MarketplaceWebhookPayload['action'], 'Renew'>;
 
 const allowedTransitions: Record<SubscriptionStatus, SubscriptionStatus[]> = {
   PendingActivation: ['Active', 'Unsubscribed'],
@@ -75,12 +81,16 @@ function normalizeDetails(details?: Record<string, unknown>): Record<string, unk
   return redactMarketplaceTokens(details ? { ...details } : {});
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === '23505');
+}
+
 function isLifecycleAction(action: MarketplaceWebhookPayload['action']): action is MarketplaceLifecycleAction {
   return action === 'Suspend' || action === 'Unsubscribe' || action === 'Reinstate';
 }
 
 function isAcknowledgedNoopAction(action: MarketplaceWebhookPayload['action']): action is MarketplaceAcknowledgedNoopAction {
-  return action === 'Subscribe' || action === 'Renew';
+  return action === 'Renew';
 }
 
 function getTargetStatus(action: MarketplaceLifecycleAction): SubscriptionStatus {
@@ -114,12 +124,46 @@ function getWebhookPlanId(payload: MarketplaceWebhookPayload): string | undefine
   return payload.planId ?? readStringDetail(payload.details, 'planId');
 }
 
+function getWebhookOfferId(payload: MarketplaceWebhookPayload): string | undefined {
+  return payload.offerId ?? readStringDetail(payload.details, 'offerId');
+}
+
 function getWebhookQuantity(payload: MarketplaceWebhookPayload): number | undefined {
   return payload.quantity ?? readNumberDetail(payload.details, 'quantity');
 }
 
+function readIdentityDetail(
+  details: Record<string, unknown> | undefined,
+  key: string
+): MarketplaceWebhookIdentity | undefined {
+  const value = details?.[key];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const identity = value as Record<string, unknown>;
+  return {
+    emailId: typeof identity.emailId === 'string' && identity.emailId.length > 0 ? identity.emailId : undefined,
+    objectId: typeof identity.objectId === 'string' && identity.objectId.length > 0 ? identity.objectId : undefined,
+    tenantId: typeof identity.tenantId === 'string' && identity.tenantId.length > 0 ? identity.tenantId : undefined
+  };
+}
+
+function getWebhookBeneficiary(payload: MarketplaceWebhookPayload): MarketplaceWebhookIdentity | undefined {
+  return payload.beneficiary ?? readIdentityDetail(payload.details, 'beneficiary');
+}
+
+function getWebhookPurchaser(payload: MarketplaceWebhookPayload): MarketplaceWebhookIdentity | undefined {
+  return payload.purchaser ?? readIdentityDetail(payload.details, 'purchaser');
+}
+
 function getWebhookBeneficiaryTenantId(payload: MarketplaceWebhookPayload): string | undefined {
-  return payload.beneficiaryTenantId ?? readStringDetail(payload.details, 'beneficiaryTenantId') ?? readStringDetail(payload.details, 'tenantId');
+  return (
+    payload.beneficiaryTenantId ??
+    getWebhookBeneficiary(payload)?.tenantId ??
+    readStringDetail(payload.details, 'beneficiaryTenantId') ??
+    readStringDetail(payload.details, 'tenantId')
+  );
 }
 
 function buildAuditEntry(input: {
@@ -171,12 +215,50 @@ export class SubscriptionService {
     const resolvedSubscription = await this.withFulfillment('resolve', input, undefined, async () => {
       return this.fulfillmentClient.resolveSubscription(input.marketplaceToken, input.requestId, input.correlationId);
     });
+    const ownerTenantId = resolvedSubscription.beneficiaryTenantId ?? input.tenantId;
+
+    if (ownerTenantId !== input.tenantId) {
+      this.logger.warn(
+        {
+          callerTenantId: input.tenantId,
+          beneficiaryTenantId: resolvedSubscription.beneficiaryTenantId,
+          marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
+          requestId: input.requestId
+        },
+        'Resolved marketplace purchase belongs to a different beneficiary tenant than the caller — denying subscription access'
+      );
+    }
 
     const existingSubscription = await this.repository.findByMarketplaceSubscriptionId(resolvedSubscription.marketplaceSubscriptionId);
     if (existingSubscription) {
-      throw AppError.conflict('A subscription already exists for the marketplace purchase', {
-        marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-        subscriptionId: existingSubscription.id
+      if (existingSubscription.tenantId !== input.tenantId) {
+        throw AppError.forbidden('The marketplace purchase belongs to a different tenant', {
+          callerTenantId: input.tenantId,
+          ownerTenantId: existingSubscription.tenantId,
+          marketplaceSubscriptionId: existingSubscription.marketplaceSubscriptionId
+        });
+      }
+
+      this.logger.info(
+        {
+          subscriptionId: existingSubscription.id,
+          marketplaceSubscriptionId: existingSubscription.marketplaceSubscriptionId,
+          tenantId: existingSubscription.tenantId,
+          requestId: input.requestId,
+          correlationId: input.correlationId,
+          source: input.source
+        },
+        'Subscription already exists for marketplace purchase; returning existing record'
+      );
+
+      return existingSubscription;
+    }
+
+    if (ownerTenantId !== input.tenantId) {
+      throw AppError.forbidden('The marketplace purchase belongs to a different tenant', {
+        callerTenantId: input.tenantId,
+        ownerTenantId,
+        marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId
       });
     }
 
@@ -195,24 +277,8 @@ export class SubscriptionService {
       }
     });
 
-    if (
-      resolvedSubscription.beneficiaryTenantId &&
-      input.tenantId &&
-      resolvedSubscription.beneficiaryTenantId !== input.tenantId
-    ) {
-      this.logger.warn(
-        {
-          callerTenantId: input.tenantId,
-          beneficiaryTenantId: resolvedSubscription.beneficiaryTenantId,
-          marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
-          requestId: input.requestId
-        },
-        'Caller tenant differs from beneficiary tenant — using beneficiaryTenantId as subscription owner'
-      );
-    }
-
     const subscription = await this.repository.createSubscription({
-      tenantId: resolvedSubscription.beneficiaryTenantId ?? input.tenantId,
+      tenantId: ownerTenantId,
       marketplaceSubscriptionId: resolvedSubscription.marketplaceSubscriptionId,
       planId: resolvedSubscription.planId,
       seats: resolvedSubscription.quantity,
@@ -392,9 +458,11 @@ export class SubscriptionService {
   async processMarketplaceWebhook(payload: ProcessMarketplaceWebhookInput): Promise<ProcessMarketplaceWebhookResult> {
     const requestId = payload.requestId ?? randomUUID();
     const correlationId = payload.correlationId ?? requestId;
+    const webhookTenantId = getWebhookBeneficiaryTenantId(payload);
     const webhookEventBase: RecordedWebhookEvent = {
       idempotencyKey: payload.idempotencyKey,
       marketplaceSubscriptionId: payload.marketplaceSubscriptionId,
+      tenantId: webhookTenantId,
       action: payload.action,
       requestId,
       correlationId,
@@ -407,13 +475,17 @@ export class SubscriptionService {
         beneficiaryTenantId: payload.beneficiaryTenantId,
         details: normalizeDetails(payload.details)
       },
-      status: 'processed',
-      processedAt: new Date().toISOString()
+      status: 'processing'
     };
 
-    const existingEvent = await this.repository.findWebhookEventByIdempotencyKey(payload.idempotencyKey);
+    const claimed = await this.repository.startWebhookEventProcessing(webhookEventBase);
     const subscription = await this.repository.findByMarketplaceSubscriptionId(payload.marketplaceSubscriptionId);
-    if (existingEvent?.status === 'processed') {
+    if (!claimed) {
+      const existingEvent = await this.repository.findWebhookEventByIdempotencyKey(payload.idempotencyKey);
+      if (!existingEvent) {
+        throw new AppError(409, 'WEBHOOK_PROCESSING_CONFLICT', 'Marketplace webhook is already being processed');
+      }
+
       return {
         subscription: subscription ?? undefined,
         duplicate: true,
@@ -421,15 +493,36 @@ export class SubscriptionService {
       };
     }
 
+    if (payload.action === 'Subscribe') {
+      try {
+        return await this.processSubscribeWebhook(payload, subscription, {
+          requestId,
+          correlationId,
+          webhookEventBase
+        });
+      } catch (error) {
+        await this.repository.recordWebhookEvent({
+          ...webhookEventBase,
+          tenantId: subscription?.tenantId ?? webhookTenantId,
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : 'Unknown webhook processing error',
+          processedAt: new Date().toISOString()
+        });
+        throw error;
+      }
+    }
+
     if (isAcknowledgedNoopAction(payload.action)) {
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
         tenantId: subscription?.tenantId,
+        status: 'processed',
         payload: {
           ...webhookEventBase.payload,
           noop: true,
           subscriptionFound: Boolean(subscription)
-        }
+        },
+        processedAt: new Date().toISOString()
       });
 
       const logContext = {
@@ -471,7 +564,8 @@ export class SubscriptionService {
           ...webhookEventBase.payload,
           noop: true,
           subscriptionFound: false
-        }
+        },
+        processedAt: new Date().toISOString()
       });
       this.logger.warn(
         {
@@ -496,11 +590,13 @@ export class SubscriptionService {
         await this.repository.recordWebhookEvent({
           ...webhookEventBase,
           tenantId: subscription.tenantId,
+          status: 'processed',
           payload: {
             ...webhookEventBase.payload,
             duplicate: true,
             noop: true
-          }
+          },
+          processedAt: new Date().toISOString()
         });
 
         return {
@@ -582,7 +678,9 @@ export class SubscriptionService {
 
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
-        tenantId: updatedSubscription.tenantId
+        tenantId: updatedSubscription.tenantId,
+        status: 'processed',
+        processedAt: new Date().toISOString()
       });
       return {
         subscription: updatedSubscription,
@@ -594,7 +692,8 @@ export class SubscriptionService {
         ...webhookEventBase,
         tenantId: subscription.tenantId,
         status: 'failed',
-        errorMessage: error instanceof Error ? error.message : 'Unknown webhook processing error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown webhook processing error',
+        processedAt: new Date().toISOString()
       });
       throw error;
     }
@@ -655,6 +754,205 @@ export class SubscriptionService {
     return updatedSubscription;
   }
 
+  private async processSubscribeWebhook(
+    payload: ProcessMarketplaceWebhookInput,
+    existingSubscription: Subscription | null,
+    context: {
+      requestId: string;
+      correlationId: string;
+      webhookEventBase: RecordedWebhookEvent;
+    }
+  ): Promise<ProcessMarketplaceWebhookResult> {
+    const planId = getWebhookPlanId(payload);
+    const seats = getWebhookQuantity(payload);
+    const beneficiary = getWebhookBeneficiary(payload);
+    const purchaser = getWebhookPurchaser(payload);
+    const beneficiaryTenantId = getWebhookBeneficiaryTenantId(payload);
+
+    if (!planId || seats === undefined || !beneficiaryTenantId || !beneficiary?.objectId) {
+      throw AppError.badRequest(
+        'Subscribe webhook must include planId, quantity, beneficiary.tenantId, and beneficiary.objectId'
+      );
+    }
+
+    let created = false;
+    let subscription = existingSubscription;
+    if (!subscription) {
+      const auditEntry = buildAuditEntry({
+        subscriptionId: 'pending',
+        eventType: 'Subscribe',
+        source: 'marketplace-webhook',
+        fromStatus: null,
+        toStatus: 'PendingActivation',
+        correlationId: context.correlationId,
+        requestId: context.requestId,
+        details: {
+          offerId: getWebhookOfferId(payload),
+          planId,
+          quantity: seats,
+          beneficiary,
+          purchaser
+        }
+      });
+
+      try {
+        subscription = await this.repository.createManagedSubscription({
+          tenantId: beneficiaryTenantId,
+          marketplaceSubscriptionId: payload.marketplaceSubscriptionId,
+          planId,
+          seats,
+          status: 'PendingActivation',
+          offerId: getWebhookOfferId(payload),
+          purchaserTenantId: purchaser?.tenantId,
+          beneficiaryTenantId,
+          correlationId: context.correlationId,
+          metadata: {
+            ...normalizeDetails(payload.details),
+            beneficiary: beneficiary ? normalizeDetails(beneficiary as Record<string, unknown>) : undefined,
+            purchaser: purchaser ? normalizeDetails(purchaser as Record<string, unknown>) : undefined
+          },
+          auditEntry
+        });
+        created = true;
+      } catch (error) {
+        if (!isUniqueViolation(error)) {
+          throw error;
+        }
+
+        subscription = await this.repository.findByMarketplaceSubscriptionId(payload.marketplaceSubscriptionId);
+        if (!subscription) {
+          throw error;
+        }
+      }
+    }
+
+    if (!subscription) {
+      throw AppError.notFound('Subscription was not found after subscribe webhook reconciliation');
+    }
+
+    let reconciled = false;
+    const desiredOfferId = getWebhookOfferId(payload);
+    const needsReconcile =
+      subscription.tenantId !== beneficiaryTenantId ||
+      subscription.planId !== planId ||
+      subscription.seats !== seats ||
+      subscription.offerId !== desiredOfferId ||
+      subscription.purchaserTenantId !== purchaser?.tenantId ||
+      subscription.beneficiaryTenantId !== beneficiaryTenantId;
+
+    if (needsReconcile) {
+      subscription = await this.updateSubscriptionRecord(
+        subscription,
+        {
+          subscriptionId: subscription.id,
+          tenantId: subscription.tenantId,
+          requestId: context.requestId,
+          correlationId: context.correlationId,
+          source: 'marketplace-webhook'
+        },
+        {
+          eventType: 'SubscribeReconcile',
+          tenantId: beneficiaryTenantId,
+          offerId: desiredOfferId,
+          purchaserTenantId: purchaser?.tenantId,
+          beneficiaryTenantId,
+          planId,
+          seats,
+          details: {
+            offerId: desiredOfferId,
+            beneficiary,
+            purchaser,
+            previousTenantId: subscription.tenantId,
+            nextTenantId: beneficiaryTenantId
+          }
+        }
+      );
+      reconciled = true;
+    }
+
+    await this.tenantMemberService?.bootstrapOwnerIfNeeded({
+      tenantId: subscription.tenantId,
+      userId: beneficiary.objectId,
+      email: beneficiary.emailId
+    });
+
+    let activationAttempted = false;
+    let activationFailed = false;
+
+    if (subscription.status === 'PendingActivation') {
+      activationAttempted = true;
+      const pendingSubscription = subscription;
+      try {
+        await this.withFulfillment('activate', context, pendingSubscription, async () => {
+          await this.fulfillmentClient.activateSubscription(
+            pendingSubscription.marketplaceSubscriptionId,
+            pendingSubscription.planId,
+            pendingSubscription.seats,
+            context.requestId,
+            context.correlationId
+          );
+        });
+
+        subscription = await this.transition(
+          pendingSubscription,
+          'Active',
+          {
+            subscriptionId: pendingSubscription.id,
+            tenantId: pendingSubscription.tenantId,
+            requestId: context.requestId,
+            correlationId: context.correlationId,
+            source: 'marketplace-webhook',
+            details: normalizeDetails(payload.details)
+          },
+          'Activate',
+          {
+            action: 'Subscribe',
+            beneficiary,
+            purchaser
+          }
+        );
+      } catch (error) {
+        activationFailed = true;
+        this.logger.warn(
+          {
+            marketplaceSubscriptionId: subscription.marketplaceSubscriptionId,
+            subscriptionId: subscription.id,
+            tenantId: subscription.tenantId,
+            requestId: context.requestId,
+            correlationId: context.correlationId,
+            err: error
+          },
+          'Subscribe webhook provisioned subscription locally but marketplace activation failed; leaving subscription pending activation'
+        );
+      }
+    }
+
+    await this.repository.recordWebhookEvent({
+      ...context.webhookEventBase,
+      tenantId: subscription.tenantId,
+      status: activationFailed ? 'failed' : 'processed',
+      errorMessage: activationFailed ? 'Marketplace fulfillment activate request failed' : undefined,
+      payload: {
+        ...context.webhookEventBase.payload,
+        offerId: desiredOfferId,
+        beneficiary,
+        purchaser,
+        subscriptionCreated: created,
+        subscriptionReconciled: reconciled,
+        activationAttempted,
+        activationFailed,
+        subscriptionStatus: subscription.status
+      },
+      processedAt: new Date().toISOString()
+    });
+
+    return {
+      subscription,
+      duplicate: !created && !reconciled && !activationAttempted,
+      acknowledgedWithoutAction: false
+    };
+  }
+
   private async updateSubscriptionRecord(
     subscription: Subscription,
     context: SubscriptionActionInput,
@@ -663,6 +961,8 @@ export class SubscriptionService {
       planId?: string;
       seats?: number;
       tenantId?: string;
+      offerId?: string;
+      purchaserTenantId?: string;
       beneficiaryTenantId?: string;
       details?: Record<string, unknown>;
     }
@@ -684,8 +984,8 @@ export class SubscriptionService {
       planId: input.planId ?? subscription.planId,
       seats: input.seats ?? subscription.seats,
       status: subscription.status,
-      offerId: subscription.offerId,
-      purchaserTenantId: subscription.purchaserTenantId,
+      offerId: input.offerId ?? subscription.offerId,
+      purchaserTenantId: input.purchaserTenantId ?? subscription.purchaserTenantId,
       beneficiaryTenantId: input.beneficiaryTenantId ?? subscription.beneficiaryTenantId,
       correlationId: context.correlationId,
       metadata: normalizeDetails(subscription.metadata),
