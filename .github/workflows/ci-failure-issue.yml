@@ -77,9 +77,9 @@ jobs:
           ' <<<"$failed_jobs_json")
 
           log_text=$(gh run view "$GH_RUN_ID" --repo "$GH_REPO" --log-failed 2>/dev/null || true)
-          error_snippet=$(printf '%s\n' "$log_text" | awk 'BEGIN { IGNORECASE = 1; count = 0 } /error|fail|exception|ELIFECYCLE|ERR!/ { print; count++; if (count >= 12) exit }')
+          error_snippet=$(awk 'BEGIN { IGNORECASE = 1; count = 0 } /error|fail|exception|ELIFECYCLE|ERR!/ { if (count < 12) { print; count++ } }' <<<"$log_text")
           if [ -z "$error_snippet" ]; then
-            error_snippet=$(printf '%s\n' "$log_text" | awk 'NF { lines[++count] = $0 } END { start = count > 12 ? count - 11 : 1; for (i = start; i <= count; i++) print lines[i] }')
+            error_snippet=$(awk 'NF { lines[++count] = $0 } END { start = count > 12 ? count - 11 : 1; for (i = start; i <= count; i++) print lines[i] }' <<<"$log_text")
           fi
           if [ -z "$error_snippet" ]; then
             error_snippet='No failing log snippet was available from the workflow run.'
@@ -121,7 +121,7 @@ jobs:
             "$error_snippet" \
             '```'
 
-          existing_issue_number=$(gh issue list --repo "$GH_REPO" --label squad --state open --limit 100 --json number,body | jq -r --arg marker "$failure_marker" '.[] | select((.body // "") | contains($marker)) | .number' | head -n 1)
+          existing_issue_number=$(jq -r --arg marker "$failure_marker" 'map(select((.body // "") | contains($marker))) | .[0].number // empty' <<<"$(gh issue list --repo "$GH_REPO" --label squad --state open --limit 100 --json number,body)")
 
           if [ -n "$existing_issue_number" ]; then
             gh api --method PATCH "repos/$GH_REPO/issues/$existing_issue_number" \
