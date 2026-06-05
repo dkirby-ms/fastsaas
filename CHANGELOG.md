@@ -1,3 +1,9 @@
+## [0.17.11](https://github.com/dkirby-ms/fastsaas/compare/v0.17.10...v0.17.11) (2026-06-05)
+
+### Bug Fixes
+
+* add MARKETPLACE_CLIENT_ID and MARKETPLACE_TENANT_ID to staging deploy ([bc3c8ba](https://github.com/dkirby-ms/fastsaas/commit/bc3c8baf3c87beebd00f96da7dfc23672a5b07e6))
+
 ## [0.17.10](https://github.com/dkirby-ms/fastsaas/compare/v0.17.9...v0.17.10) (2026-06-04)
 
 ### Bug Fixes
