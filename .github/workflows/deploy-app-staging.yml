@@ -167,7 +167,9 @@ jobs:
           PORTAL_SECRETS_FILE: infrastructure/env/.generated-staging-portal.secrets.json
           API_ENTRA_CLIENT_ID: ${{ secrets.API_ENTRA_CLIENT_ID }}
           ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
+          MARKETPLACE_CLIENT_ID: ${{ secrets.MARKETPLACE_CLIENT_ID }}
           MARKETPLACE_CLIENT_SECRET: ${{ secrets.MARKETPLACE_CLIENT_SECRET }}
+          MARKETPLACE_TENANT_ID: ${{ secrets.MARKETPLACE_TENANT_ID }}
           MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
           PORTAL_ENTRA_CLIENT_ID: ${{ secrets.PORTAL_ENTRA_CLIENT_ID }}
           PORTAL_ENTRA_CLIENT_SECRET: ${{ secrets.PORTAL_ENTRA_CLIENT_SECRET }}
