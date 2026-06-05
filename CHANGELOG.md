@@ -1,3 +1,10 @@
+## [0.17.12](https://github.com/dkirby-ms/fastsaas/compare/v0.17.11...v0.17.12) (2026-06-05)
+
+### Bug Fixes
+
+* graceful marketplace webhook handling for Subscribe/Renew and missing subscriptions ([e577137](https://github.com/dkirby-ms/fastsaas/commit/e577137603336f9d28563f2315ca659bb5245048))
+* increase audit-logging test timeout and fix ci-failure-issue broken pipe ([5c71ea0](https://github.com/dkirby-ms/fastsaas/commit/5c71ea01a8a29bd6da57f91e226538632d57f39b))
+
 ## [0.17.11](https://github.com/dkirby-ms/fastsaas/compare/v0.17.10...v0.17.11) (2026-06-05)
 
 ### Bug Fixes
