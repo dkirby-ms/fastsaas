@@ -221,6 +221,8 @@ export interface CreateSubscriptionRequest {
 }
 
 export type MarketplaceWebhookAction =
+  | 'Subscribe'
+  | 'Renew'
   | 'Suspend'
   | 'Unsubscribe'
   | 'Reinstate'

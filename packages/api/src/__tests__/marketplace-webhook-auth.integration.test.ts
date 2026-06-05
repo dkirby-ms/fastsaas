@@ -34,7 +34,8 @@ function buildSubscription(): Subscription {
 function createHarness(authMode: MarketplaceWebhookAuthMode, overrides: Record<string, string> = {}) {
   const processMarketplaceWebhook = vi.fn().mockResolvedValue({
     subscription: buildSubscription(),
-    duplicate: false
+    duplicate: false,
+    acknowledgedWithoutAction: false
   });
 
   const app = createApp(
@@ -215,5 +216,39 @@ describe('marketplace webhook auth', () => {
 
     expect(response.status).toBe(202);
     expect(processMarketplaceWebhook).toHaveBeenCalledOnce();
+  });
+
+  it.each(['Subscribe', 'Renew'] as const)('accepts %s marketplace webhook actions', async (action) => {
+    const { app, processMarketplaceWebhook } = createHarness('none');
+    const body = JSON.stringify({
+      action,
+      marketplaceSubscriptionId: 'marketplace-sub-123'
+    });
+
+    const response = await request(app).post('/api/webhooks/marketplace').set('Content-Type', 'application/json').send(body);
+
+    expect(response.status).toBe(202);
+    expect(processMarketplaceWebhook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action,
+        marketplaceSubscriptionId: 'marketplace-sub-123'
+      })
+    );
+  });
+
+  it('includes the rejected action value when an unsupported marketplace action is sent', async () => {
+    const { app, processMarketplaceWebhook } = createHarness('none');
+    const body = JSON.stringify({
+      action: 'Delete',
+      marketplaceSubscriptionId: 'marketplace-sub-123'
+    });
+
+    const response = await request(app).post('/api/webhooks/marketplace').set('Content-Type', 'application/json').send(body);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe(
+      'Webhook action "Delete" is not supported; expected one of Subscribe, Renew, Suspend, Unsubscribe, Reinstate, ChangePlan, ChangeQuantity, Transfer'
+    );
+    expect(processMarketplaceWebhook).not.toHaveBeenCalled();
   });
 });

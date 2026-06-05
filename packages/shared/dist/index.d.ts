@@ -193,7 +193,7 @@ export interface CreateSubscriptionRequest {
     marketplaceToken: string;
     metadata?: Record<string, unknown>;
 }
-export type MarketplaceWebhookAction = 'Suspend' | 'Unsubscribe' | 'Reinstate' | 'ChangePlan' | 'ChangeQuantity' | 'Transfer';
+export type MarketplaceWebhookAction = 'Subscribe' | 'Renew' | 'Suspend' | 'Unsubscribe' | 'Reinstate' | 'ChangePlan' | 'ChangeQuantity' | 'Transfer';
 export interface MarketplaceWebhookPayload {
     action: MarketplaceWebhookAction;
     marketplaceSubscriptionId: string;

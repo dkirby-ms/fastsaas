@@ -54,6 +54,7 @@ function createService(overrides: Partial<FulfillmentResolveResult> = {}) {
 
   return {
     service,
+    repository,
     loggerSpies: logger,
     resolvedSubscription,
     tenantMemberRepository
@@ -125,5 +126,188 @@ describe('SubscriptionService.subscribe', () => {
 
     expect(existingOwner?.role).toBe('Owner');
     expect(caller).toBeNull();
+  });
+});
+
+describe('SubscriptionService.processMarketplaceWebhook', () => {
+  it('acknowledges Subscribe webhooks when the subscription is not yet stored locally', async () => {
+    const { service, repository, loggerSpies } = createService();
+
+    const result = await service.processMarketplaceWebhook({
+      action: 'Subscribe',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      idempotencyKey: 'marketplace:event-subscribe',
+      requestId: 'req-subscribe',
+      correlationId: 'corr-subscribe'
+    });
+
+    expect(result).toEqual({
+      subscription: undefined,
+      duplicate: false,
+      acknowledgedWithoutAction: true
+    });
+    expect(loggerSpies.info).toHaveBeenCalledWith(
+      {
+        action: 'Subscribe',
+        marketplaceSubscriptionId: 'missing-marketplace-subscription',
+        requestId: 'req-subscribe',
+        correlationId: 'corr-subscribe'
+      },
+      'Received Subscribe webhook for subscription missing-marketplace-subscription not yet in local database — acknowledging without action.'
+    );
+
+    await expect(repository.findWebhookEventByIdempotencyKey('marketplace:event-subscribe')).resolves.toMatchObject({
+      status: 'processed',
+      action: 'Subscribe',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      payload: expect.objectContaining({
+        noop: true,
+        subscriptionFound: false
+      })
+    });
+  });
+
+  it('acknowledges non-creation webhooks when the subscription is missing locally', async () => {
+    const { service, repository, loggerSpies } = createService();
+
+    const result = await service.processMarketplaceWebhook({
+      action: 'Suspend',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      idempotencyKey: 'marketplace:event-suspend',
+      requestId: 'req-suspend',
+      correlationId: 'corr-suspend'
+    });
+
+    expect(result).toEqual({
+      subscription: undefined,
+      duplicate: false,
+      acknowledgedWithoutAction: true
+    });
+    expect(loggerSpies.warn).toHaveBeenCalledWith(
+      {
+        action: 'Suspend',
+        marketplaceSubscriptionId: 'missing-marketplace-subscription',
+        requestId: 'req-suspend',
+        correlationId: 'corr-suspend'
+      },
+      'Received Suspend webhook for subscription missing-marketplace-subscription not found in local database — acknowledging without action.'
+    );
+
+    await expect(repository.findWebhookEventByIdempotencyKey('marketplace:event-suspend')).resolves.toMatchObject({
+      status: 'failed',
+      action: 'Suspend',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      payload: expect.objectContaining({
+        noop: true,
+        subscriptionFound: false
+      })
+    });
+  });
+
+  it('reprocesses a missing-subscription mutating webhook once the subscription exists locally', async () => {
+    const { service, repository } = createService();
+    const idempotencyKey = 'marketplace:event-suspend-retry';
+
+    await service.processMarketplaceWebhook({
+      action: 'Suspend',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      idempotencyKey,
+      requestId: 'req-suspend-missing',
+      correlationId: 'corr-suspend-missing'
+    });
+
+    const createdSubscription = await repository.createManagedSubscription({
+      tenantId: 'tenant-suspend',
+      marketplaceSubscriptionId: 'missing-marketplace-subscription',
+      planId: 'plan-growth',
+      seats: 10,
+      status: 'Active',
+      correlationId: 'corr-create-suspend',
+      metadata: {},
+      auditEntry: {
+        id: 'audit-suspend-create',
+        subscriptionId: 'placeholder',
+        eventType: 'Subscribe',
+        source: 'api',
+        fromStatus: null,
+        toStatus: 'Active',
+        correlationId: 'corr-create-suspend',
+        requestId: 'req-create-suspend',
+        details: {},
+        createdAt: '2026-06-05T19:39:45.172+00:00'
+      }
+    });
+
+    const retryResult = await service.processMarketplaceWebhook({
+      action: 'Suspend',
+      marketplaceSubscriptionId: createdSubscription.marketplaceSubscriptionId,
+      idempotencyKey,
+      requestId: 'req-suspend-retry',
+      correlationId: 'corr-suspend-retry'
+    });
+
+    expect(retryResult).toMatchObject({
+      subscription: expect.objectContaining({
+        id: createdSubscription.id,
+        status: 'Suspended'
+      }),
+      duplicate: false,
+      acknowledgedWithoutAction: false
+    });
+    await expect(repository.findWebhookEventByIdempotencyKey(idempotencyKey)).resolves.toMatchObject({
+      status: 'processed',
+      action: 'Suspend',
+      tenantId: createdSubscription.tenantId
+    });
+  });
+
+  it('acknowledges Renew webhooks even when the subscription already exists locally', async () => {
+    const { service, repository, loggerSpies } = createService();
+    const createdSubscription = await repository.createManagedSubscription({
+      tenantId: 'tenant-renew',
+      marketplaceSubscriptionId: 'marketplace-renew-subscription',
+      planId: 'plan-growth',
+      seats: 10,
+      status: 'Active',
+      correlationId: 'corr-create',
+      metadata: {},
+      auditEntry: {
+        id: 'audit-renew-create',
+        subscriptionId: 'placeholder',
+        eventType: 'Subscribe',
+        source: 'api',
+        fromStatus: null,
+        toStatus: 'Active',
+        correlationId: 'corr-create',
+        requestId: 'req-create',
+        details: {},
+        createdAt: '2026-06-05T17:44:07.201+00:00'
+      }
+    });
+
+    const result = await service.processMarketplaceWebhook({
+      action: 'Renew',
+      marketplaceSubscriptionId: createdSubscription.marketplaceSubscriptionId,
+      idempotencyKey: 'marketplace:event-renew',
+      requestId: 'req-renew',
+      correlationId: 'corr-renew'
+    });
+
+    expect(result).toEqual({
+      subscription: createdSubscription,
+      duplicate: false,
+      acknowledgedWithoutAction: true
+    });
+    expect(loggerSpies.info).toHaveBeenCalledWith(
+      {
+        action: 'Renew',
+        marketplaceSubscriptionId: 'marketplace-renew-subscription',
+        requestId: 'req-renew',
+        correlationId: 'corr-renew',
+        subscriptionId: createdSubscription.id,
+        tenantId: createdSubscription.tenantId
+      },
+      'Received Renew webhook for subscription marketplace-renew-subscription — acknowledging without action.'
+    );
   });
 });

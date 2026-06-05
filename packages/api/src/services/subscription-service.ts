@@ -55,12 +55,14 @@ interface ProcessMarketplaceWebhookInput extends MarketplaceWebhookPayload {
 }
 
 interface ProcessMarketplaceWebhookResult {
-  subscription: Subscription;
+  subscription?: Subscription;
   duplicate: boolean;
+  acknowledgedWithoutAction: boolean;
 }
 
 type MarketplaceLifecycleAction = Extract<MarketplaceWebhookPayload['action'], 'Suspend' | 'Unsubscribe' | 'Reinstate'>;
 type MarketplaceOperationAction = Extract<MarketplaceWebhookPayload['action'], 'ChangePlan' | 'ChangeQuantity' | 'Transfer'>;
+type MarketplaceAcknowledgedNoopAction = Extract<MarketplaceWebhookPayload['action'], 'Subscribe' | 'Renew'>;
 
 const allowedTransitions: Record<SubscriptionStatus, SubscriptionStatus[]> = {
   PendingActivation: ['Active', 'Unsubscribed'],
@@ -75,6 +77,10 @@ function normalizeDetails(details?: Record<string, unknown>): Record<string, unk
 
 function isLifecycleAction(action: MarketplaceWebhookPayload['action']): action is MarketplaceLifecycleAction {
   return action === 'Suspend' || action === 'Unsubscribe' || action === 'Reinstate';
+}
+
+function isAcknowledgedNoopAction(action: MarketplaceWebhookPayload['action']): action is MarketplaceAcknowledgedNoopAction {
+  return action === 'Subscribe' || action === 'Renew';
 }
 
 function getTargetStatus(action: MarketplaceLifecycleAction): SubscriptionStatus {
@@ -407,21 +413,80 @@ export class SubscriptionService {
 
     const existingEvent = await this.repository.findWebhookEventByIdempotencyKey(payload.idempotencyKey);
     const subscription = await this.repository.findByMarketplaceSubscriptionId(payload.marketplaceSubscriptionId);
+    if (existingEvent?.status === 'processed') {
+      return {
+        subscription: subscription ?? undefined,
+        duplicate: true,
+        acknowledgedWithoutAction: !subscription
+      };
+    }
+
+    if (isAcknowledgedNoopAction(payload.action)) {
+      await this.repository.recordWebhookEvent({
+        ...webhookEventBase,
+        tenantId: subscription?.tenantId,
+        payload: {
+          ...webhookEventBase.payload,
+          noop: true,
+          subscriptionFound: Boolean(subscription)
+        }
+      });
+
+      const logContext = {
+        action: payload.action,
+        marketplaceSubscriptionId: payload.marketplaceSubscriptionId,
+        requestId,
+        correlationId
+      };
+
+      if (subscription) {
+        this.logger.info(
+          {
+            ...logContext,
+            subscriptionId: subscription.id,
+            tenantId: subscription.tenantId
+          },
+          `Received ${payload.action} webhook for subscription ${payload.marketplaceSubscriptionId} — acknowledging without action.`
+        );
+      } else {
+        this.logger.info(
+          logContext,
+          `Received ${payload.action} webhook for subscription ${payload.marketplaceSubscriptionId} not yet in local database — acknowledging without action.`
+        );
+      }
+
+      return {
+        subscription: subscription ?? undefined,
+        duplicate: false,
+        acknowledgedWithoutAction: true
+      };
+    }
+
     if (!subscription) {
       await this.repository.recordWebhookEvent({
         ...webhookEventBase,
         status: 'failed',
-        errorMessage: 'Subscription for marketplace webhook was not found'
+        errorMessage: 'Subscription not found in local database',
+        payload: {
+          ...webhookEventBase.payload,
+          noop: true,
+          subscriptionFound: false
+        }
       });
-      throw AppError.notFound('Subscription for marketplace webhook was not found', {
-        marketplaceSubscriptionId: payload.marketplaceSubscriptionId
-      });
-    }
+      this.logger.warn(
+        {
+          action: payload.action,
+          marketplaceSubscriptionId: payload.marketplaceSubscriptionId,
+          requestId,
+          correlationId
+        },
+        `Received ${payload.action} webhook for subscription ${payload.marketplaceSubscriptionId} not found in local database — acknowledging without action.`
+      );
 
-    if (existingEvent?.status === 'processed') {
       return {
-        subscription,
-        duplicate: true
+        subscription: undefined,
+        duplicate: false,
+        acknowledgedWithoutAction: true
       };
     }
 
@@ -440,7 +505,8 @@ export class SubscriptionService {
 
         return {
           subscription,
-          duplicate: true
+          duplicate: true,
+          acknowledgedWithoutAction: false
         };
       }
     }
@@ -520,7 +586,8 @@ export class SubscriptionService {
       });
       return {
         subscription: updatedSubscription,
-        duplicate: false
+        duplicate: false,
+        acknowledgedWithoutAction: false
       };
     } catch (error) {
       await this.repository.recordWebhookEvent({

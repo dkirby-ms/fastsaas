@@ -11,7 +11,7 @@ import type { SubscriptionService } from '../../services/subscription-service';
 
 const EVENT_ID_HEADERS = ['x-ms-marketplace-event-id', 'x-ms-event-id', 'x-ms-requestid', 'x-request-id'];
 const TIMESTAMP_HEADERS = ['x-ms-marketplace-timestamp', 'x-ms-signature-timestamp', 'x-marketplace-timestamp'];
-const SUPPORTED_ACTIONS = ['Suspend', 'Unsubscribe', 'Reinstate', 'ChangePlan', 'ChangeQuantity', 'Transfer'] as const;
+const SUPPORTED_ACTIONS = ['Subscribe', 'Renew', 'Suspend', 'Unsubscribe', 'Reinstate', 'ChangePlan', 'ChangeQuantity', 'Transfer'] as const;
 
 function readHeader(req: ApiRequest, names: string[]): string | undefined {
   for (const name of names) {
@@ -72,7 +72,9 @@ function parseWebhookBody(body: Buffer): MarketplaceWebhookPayload {
   const candidate = parsed;
   const action = readString(candidate.action, 'action') as MarketplaceWebhookPayload['action'];
   if (!SUPPORTED_ACTIONS.includes(action)) {
-    throw AppError.badRequest(`Webhook action must be ${SUPPORTED_ACTIONS.join(', ')}`);
+    throw AppError.badRequest(`Webhook action "${action}" is not supported; expected one of ${SUPPORTED_ACTIONS.join(', ')}`, {
+      action
+    });
   }
 
   const subscription = isRecord(candidate.subscription) ? candidate.subscription : undefined;
@@ -142,7 +144,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *             properties:
    *               action:
    *                 type: string
-   *                 enum: [Suspend, Unsubscribe, Reinstate, ChangePlan, ChangeQuantity, Transfer]
+   *                 enum: [Subscribe, Renew, Suspend, Unsubscribe, Reinstate, ChangePlan, ChangeQuantity, Transfer]
    *               marketplaceSubscriptionId:
    *                 type: string
    *               subscriptionId:
@@ -170,13 +172,11 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
    *       202:
    *         description: Webhook accepted and applied to the subscription
    *       200:
-   *         description: Duplicate or idempotent webhook acknowledged without additional state change
+   *         description: Duplicate, no-op, or otherwise acknowledged webhook without additional state change
    *       400:
    *         description: Webhook body is invalid
    *       401:
    *         description: Missing, invalid, or expired Microsoft Entra Bearer token
-   *       404:
-   *         description: Marketplace subscription not found
    *       409:
    *         description: Subscription cannot apply the requested marketplace change
    */
@@ -201,7 +201,7 @@ export function createMarketplaceWebhookRouter(config: ApiConfig, subscriptionSe
           })
         );
 
-        res.status(result.duplicate ? 200 : 202).json({
+        res.status(result.duplicate || result.acknowledgedWithoutAction ? 200 : 202).json({
           status: 'success',
           data: result.subscription,
           meta: buildResponseMeta(req, config.apiVersion)
