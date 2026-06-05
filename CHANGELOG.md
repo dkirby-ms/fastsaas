@@ -1,3 +1,9 @@
+## [0.18.0](https://github.com/dkirby-ms/fastsaas/compare/v0.17.12...v0.18.0) (2026-06-05)
+
+### Features
+
+* implement subscription provisioning from Subscribe webhook ([dbe1f44](https://github.com/dkirby-ms/fastsaas/commit/dbe1f44d94823a2a7b17499662c8da0f6888b814))
+
 ## [0.17.12](https://github.com/dkirby-ms/fastsaas/compare/v0.17.11...v0.17.12) (2026-06-05)
 
 ### Bug Fixes
