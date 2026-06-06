@@ -60,16 +60,16 @@ const defaultActions = (state: NonNullable<DashboardData['subscription']>['state
 
 function defaultPublisherPlans(): PublisherPlan[] {
   return [
-    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', priceMonthly: '$79', status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
-    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', priceMonthly: '$249', status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', priceMonthly: '$499', status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
+    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 }
 
 function defaultPublisherTenants(): PublisherTenantDetail[] {
   return [
     {
-      id: 'tenant-contoso', displayName: 'Contoso Ltd', primaryDomain: 'contoso.example', planId: 'growth', planName: 'Growth', status: 'active', monthlyRecurringRevenue: '$249', seats: 24, subscriptionId: 'sub-contoso', lastUpdated: '2026-05-28T15:00:00.000Z', purchaserTenantId: 'purchaser-contoso', beneficiaryTenantId: 'beneficiary-contoso',
+      id: 'tenant-contoso', displayName: 'Contoso Ltd', primaryDomain: 'contoso.example', planId: 'growth', planName: 'Growth', status: 'active', monthlyRecurringRevenue: null, seats: 24, subscriptionId: 'sub-contoso', lastUpdated: '2026-05-28T15:00:00.000Z', purchaserTenantId: 'purchaser-contoso', beneficiaryTenantId: 'beneficiary-contoso',
       usage: { activeUsers: 21, apiRequestsThisMonth: 188420, storageGb: 11.8 },
       audit: [
         { id: 'audit-contoso-1', label: 'Subscribed → Active', timestamp: '2026-05-01T10:00:00.000Z' },
@@ -77,12 +77,12 @@ function defaultPublisherTenants(): PublisherTenantDetail[] {
       ],
     },
     {
-      id: 'tenant-fabrikam', displayName: 'Fabrikam Retail', primaryDomain: 'fabrikam.example', planId: 'starter', planName: 'Starter', status: 'trialing', monthlyRecurringRevenue: '$79', seats: 8, subscriptionId: 'sub-fabrikam', lastUpdated: '2026-05-29T12:30:00.000Z', purchaserTenantId: 'purchaser-fabrikam', beneficiaryTenantId: 'beneficiary-fabrikam',
+      id: 'tenant-fabrikam', displayName: 'Fabrikam Retail', primaryDomain: 'fabrikam.example', planId: 'starter', planName: 'Starter', status: 'trialing', monthlyRecurringRevenue: null, seats: 8, subscriptionId: 'sub-fabrikam', lastUpdated: '2026-05-29T12:30:00.000Z', purchaserTenantId: 'purchaser-fabrikam', beneficiaryTenantId: 'beneficiary-fabrikam',
       usage: { activeUsers: 5, apiRequestsThisMonth: 32410, storageGb: 2.4 },
       audit: [{ id: 'audit-fabrikam-1', label: 'Provisioning in progress', timestamp: '2026-05-29T12:30:00.000Z' }],
     },
     {
-      id: 'tenant-adatum', displayName: 'Adatum Ventures', primaryDomain: 'adatum.example', planId: 'growth', planName: 'Growth', status: 'suspended', monthlyRecurringRevenue: '$249', seats: 18, subscriptionId: 'sub-adatum', lastUpdated: '2026-05-30T09:45:00.000Z', purchaserTenantId: 'purchaser-adatum', beneficiaryTenantId: 'beneficiary-adatum',
+      id: 'tenant-adatum', displayName: 'Adatum Ventures', primaryDomain: 'adatum.example', planId: 'growth', planName: 'Growth', status: 'suspended', monthlyRecurringRevenue: null, seats: 18, subscriptionId: 'sub-adatum', lastUpdated: '2026-05-30T09:45:00.000Z', purchaserTenantId: 'purchaser-adatum', beneficiaryTenantId: 'beneficiary-adatum',
       usage: { activeUsers: 9, apiRequestsThisMonth: 72110, storageGb: 6.1 },
       audit: [
         { id: 'audit-adatum-1', label: 'Billing hold applied', timestamp: '2026-05-30T09:45:00.000Z' },
@@ -114,14 +114,6 @@ function decodePathSegment(value: string | undefined) {
   return value ? decodeURIComponent(value) : value;
 }
 
-function parseMoney(value: string): number {
-  const parsed = Number(value.replace(/[^\d.]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
-}
 
 type PortalSession = Awaited<ReturnType<typeof getSession>>;
 
@@ -411,7 +403,7 @@ function buildPublisherDashboard(state: MockPortalState): PublisherDashboardData
   return {
     subscriptionCount: state.publisher.tenants.length,
     activeTenants: state.publisher.tenants.filter((tenant) => tenant.status === 'active').length,
-    monthlyRecurringRevenue: formatMoney(state.publisher.tenants.reduce((total, tenant) => total + parseMoney(tenant.monthlyRecurringRevenue), 0)),
+    monthlyRecurringRevenue: null,
     churnRiskCount: state.publisher.tenants.filter((tenant) => tenant.status === 'past_due' || tenant.status === 'suspended').length,
     plans: state.publisher.plans.map((plan) => ({ planId: plan.id, planName: plan.name, tenantCount: plan.activeSubscriptions })),
   };
@@ -697,15 +689,14 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as CreatePublisherPlanInput;
     const name = payload.name?.trim();
     const description = payload.description?.trim();
-    const priceMonthly = payload.priceMonthly?.trim();
-    if (!name || !description || !priceMonthly) {
-      throw new ApiError('Name, description, and monthly price are required.', 400, 'publisher_plan_invalid');
+    if (!name || !description) {
+      throw new ApiError('Name and description are required.', 400, 'publisher_plan_invalid');
     }
     const plan: PublisherPlan = {
       id: createPublisherPlanId(state, payload.id, name),
       name,
       description,
-      priceMonthly,
+      pricingSummary: null,
       status: payload.status ?? 'draft',
       activeSubscriptions: 0,
       features: payload.features ?? [],
@@ -727,13 +718,12 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       ...current,
       name: payload.name?.trim() || current.name,
       description: payload.description?.trim() || current.description,
-      priceMonthly: payload.priceMonthly?.trim() || current.priceMonthly,
       status: payload.status ?? current.status,
       marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId) ?? null,
       seatLimit: normalizeSeatLimit(payload.seatLimit),
     };
     state.publisher.plans[planIndex] = nextPlan;
-    state.publisher.tenants = state.publisher.tenants.map((tenant) => tenant.planId === planId ? { ...tenant, planName: nextPlan.name, monthlyRecurringRevenue: nextPlan.priceMonthly } : tenant);
+    state.publisher.tenants = state.publisher.tenants.map((tenant) => tenant.planId === planId ? { ...tenant, planName: nextPlan.name, monthlyRecurringRevenue: null } : tenant);
     writeState(state);
     return { plans: state.publisher.plans } as T;
   }
@@ -754,9 +744,8 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       planId: payload.planId,
       planName: selectedPlan.name,
       status: payload.status,
-      monthlyRecurringRevenue: selectedPlan.priceMonthly,
+      monthlyRecurringRevenue: null,
       seats: payload.seats,
-      subscriptionId: `sub-${now}`,
       lastUpdated: new Date(now).toISOString(),
       purchaserTenantId: `purchaser-${now}`,
       beneficiaryTenantId: `beneficiary-${now}`,
@@ -783,7 +772,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     const selectedPlan = getPublisherPlan(state, payload.planId);
     if (!selectedPlan) throw new ApiError('Select a valid plan before saving the tenant.', 400, 'publisher_plan_required');
     const current = state.publisher.tenants[tenantIndex];
-    state.publisher.tenants[tenantIndex] = appendAudit({ ...current, displayName: payload.displayName, primaryDomain: payload.primaryDomain, planId: payload.planId, planName: selectedPlan.name, status: payload.status, monthlyRecurringRevenue: selectedPlan.priceMonthly, seats: payload.seats, usage: { ...current.usage, activeUsers: Math.max(1, Math.min(payload.seats, Math.round(payload.seats * 0.7))), storageGb: Number((payload.seats * 0.3).toFixed(1)) } }, 'Tenant updated');
+    state.publisher.tenants[tenantIndex] = appendAudit({ ...current, displayName: payload.displayName, primaryDomain: payload.primaryDomain, planId: payload.planId, planName: selectedPlan.name, status: payload.status, monthlyRecurringRevenue: null, seats: payload.seats, usage: { ...current.usage, activeUsers: Math.max(1, Math.min(payload.seats, Math.round(payload.seats * 0.7))), storageGb: Number((payload.seats * 0.3).toFixed(1)) } }, 'Tenant updated');
     writeState(state);
     return state.publisher.tenants[tenantIndex] as T;
   }

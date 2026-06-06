@@ -124,7 +124,7 @@ function mockDashboard(): PublisherDashboardData {
   return {
     subscriptionCount: 3,
     activeTenants: 1,
-    monthlyRecurringRevenue: '$577',
+    monthlyRecurringRevenue: null,
     churnRiskCount: 1,
     plans: [
       { planId: 'growth', planName: 'Growth', tenantCount: 2 },
@@ -135,9 +135,9 @@ function mockDashboard(): PublisherDashboardData {
 
 function mockPlans(): PublisherPlan[] {
   return [
-    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', priceMonthly: '$79', status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
-    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', priceMonthly: '$249', status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', priceMonthly: '$499', status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
+    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 }
 
@@ -231,7 +231,7 @@ export async function createPublisherPlanAction(payload: CreatePublisherPlanInpu
         id: payload.id ?? payload.name.toLowerCase().replace(/\s+/g, '-'),
         name: payload.name,
         description: payload.description,
-        priceMonthly: payload.priceMonthly,
+        pricingSummary: null,
         status: payload.status ?? 'draft',
         activeSubscriptions: 0,
         features: payload.features ?? [],

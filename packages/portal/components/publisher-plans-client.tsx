@@ -34,7 +34,6 @@ function unwrapResult<T>(result: ActionResult<T>): T {
 type PlanFormState = {
   name: string;
   description: string;
-  priceMonthly: string;
   status: PublisherPlanStatus;
   marketplacePlanId: string;
   seatLimit: string;
@@ -48,7 +47,6 @@ type EditorState =
 const emptyPlanForm: PlanFormState = {
   name: '',
   description: '',
-  priceMonthly: '',
   status: 'draft',
   marketplacePlanId: '',
   seatLimit: '',
@@ -67,7 +65,6 @@ function toPlanFormState(plan?: PublisherPlan): PlanFormState {
   return {
     name: plan.name,
     description: plan.description,
-    priceMonthly: plan.priceMonthly,
     status: plan.status,
     marketplacePlanId: plan.marketplacePlanId ?? '',
     seatLimit: plan.seatLimit?.toString() ?? '',
@@ -77,19 +74,17 @@ function toPlanFormState(plan?: PublisherPlan): PlanFormState {
 function parsePlanFormState(formState: PlanFormState): { payload: PublisherPlanUpdateInput; error?: string } {
   const name = formState.name.trim();
   const description = formState.description.trim();
-  const priceMonthly = formState.priceMonthly.trim();
   const marketplacePlanId = formState.marketplacePlanId.trim();
   const seatLimitValue = formState.seatLimit.trim();
 
-  if (!name || !description || !priceMonthly) {
+  if (!name || !description) {
     return {
       payload: {
         name,
         description,
-        priceMonthly,
         status: formState.status,
       },
-      error: 'Name, description, and monthly price are required.',
+      error: 'Name and description are required.',
     };
   }
 
@@ -100,7 +95,6 @@ function parsePlanFormState(formState: PlanFormState): { payload: PublisherPlanU
         payload: {
           name,
           description,
-          priceMonthly,
           status: formState.status,
         },
         error: 'Seat limit must be a whole number greater than zero, or left empty for unlimited.',
@@ -112,7 +106,6 @@ function parsePlanFormState(formState: PlanFormState): { payload: PublisherPlanU
     payload: {
       name,
       description,
-      priceMonthly,
       status: formState.status,
       marketplacePlanId: marketplacePlanId || null,
       seatLimit: seatLimitValue ? Number(seatLimitValue) : null,
@@ -420,8 +413,8 @@ export function PublisherPlansClient() {
 
               <dl className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <dt className="text-sm text-slate-500 dark:text-slate-400">Monthly price</dt>
-                  <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.priceMonthly}</dd>
+                  <dt className="text-sm text-slate-500 dark:text-slate-400">Pricing</dt>
+                  <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.pricingSummary ? 'Synced from Partner Center' : 'No pricing available'}</dd>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
                   <dt className="text-sm text-slate-500 dark:text-slate-400">Seat limit</dt>
@@ -466,7 +459,6 @@ export function PublisherPlansClient() {
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-name">Name</label><input id="plan-name" value={formState.name} onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" required /></div>
-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-price">Monthly price</label><input id="plan-price" value={formState.priceMonthly} onChange={(event) => setFormState((current) => ({ ...current, priceMonthly: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" placeholder="$79" required /></div>
             <div className="lg:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-description">Description</label><textarea id="plan-description" value={formState.description} onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))} className="min-h-32 w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" required /></div>
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-status">Status</label><select id="plan-status" value={formState.status} onChange={(event) => setFormState((current) => ({ ...current, status: event.target.value as PublisherPlanStatus }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600"><option value="active">Active</option><option value="draft">Draft</option></select></div>
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-seat-limit">Seat limit</label><input id="plan-seat-limit" type="number" min={1} step={1} value={formState.seatLimit} onChange={(event) => setFormState((current) => ({ ...current, seatLimit: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" placeholder="Unlimited" /></div>

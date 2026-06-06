@@ -17,7 +17,7 @@ const publisherPlanCatalog: Record<string, Omit<PublisherPlan, 'activeSubscripti
     id: 'starter',
     name: 'Starter',
     description: 'Self-serve onboarding for early marketplace customers.',
-    priceMonthly: '$79',
+    pricingSummary: null,
     status: 'active',
     features: ['10 seats included', 'Email support', 'Single environment'],
   },
@@ -25,7 +25,7 @@ const publisherPlanCatalog: Record<string, Omit<PublisherPlan, 'activeSubscripti
     id: 'growth',
     name: 'Growth',
     description: 'Balanced controls for growing portfolio tenants.',
-    priceMonthly: '$249',
+    pricingSummary: null,
     status: 'active',
     features: ['25 seats included', 'Priority support', 'Usage analytics'],
   },
@@ -33,7 +33,7 @@ const publisherPlanCatalog: Record<string, Omit<PublisherPlan, 'activeSubscripti
     id: 'scale',
     name: 'Scale',
     description: 'Enterprise controls and publisher-ready governance.',
-    priceMonthly: '$499',
+    pricingSummary: null,
     status: 'active',
     features: ['Unlimited seats', 'Dedicated support', 'Custom exports'],
   },
@@ -53,25 +53,13 @@ function getPlanTemplate(planId: string): Omit<PublisherPlan, 'activeSubscriptio
       id: planId,
       name: titleize(planId),
       description: 'Marketplace plan imported from the fulfillment API subscription record.',
-      priceMonthly: '$0',
+      pricingSummary: null,
       status: 'draft',
       features: ['Imported from live subscription data'],
     }
   );
 }
 
-function parseMoney(value: string): number {
-  const parsed = Number(value.replace(/[^\d.]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function getMetadataValue(metadata: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
@@ -126,7 +114,7 @@ export function mapSubscriptionToPublisherTenant(subscription: Subscription): Pu
     planId: subscription.planId,
     planName: template.name,
     status: mapSubscriptionStatus(subscription.status),
-    monthlyRecurringRevenue: template.priceMonthly,
+    monthlyRecurringRevenue: null,
     seats: subscription.seats,
     subscriptionId: subscription.id,
     lastUpdated: subscription.updatedAt,
@@ -144,7 +132,7 @@ export function buildPublisherDashboard(subscriptions: Subscription[]): Publishe
   return {
     subscriptionCount: subscriptions.length,
     activeTenants: tenants.filter((tenant) => tenant.status === 'active').length,
-    monthlyRecurringRevenue: formatMoney(tenants.reduce((total, tenant) => total + parseMoney(tenant.monthlyRecurringRevenue), 0)),
+    monthlyRecurringRevenue: null,
     churnRiskCount: tenants.filter((tenant) => tenant.status === 'past_due' || tenant.status === 'suspended').length,
     plans: [...planCounts.entries()].map(([planId, tenantCount]) => ({
       planId,
