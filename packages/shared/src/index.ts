@@ -47,7 +47,7 @@ export interface PlanOption {
   id: string;
   name: string;
   description: string;
-  priceMonthly: string;
+  pricingSummary: string | null;
   recommended?: boolean;
   features: PlanFeature[];
 }

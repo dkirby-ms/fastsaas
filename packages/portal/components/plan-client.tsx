@@ -53,7 +53,7 @@ export function PlanClient() {
                 </div>
                 {plan.recommended ? <span className="rounded-full bg-brand-50 dark:bg-brand-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700 dark:text-brand-300">Popular</span> : null}
               </div>
-              <p className="mt-6 text-3xl font-semibold text-slate-950 dark:text-slate-50">{plan.priceMonthly}<span className="text-base font-medium text-slate-500 dark:text-slate-400"> / month</span></p>
+              <p className="mt-6 text-3xl font-semibold text-slate-950 dark:text-slate-50">{plan.pricingSummary ?? <span className="text-base font-medium text-slate-500 dark:text-slate-400">Contact sales</span>}</p>
               <ul className="mt-6 space-y-3 text-sm text-slate-600 dark:text-slate-400">
                 {plan.features.map((feature) => (
                   <li key={feature.label} className="flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3"><span className={clsx('h-2.5 w-2.5 rounded-full', feature.included ? 'bg-emerald-50 dark:bg-emerald-500/100' : 'bg-slate-300')} aria-hidden="true" /><span>{feature.label}</span></li>

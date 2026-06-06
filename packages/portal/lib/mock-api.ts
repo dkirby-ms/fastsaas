@@ -123,9 +123,9 @@ function defaultCustomerPlans(): PlansResponse {
   return {
     currentPlanId: null,
     availablePlans: [
-      { id: 'starter', name: 'Starter', description: 'Core workflow automation for small teams.', priceMonthly: '$79', features: [{ label: 'Up to 10 team members', included: true }, { label: 'Email support', included: true }, { label: 'Single environment', included: true }] },
-      { id: 'growth', name: 'Growth', description: 'Balanced controls for scaling product teams.', priceMonthly: '$249', recommended: true, features: [{ label: 'Up to 25 team members', included: true }, { label: 'Priority support', included: true }, { label: 'Advanced analytics', included: true }] },
-      { id: 'scale', name: 'Scale', description: 'Enterprise-ready governance and visibility.', priceMonthly: '$499', features: [{ label: 'Unlimited team members', included: true }, { label: 'Dedicated success manager', included: true }, { label: 'Custom usage exports', included: true }] },
+      { id: 'starter', name: 'Starter', description: 'Core workflow automation for small teams.', pricingSummary: '$79/mo', features: [{ label: 'Up to 10 team members', included: true }, { label: 'Email support', included: true }, { label: 'Single environment', included: true }] },
+      { id: 'growth', name: 'Growth', description: 'Balanced controls for scaling product teams.', pricingSummary: '$249/mo', recommended: true, features: [{ label: 'Up to 25 team members', included: true }, { label: 'Priority support', included: true }, { label: 'Advanced analytics', included: true }] },
+      { id: 'scale', name: 'Scale', description: 'Enterprise-ready governance and visibility.', pricingSummary: null, features: [{ label: 'Unlimited team members', included: true }, { label: 'Dedicated success manager', included: true }, { label: 'Custom usage exports', included: true }] },
     ],
   };
 }
@@ -272,7 +272,7 @@ function buildCustomerDashboard(state: MockPortalState): DashboardData {
           ? 'annual'
           : 'monthly',
       renewalDate: formatRenewalDate(currentSubscription, dashboardState),
-      amount: plan?.priceMonthly ?? '$0',
+      amount: plan?.pricingSummary ?? '$0',
     },
     usage: {
       activeMembers: dashboardState === 'canceled' ? 0 : Math.max(1, Math.min(seatsPurchased, Math.round(seatsPurchased * 0.7))),
