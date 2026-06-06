@@ -20,6 +20,7 @@ import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
 import type { AssetVisibilityService } from './services/asset-visibility-service';
 import type { PublisherPlanRepository } from './repositories/publisher-plan-repository';
+import type { PlanFeatureGateService } from './services/plan-feature-gate-service';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
@@ -31,6 +32,7 @@ export interface AppDependencies extends MeteringRuntimeDependencies {
   assetVisibilityService?: AssetVisibilityService;
   tenantMemberService?: TenantMemberService;
   publisherPlanRepository?: PublisherPlanRepository;
+  planFeatureGateService?: PlanFeatureGateService;
 }
 
 export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
@@ -85,7 +87,8 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.productCatalogService,
       dependencies.submissionMonitoringService,
       dependencies.assetVisibilityService,
-      dependencies.tenantMemberService
+      dependencies.tenantMemberService,
+      dependencies.planFeatureGateService
     )
   );
   app.use(notFoundHandler);

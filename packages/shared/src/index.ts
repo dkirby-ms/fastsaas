@@ -302,6 +302,31 @@ export interface PublisherPlansResponse {
   plans: PublisherPlan[];
 }
 
+export interface PlanFeatureGate {
+  publisherTenantId: string;
+  planId: string;
+  featureKey: string;
+  enabled: boolean;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface PlanFeatureGatesResponse {
+  features: string[];
+}
+
+export interface FeatureEnabledResponse {
+  enabled: boolean;
+}
+
+export interface SetFeatureGatesRequest {
+  gates: Array<{
+    featureKey: string;
+    enabled: boolean;
+    metadata?: Record<string, unknown>;
+  }>;
+}
+
 export interface MarketplacePlanSummary {
   id: string;
   externalPlanId: string;

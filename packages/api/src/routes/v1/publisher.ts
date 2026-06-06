@@ -9,10 +9,12 @@ import type {
   PublisherDashboardData,
   PublisherPlan,
   PublisherPlansResponse,
+  PlanFeatureGatesResponse,
   PublisherTenantDetail,
   PublisherTenantStatus,
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
+  SetFeatureGatesRequest,
   Subscription
 } from '@fastsaas/shared';
 import { Router, type Response } from 'express';
@@ -44,6 +46,7 @@ import type {
 } from '../../services/submission-monitoring-service';
 import type { CreatePublisherPlanInput, PublisherActorContext, PublisherService } from '../../services/publisher-service';
 import type { AssetVisibilityService } from '../../services/asset-visibility-service';
+import type { PlanFeatureGateService, SetFeatureGateInput } from '../../services/plan-feature-gate-service';
 
 function parsePlanBody(body: unknown): CreatePublisherPlanInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -255,6 +258,50 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
   throw AppError.badRequest('Publisher tenant action is not supported');
 }
 
+function getFeatureKey(req: ApiRequest): string {
+  const { featureKey } = req.params;
+  if (typeof featureKey !== 'string' || featureKey.length === 0) {
+    throw AppError.badRequest('featureKey path parameter is required');
+  }
+
+  return featureKey;
+}
+
+function parseFeatureGatesBody(body: unknown): SetFeatureGateInput[] {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  const candidate = body as Record<string, unknown>;
+  const { gates } = candidate;
+
+  if (!Array.isArray(gates)) {
+    throw AppError.badRequest('gates must be an array');
+  }
+
+  return gates.map((gate, index) => {
+    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+      throw AppError.badRequest(`gates[${index}] must be an object`);
+    }
+
+    const g = gate as Record<string, unknown>;
+
+    if (typeof g.featureKey !== 'string' || g.featureKey.length === 0) {
+      throw AppError.badRequest(`gates[${index}].featureKey must be a non-empty string`);
+    }
+
+    if (typeof g.enabled !== 'boolean') {
+      throw AppError.badRequest(`gates[${index}].enabled must be a boolean`);
+    }
+
+    return {
+      featureKey: g.featureKey,
+      enabled: g.enabled,
+      ...(g.metadata !== undefined ? { metadata: g.metadata } : {})
+    };
+  });
+}
+
 export function createPublisherRouter(
   config: ApiConfig,
   publisherService: PublisherService,
@@ -262,7 +309,8 @@ export function createPublisherRouter(
   productCatalogService?: ProductCatalogService,
   submissionMonitoringService?: SubmissionMonitoringService,
   assetVisibilityService?: AssetVisibilityService,
-  tenantMemberService?: TenantMemberService
+  tenantMemberService?: TenantMemberService,
+  planFeatureGateService?: PlanFeatureGateService
 ) {
   const router = Router();
   router.use(
@@ -585,6 +633,151 @@ export function createPublisherRouter(
       }
     }
   );
+
+  if (planFeatureGateService) {
+    /**
+     * @swagger
+     * /v1/publisher/plans/{planId}/features:
+     *   get:
+     *     summary: List enabled features for a plan
+     *     description: Returns the list of enabled feature keys for the specified publisher plan.
+     *     tags:
+     *       - Publisher
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: planId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Enabled feature keys for the plan
+     *       401:
+     *         description: Missing or invalid bearer token
+     *       403:
+     *         description: Token missing required scope or publisher view permission
+     */
+    router.get(
+      '/plans/:planId/features',
+      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getPlanId }),
+      async (req: ApiRequest, res: Response<ApiResponse<PlanFeatureGatesResponse>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const features = await planFeatureGateService.listFeatures(getPlanId(req), actor.tenantId);
+          res.status(200).json({ status: 'success', data: { features }, meta: buildResponseMeta(req, config.apiVersion) });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    /**
+     * @swagger
+     * /v1/publisher/plans/{planId}/features:
+     *   put:
+     *     summary: Bulk set feature gates for a plan
+     *     description: Upserts feature gate entries for the specified publisher plan.
+     *     tags:
+     *       - Publisher
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: planId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required: [gates]
+     *             properties:
+     *               gates:
+     *                 type: array
+     *                 items:
+     *                   type: object
+     *                   required: [featureKey, enabled]
+     *                   properties:
+     *                     featureKey:
+     *                       type: string
+     *                     enabled:
+     *                       type: boolean
+     *                     metadata:
+     *                       type: object
+     *     responses:
+     *       204:
+     *         description: Feature gates updated
+     *       400:
+     *         description: Request body is invalid
+     *       401:
+     *         description: Missing or invalid bearer token
+     *       403:
+     *         description: Token missing required scope or publisher management permission
+     */
+    router.put(
+      '/plans/:planId/features',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+      async (req: ApiRequest, res: Response<ApiResponse<never>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const gates = parseFeatureGatesBody(req.body);
+          await planFeatureGateService.setFeatureGates(actor.tenantId, getPlanId(req), gates);
+          res.status(204).send();
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    /**
+     * @swagger
+     * /v1/publisher/plans/{planId}/features/{featureKey}:
+     *   delete:
+     *     summary: Remove a feature gate from a plan
+     *     description: Deletes a single feature gate entry for the specified publisher plan.
+     *     tags:
+     *       - Publisher
+     *     security:
+     *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: planId
+     *         required: true
+     *         schema:
+     *           type: string
+     *       - in: path
+     *         name: featureKey
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       204:
+     *         description: Feature gate removed
+     *       401:
+     *         description: Missing or invalid bearer token
+     *       403:
+     *         description: Token missing required scope or publisher management permission
+     */
+    router.delete(
+      '/plans/:planId/features/:featureKey',
+      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+      async (req: ApiRequest, res: Response<ApiResponse<never>>, next) => {
+        try {
+          const actor = buildActorContext(req);
+          const featureKey = getFeatureKey(req);
+          await planFeatureGateService.removeFeatureGate(actor.tenantId, getPlanId(req), featureKey);
+          res.status(204).send();
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+  }
 
   /**
    * @swagger

@@ -4,6 +4,7 @@ import type { ApiConfig } from '../../config';
 import type { MeteringService } from '../../metering/service';
 import type { AuditService } from '../../services/audit-service';
 import type { JobPollingService } from '../../services/job-polling-service';
+import type { PlanFeatureGateService } from '../../services/plan-feature-gate-service';
 import type { ProductCatalogService } from '../../services/product-catalog-service';
 import type { PublisherService } from '../../services/publisher-service';
 import type { SubmissionMonitoringService } from '../../services/submission-monitoring-service';
@@ -12,6 +13,7 @@ import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { AssetVisibilityService } from '../../services/asset-visibility-service';
 import { createAuditLogsRouter } from './audit-logs';
 import { createAuthRouter } from './auth';
+import { createFeaturesRouter } from './features';
 import { createMembersRouter } from './members';
 import { createMeteringRouter } from './metering';
 import { createPublisherRouter } from './publisher';
@@ -27,7 +29,8 @@ export function createV1Router(
   productCatalogService?: ProductCatalogService,
   submissionMonitoringService?: SubmissionMonitoringService,
   assetVisibilityService?: AssetVisibilityService,
-  tenantMemberService?: TenantMemberService
+  tenantMemberService?: TenantMemberService,
+  planFeatureGateService?: PlanFeatureGateService
 ) {
   const router = Router();
 
@@ -46,6 +49,10 @@ export function createV1Router(
     router.use('/audit-logs', createAuditLogsRouter(config, auditService, tenantMemberService));
   }
 
+  if (planFeatureGateService) {
+    router.use('/features', createFeaturesRouter(config, planFeatureGateService, tenantMemberService));
+  }
+
   if (publisherService && jobPollingService) {
     router.use(
       '/publisher',
@@ -56,7 +63,8 @@ export function createV1Router(
         productCatalogService,
         submissionMonitoringService,
         assetVisibilityService,
-        tenantMemberService
+        tenantMemberService,
+        planFeatureGateService
       )
     );
   }

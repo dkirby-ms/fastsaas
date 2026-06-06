@@ -196,6 +196,15 @@ export interface AuditLogsTable {
   metadata: JsonColumn;
 }
 
+export interface PlanFeatureGatesTable {
+  publisher_tenant_id: string;
+  plan_id: string;
+  feature_key: string;
+  enabled: boolean;
+  metadata: NullableJsonColumn;
+  created_at: GeneratedTimestamp;
+}
+
 export interface Database {
   usage_events: UsageEventsTable;
   usage_event_dead_letters: UsageEventDeadLettersTable;
@@ -203,6 +212,7 @@ export interface Database {
   subscription_audit_logs: SubscriptionAuditLogsTable;
   marketplace_webhook_events: MarketplaceWebhookEventsTable;
   publisher_plans: PublisherPlansTable;
+  plan_feature_gates: PlanFeatureGatesTable;
   tenant_members: TenantMembersTable;
   marketplace_jobs: MarketplaceJobsTable;
   marketplace_products: MarketplaceProductsTable;
