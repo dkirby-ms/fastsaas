@@ -1,3 +1,9 @@
+## [0.19.1](https://github.com/dkirby-ms/fastsaas/compare/v0.19.0...v0.19.1) (2026-06-06)
+
+### Bug Fixes
+
+* restore partner_center_connections migration stub to unbreak staging API ([48fec2a](https://github.com/dkirby-ms/fastsaas/commit/48fec2a5b224bfe64419c6a16df84edce96d8915))
+
 ## [0.19.0](https://github.com/dkirby-ms/fastsaas/compare/v0.18.1...v0.19.0) (2026-06-06)
 
 ### Features
