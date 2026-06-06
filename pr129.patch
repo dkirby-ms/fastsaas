@@ -1,0 +1,571 @@
+diff --git a/.squad/agents/eecom/history.md b/.squad/agents/eecom/history.md
+index c8bf885..d49a787 100644
+--- a/.squad/agents/eecom/history.md
++++ b/.squad/agents/eecom/history.md
+@@ -65,3 +65,5 @@
+ - **2026-06-03T14:39:04.834+00:00:** Issue #103 asset visibility backend now lives in `packages/api/src/services/asset-visibility-service.ts`, where live Product Ingestion `resource-tree` reads are cached in-memory with TTL and exposed through read-only publisher endpoints in `packages/api/src/routes/v1/publisher.ts`.
+ - **2026-06-03T14:39:04.834+00:00:** Shared marketplace visibility contracts live in `packages/shared/src/index.ts`; Product Ingestion schema/type coverage for `listing-asset`, `listing-trailer`, `preview-audience`, `private-audiences`, and `price-and-availability-offer` lives in `packages/api/src/lib/product-ingestion-types.ts`; regression coverage is in `packages/api/src/__tests__/asset-visibility-service.test.ts`.
+ - **2026-06-03T14:39:04.834+00:00:** Issue #103 asset visibility implementation — Implemented `AssetVisibilityService` with Product Ingestion resource-tree querying, TTL in-memory caching, and type definitions. Routes: `GET /v1/publisher/products/:productId/assets`, `GET /v1/publisher/products/:productId/audiences`, `GET /v1/publisher/products/:productId/plans/:planId/pricing`. All types exported from @fastsaas/shared. Typecheck + tests pass. No persistence or schema changes in first pass per architecture plan. Service boundary preserved for future database-backed cache.
++- **2026-06-03T19:44:18.235+00:00:** Portal subscription enforcement now happens server-side in `packages/portal/app/(portal)/layout.tsx`, which reuses the existing App Router auth layout and redirects customer routes to `/no-subscription` before render while exempting publisher routes.
++- **2026-06-03T19:44:18.235+00:00:** Mock customer subscription access is mirrored into the lightweight cookie helper at `packages/portal/lib/subscription-gate-cookie.ts` from `packages/portal/lib/mock-api.ts`, because the main mock portal state remains in browser localStorage and is unavailable to server components.
+diff --git a/packages/portal/app/(portal)/layout.tsx b/packages/portal/app/(portal)/layout.tsx
+index 5d5184a..25d7de2 100644
+--- a/packages/portal/app/(portal)/layout.tsx
++++ b/packages/portal/app/(portal)/layout.tsx
+@@ -1,6 +1,45 @@
++import type { DashboardData } from '@fastsaas/shared';
++import type { Session } from 'next-auth';
++import { cookies } from 'next/headers';
+ import { redirect } from 'next/navigation';
+ import { auth } from '@/auth';
+ import { PortalShell } from '@/components/portal-shell';
++import { hasPublisherAccess } from '@/lib/roles';
++import { decodeMockSubscriptionGateCookie, mockSubscriptionGateCookieName } from '@/lib/subscription-gate-cookie';
++
++function shouldUseMockApi() {
++  return process.env.USE_MOCK_API?.toLowerCase() !== 'false' || !process.env.API_BASE_URL;
++}
++
++function normalizeBaseUrl(baseUrl: string) {
++  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
++}
++
++async function hasCustomerSubscription(session: Session) {
++  if (shouldUseMockApi()) {
++    const cookieStore = await cookies();
++    return decodeMockSubscriptionGateCookie(cookieStore.get(mockSubscriptionGateCookieName)?.value);
++  }
++
++  if (!session.accessToken || !process.env.API_BASE_URL) {
++    throw new Error('Portal customer subscription checks require API_BASE_URL and a session access token.');
++  }
++
++  const response = await fetch(`${normalizeBaseUrl(process.env.API_BASE_URL)}/portal/dashboard`, {
++    headers: {
++      Authorization: `Bearer ${session.accessToken}`,
++      'Content-Type': 'application/json',
++    },
++    cache: 'no-store',
++  });
++
++  if (!response.ok) {
++    throw new Error(`Failed to verify customer subscription access (${response.status}).`);
++  }
++
++  const dashboard = (await response.json()) as DashboardData;
++  return dashboard.subscription !== null;
++}
+ 
+ export default async function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+   const session = await auth();
+@@ -9,5 +48,9 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
+     redirect('/sign-in');
+   }
+ 
++  if (!hasPublisherAccess(session.roles) && !(await hasCustomerSubscription(session))) {
++    redirect('/no-subscription');
++  }
++
+   return <PortalShell>{children}</PortalShell>;
+ }
+diff --git a/packages/portal/app/no-subscription/page.tsx b/packages/portal/app/no-subscription/page.tsx
+new file mode 100644
+index 0000000..f545d20
+--- /dev/null
++++ b/packages/portal/app/no-subscription/page.tsx
+@@ -0,0 +1,34 @@
++import Link from 'next/link';
++import { SignOutButton } from '@/components/sign-out-button';
++
++export default function NoSubscriptionPage() {
++  return (
++    <main className="shell-gradient flex min-h-screen items-center justify-center px-6 py-12">
++      <section className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-panel dark:border-slate-700 dark:bg-slate-900">
++        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600 dark:text-brand-300">
++          FastSaaS Portal
++        </p>
++        <h1 className="mt-4 text-3xl font-semibold text-slate-950 dark:text-slate-50">
++          No Active Subscription
++        </h1>
++        <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
++          Your organization does not have an active subscription to this service.
++        </p>
++        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
++          Purchase or reactivate a subscription in Azure Marketplace, then sign in again to continue.
++        </p>
++        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
++          <Link
++            href="https://azuremarketplace.microsoft.com"
++            target="_blank"
++            rel="noreferrer"
++            className="inline-flex rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700"
++          >
++            Open Azure Marketplace
++          </Link>
++          <SignOutButton />
++        </div>
++      </section>
++    </main>
++  );
++}
+diff --git a/packages/portal/components/customer-subscription-gate.tsx b/packages/portal/components/customer-subscription-gate.tsx
+new file mode 100644
+index 0000000..e9e8566
+--- /dev/null
++++ b/packages/portal/components/customer-subscription-gate.tsx
+@@ -0,0 +1,40 @@
++'use client';
++
++import { useQuery } from '@tanstack/react-query';
++import { usePathname, useRouter } from 'next/navigation';
++import { useEffect } from 'react';
++import { ErrorAlert } from '@/components/error-alert';
++import { LoadingPanel } from '@/components/loading-panel';
++import { portalApi } from '@/lib/api-client';
++import { getErrorMessage } from '@/lib/errors';
++
++export function CustomerSubscriptionGate({ children }: Readonly<{ children: React.ReactNode }>) {
++  const pathname = usePathname();
++  const router = useRouter();
++  const requiresSubscription = !pathname.startsWith('/publisher');
++  const dashboardQuery = useQuery({
++    queryKey: ['portal-dashboard'],
++    queryFn: portalApi.getDashboard,
++    enabled: requiresSubscription,
++  });
++
++  useEffect(() => {
++    if (requiresSubscription && dashboardQuery.data?.subscription === null) {
++      router.replace('/no-subscription');
++    }
++  }, [dashboardQuery.data?.subscription, requiresSubscription, router]);
++
++  if (!requiresSubscription) {
++    return <>{children}</>;
++  }
++
++  if (dashboardQuery.isError) {
++    return <ErrorAlert message={getErrorMessage(dashboardQuery.error, 'We could not verify your subscription access.')} />;
++  }
++
++  if (dashboardQuery.isLoading || !dashboardQuery.data || dashboardQuery.data.subscription === null) {
++    return <LoadingPanel label="Checking your subscription access" />;
++  }
++
++  return <>{children}</>;
++}
+diff --git a/packages/portal/components/dashboard-client.tsx b/packages/portal/components/dashboard-client.tsx
+index 0704884..5954405 100644
+--- a/packages/portal/components/dashboard-client.tsx
++++ b/packages/portal/components/dashboard-client.tsx
+@@ -2,7 +2,6 @@
+ 
+ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+ import clsx from 'clsx';
+-import Link from 'next/link';
+ import type { DashboardData, PortalAction } from '@fastsaas/shared';
+ import { ErrorAlert } from '@/components/error-alert';
+ import { ForbiddenState } from '@/components/forbidden-state';
+@@ -48,46 +47,7 @@ export function DashboardClient() {
+   const firstName = user.name.trim().split(/\s+/).find(Boolean) ?? 'there';
+ 
+   if (!subscription || !usage) {
+-    return (
+-      <section className="space-y-6">
+-        <header className="rounded-3xl bg-slate-950 dark:bg-slate-900 px-6 py-8 text-white shadow-panel">
+-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Subscription status</p>
+-          <h1 className="mt-3 text-3xl font-semibold">No active subscription</h1>
+-          <p className="mt-3 max-w-2xl text-sm text-slate-300 dark:text-slate-400">
+-            Hi {firstName}, your account is signed in but there is not an active Marketplace subscription attached to it yet.
+-          </p>
+-        </header>
+-
+-        <article className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
+-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+-            <div>
+-              <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Get started with FastSaaS</h2>
+-              <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+-                Subscribe in Azure Marketplace or ask your publisher contact to assign a subscription to this tenant. Once a subscription is active, usage, billing, and lifecycle controls will appear here.
+-              </p>
+-            </div>
+-            <div className="flex flex-wrap gap-3">
+-              <Link href="/plan" className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
+-                Review plans
+-              </Link>
+-              <Link href="/settings" className="rounded-full border border-slate-300 dark:border-slate-600 px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:border-brand-500 hover:text-brand-700 dark:hover:text-brand-300">
+-                Review account settings
+-              </Link>
+-            </div>
+-          </div>
+-          <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+-            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+-              <dt className="text-sm text-slate-500 dark:text-slate-400">Signed-in contact</dt>
+-              <dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.email || 'No email on file'}</dd>
+-            </div>
+-            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4">
+-              <dt className="text-sm text-slate-500 dark:text-slate-400">Organization</dt>
+-              <dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.company || 'Update your company details in settings'}</dd>
+-            </div>
+-          </dl>
+-        </article>
+-      </section>
+-    );
++    return <ErrorAlert message="We could not find an active subscription for this account." />;
+   }
+ 
+   return (
+@@ -128,7 +88,7 @@ export function DashboardClient() {
+           <h2 className="text-xl font-semibold">This month</h2>
+           <dl className="mt-6 space-y-4">
+             <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">API requests</dt><dd className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{usage.apiRequestsThisMonth.toLocaleString()}</dd></div>
+-            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Customer contact</dt><dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.email}</dd></div>
++            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Customer contact</dt><dd className="mt-2 text-base font-medium text-slate-950 dark:text-slate-50">{user.email || 'No email on file'}</dd></div>
+           </dl>
+         </article>
+       </div>
+diff --git a/packages/portal/components/plan-client.tsx b/packages/portal/components/plan-client.tsx
+index a8c53ff..c089b4a 100644
+--- a/packages/portal/components/plan-client.tsx
++++ b/packages/portal/components/plan-client.tsx
+@@ -29,7 +29,6 @@ export function PlanClient() {
+   if (!plansQuery.data) return <LoadingPanel label="Loading your plan options" />;
+ 
+   const { currentPlanId, availablePlans } = plansQuery.data;
+-  const hasActiveSubscription = Boolean(currentPlanId);
+ 
+   return (
+     <section className="space-y-6">
+@@ -39,19 +38,12 @@ export function PlanClient() {
+         <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Upgrade or downgrade between curated plans now. The API client already normalizes user-friendly errors so the real backend can slot in later without changing these screens.</p>
+       </header>
+ 
+-      {!hasActiveSubscription ? (
+-        <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-700 bg-brand-50/40 dark:bg-brand-500/5 px-6 py-5 text-sm text-slate-700 dark:text-slate-200 shadow-panel">
+-          <p className="font-semibold text-slate-950 dark:text-slate-50">No active subscription yet</p>
+-          <p className="mt-2">You can review available plans here, but plan changes stay disabled until this tenant has an active Marketplace subscription.</p>
+-        </div>
+-      ) : null}
+-
+       {updatePlanMutation.isError ? <ErrorAlert message={getErrorMessage(updatePlanMutation.error, 'We could not update your subscription plan.')} /> : null}
+ 
+       <div className="grid gap-6 xl:grid-cols-3">
+         {availablePlans.map((plan) => {
+           const isCurrent = plan.id === currentPlanId;
+-          const isDisabled = !hasActiveSubscription || isCurrent || updatePlanMutation.isPending;
++          const isDisabled = isCurrent || updatePlanMutation.isPending;
+           return (
+             <article key={plan.id} className={clsx('flex h-full flex-col rounded-3xl border bg-white dark:bg-slate-900 p-6 shadow-panel', plan.recommended ? 'border-brand-500 ring-1 ring-brand-200 dark:ring-brand-500/40' : 'border-slate-200 dark:border-slate-700')}>
+               <div className="flex items-start justify-between gap-3">
+@@ -67,8 +59,8 @@ export function PlanClient() {
+                   <li key={feature.label} className="flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3"><span className={clsx('h-2.5 w-2.5 rounded-full', feature.included ? 'bg-emerald-50 dark:bg-emerald-500/100' : 'bg-slate-300')} aria-hidden="true" /><span>{feature.label}</span></li>
+                 ))}
+               </ul>
+-              <button type="button" disabled={isDisabled} onClick={() => updatePlanMutation.mutate(plan.id)} className={clsx('mt-8 rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', isCurrent || !hasActiveSubscription ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-brand-600 text-white hover:bg-brand-700')}>
+-                {isCurrent ? 'Current plan' : !hasActiveSubscription ? 'Requires active subscription' : updatePlanMutation.isPending ? 'Updating…' : `Switch to ${plan.name}`}
++              <button type="button" disabled={isDisabled} onClick={() => updatePlanMutation.mutate(plan.id)} className={clsx('mt-8 rounded-full px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60', isCurrent ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-brand-600 text-white hover:bg-brand-700')}>
++                {isCurrent ? 'Current plan' : updatePlanMutation.isPending ? 'Updating…' : `Switch to ${plan.name}`}
+               </button>
+             </article>
+           );
+diff --git a/packages/portal/components/portal-shell.tsx b/packages/portal/components/portal-shell.tsx
+index 09e8572..41bb002 100644
+--- a/packages/portal/components/portal-shell.tsx
++++ b/packages/portal/components/portal-shell.tsx
+@@ -1,7 +1,9 @@
+ 'use client';
+ 
+-import { signOut, useSession } from 'next-auth/react';
++import { useSession } from 'next-auth/react';
++import { CustomerSubscriptionGate } from '@/components/customer-subscription-gate';
+ import { SidebarNav } from '@/components/sidebar-nav';
++import { SignOutButton } from '@/components/sign-out-button';
+ import { ThemeToggle } from '@/components/theme-toggle';
+ import { getPortalRole } from '@/lib/roles';
+ import { usePortalShellStore } from '@/lib/store';
+@@ -48,18 +50,12 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
+             </div>
+             <div className="flex flex-wrap items-center gap-3">
+               <ThemeToggle />
+-              <button
+-                type="button"
+-                onClick={() => signOut({ callbackUrl: '/sign-in' })}
+-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-brand-400 dark:hover:text-brand-300"
+-              >
+-                Sign out
+-              </button>
++              <SignOutButton />
+             </div>
+           </header>
+ 
+           <main className="flex-1" role="main">
+-            {children}
++            <CustomerSubscriptionGate>{children}</CustomerSubscriptionGate>
+           </main>
+         </div>
+       </div>
+diff --git a/packages/portal/components/settings-client.tsx b/packages/portal/components/settings-client.tsx
+index ebebcae..f00efa7 100644
+--- a/packages/portal/components/settings-client.tsx
++++ b/packages/portal/components/settings-client.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import clsx from 'clsx';
+ import { type FormEvent, useEffect, useState } from 'react';
+ import type { SettingsData } from '@fastsaas/shared';
+ import { ErrorAlert } from '@/components/error-alert';
+@@ -10,6 +11,8 @@ import { portalApi } from '@/lib/api-client';
+ import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+ 
+ const emptySettings: SettingsData = { displayName: '', email: '', company: '', timezone: 'America/Chicago', notificationsEnabled: true };
++const profileFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:bg-slate-800/70 dark:disabled:text-slate-400';
++const preferenceFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
+ 
+ export function SettingsClient() {
+   const queryClient = useQueryClient();
+@@ -60,17 +63,17 @@ export function SettingsClient() {
+         <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
+           <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Profile</h2>
+           <div className="mt-6 grid gap-5 sm:grid-cols-2">
+-            <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="displayName">Display name</label><input id="displayName" value={formState.displayName} onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
+-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="email">Billing email</label><input id="email" type="email" value={formState.email} onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
+-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="company">Company</label><input id="company" value={formState.company} onChange={(event) => setFormState((current) => ({ ...current, company: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100" required /></div>
++            <div className="sm:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="displayName">Display name</label><input id="displayName" value={formState.displayName} onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))} className={profileFieldClassName} required /></div>
++            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="email">Billing email</label><input id="email" type="email" value={formState.email} onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))} className={profileFieldClassName} required /></div>
++            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="company">Company</label><input id="company" value={formState.company} onChange={(event) => setFormState((current) => ({ ...current, company: event.target.value }))} className={profileFieldClassName} required /></div>
+           </div>
+         </section>
+ 
+         <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-panel">
+           <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Preferences</h2>
+           <div className="mt-6 space-y-5">
+-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="timezone">Timezone</label><select id="timezone" value={formState.timezone} onChange={(event) => setFormState((current) => ({ ...current, timezone: event.target.value }))} className="w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="America/Chicago">America/Chicago</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="Asia/Singapore">Asia/Singapore</option></select></div>
+-            <label className="flex items-start gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4 text-sm text-slate-600 dark:text-slate-400" htmlFor="notificationsEnabled"><input id="notificationsEnabled" type="checkbox" checked={formState.notificationsEnabled} onChange={(event) => setFormState((current) => ({ ...current, notificationsEnabled: event.target.checked }))} className="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500" /><span><span className="block font-medium text-slate-900 dark:text-slate-100">Billing and renewal notifications</span>Keep email reminders enabled for renewals, seat changes, and payment issues.</span></label>
++            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="timezone">Timezone</label><select id="timezone" value={formState.timezone} onChange={(event) => setFormState((current) => ({ ...current, timezone: event.target.value }))} className={preferenceFieldClassName}><option value="America/Chicago">America/Chicago</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="Asia/Singapore">Asia/Singapore</option></select></div>
++            <label className={clsx('flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-400')} htmlFor="notificationsEnabled"><input id="notificationsEnabled" type="checkbox" checked={formState.notificationsEnabled} onChange={(event) => setFormState((current) => ({ ...current, notificationsEnabled: event.target.checked }))} className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600" /><span><span className="block font-medium text-slate-900 dark:text-slate-100">Billing and renewal notifications</span>Keep email reminders enabled for renewals, seat changes, and payment issues.</span></label>
+           </div>
+           <button type="submit" disabled={updateSettingsMutation.isPending} className="mt-6 rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">{updateSettingsMutation.isPending ? 'Saving…' : 'Save settings'}</button>
+         </section>
+diff --git a/packages/portal/components/sign-out-button.tsx b/packages/portal/components/sign-out-button.tsx
+new file mode 100644
+index 0000000..ddd916b
+--- /dev/null
++++ b/packages/portal/components/sign-out-button.tsx
+@@ -0,0 +1,24 @@
++'use client';
++
++import clsx from 'clsx';
++import { signOut } from 'next-auth/react';
++
++const defaultClassName =
++  'rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:border-brand-400 dark:hover:text-brand-300';
++
++type SignOutButtonProps = {
++  className?: string;
++  label?: string;
++};
++
++export function SignOutButton({ className, label = 'Sign out' }: SignOutButtonProps) {
++  return (
++    <button
++      type="button"
++      onClick={() => signOut({ callbackUrl: '/sign-in' })}
++      className={clsx(defaultClassName, className)}
++    >
++      {label}
++    </button>
++  );
++}
+diff --git a/packages/portal/lib/mock-api.ts b/packages/portal/lib/mock-api.ts
+index 4a480c4..c6f58f8 100644
+--- a/packages/portal/lib/mock-api.ts
++++ b/packages/portal/lib/mock-api.ts
+@@ -22,6 +22,7 @@ import type {
+   PublisherProductSummary,
+ } from '@/lib/publisher/types';
+ import { hasPublisherAccess } from '@/lib/roles';
++import { writeMockSubscriptionGateCookie } from '@/lib/subscription-gate-cookie';
+ 
+ interface MockPublisherProduct extends PublisherProductDetail {
+   assets: ListingAsset[];
+@@ -45,6 +46,10 @@ interface MockPortalState {
+ }
+ 
+ const storageKey = 'fastsaas.portal.mock-state';
++const legacyPlaceholderNames = new Set(['Alex Customer']);
++const legacyPlaceholderEmails = new Set(['alex.customer@fastsaas.dev']);
++const legacyPlaceholderCompanies = new Set(['Northwind Traders']);
++const legacyPlaceholderUserIds = new Set(['cust_001']);
+ 
+ const defaultActions = (state: NonNullable<DashboardData['subscription']>['state']): PortalAction[] => {
+   if (state === 'canceled') {
+@@ -256,26 +261,72 @@ function defaultCustomerSettings(): SettingsData {
+   };
+ }
+ 
++function isLegacyPlaceholder(value: string, placeholders: Set<string>) {
++  return placeholders.has(value.trim());
++}
++
++function clearLegacyCustomerProfile(state: MockPortalState): MockPortalState {
++  const shouldClearName = isLegacyPlaceholder(state.dashboard.user.name, legacyPlaceholderNames)
++    || isLegacyPlaceholder(state.settings.displayName, legacyPlaceholderNames);
++  const shouldClearEmail = isLegacyPlaceholder(state.dashboard.user.email, legacyPlaceholderEmails)
++    || isLegacyPlaceholder(state.settings.email, legacyPlaceholderEmails);
++  const shouldClearCompany = isLegacyPlaceholder(state.dashboard.user.company, legacyPlaceholderCompanies)
++    || isLegacyPlaceholder(state.settings.company, legacyPlaceholderCompanies);
++  const shouldClearUserId = shouldClearEmail && legacyPlaceholderUserIds.has(state.dashboard.user.id);
++
++  if (!shouldClearName && !shouldClearEmail && !shouldClearCompany && !shouldClearUserId) {
++    return state;
++  }
++
++  return {
++    ...state,
++    dashboard: {
++      ...state.dashboard,
++      user: {
++        ...state.dashboard.user,
++        id: shouldClearUserId ? '' : state.dashboard.user.id,
++        name: shouldClearName ? '' : state.dashboard.user.name,
++        email: shouldClearEmail ? '' : state.dashboard.user.email,
++        company: shouldClearCompany ? '' : state.dashboard.user.company,
++      },
++    },
++    settings: {
++      ...state.settings,
++      displayName: shouldClearName ? '' : state.settings.displayName,
++      email: shouldClearEmail ? '' : state.settings.email,
++      company: shouldClearCompany ? '' : state.settings.company,
++    },
++  };
++}
++
+ function syncCustomerProfile(state: MockPortalState, session: PortalSession): MockPortalState {
++  const sanitizedState = clearLegacyCustomerProfile(state);
+   const sessionName = session?.user?.name?.trim() ?? '';
+   const sessionEmail = session?.user?.email?.trim() ?? '';
+-  const displayName = sessionName || state.settings.displayName || state.dashboard.user.name;
+-  const email = sessionEmail || state.settings.email || state.dashboard.user.email;
+-  const company = state.settings.company || state.dashboard.user.company;
++  const hasSubscriptionProfile = getCurrentCustomerSubscription(sanitizedState) !== null;
++  const displayName = hasSubscriptionProfile
++    ? sessionName || sanitizedState.settings.displayName || sanitizedState.dashboard.user.name
++    : sessionName;
++  const email = hasSubscriptionProfile
++    ? sessionEmail || sanitizedState.settings.email || sanitizedState.dashboard.user.email
++    : sessionEmail;
++  const company = hasSubscriptionProfile
++    ? sanitizedState.settings.company || sanitizedState.dashboard.user.company
++    : '';
+ 
+   return {
+-    ...state,
++    ...sanitizedState,
+     dashboard: {
+-      ...state.dashboard,
++      ...sanitizedState.dashboard,
+       user: {
+-        id: email || session?.tenantId || state.dashboard.user.id || 'customer-user',
++        id: email || session?.tenantId || sanitizedState.dashboard.user.id || 'customer-user',
+         name: displayName,
+         email,
+         company,
+       },
+     },
+     settings: {
+-      ...state.settings,
++      ...sanitizedState.settings,
+       displayName,
+       email,
+       company,
+@@ -386,7 +437,7 @@ function hydrateState(saved: string | null): MockPortalState {
+     const parsed = JSON.parse(saved) as Partial<MockPortalState>;
+     const base = defaultState();
+ 
+-    return withPublisherCounts({
++    return clearLegacyCustomerProfile(withPublisherCounts({
+       dashboard: parsed.dashboard ?? base.dashboard,
+       plans: parsed.plans ?? base.plans,
+       settings: parsed.settings ?? base.settings,
+@@ -396,7 +447,7 @@ function hydrateState(saved: string | null): MockPortalState {
+         tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
+         products: parsed.publisher?.products ?? base.publisher.products,
+       },
+-    });
++    }));
+   } catch {
+     return defaultState();
+   }
+@@ -414,7 +465,9 @@ function readState(): MockPortalState {
+ 
+ function writeState(state: MockPortalState) {
+   if (isBrowser()) {
+-    window.localStorage.setItem(storageKey, JSON.stringify(withPublisherCounts(state)));
++    const nextState = withPublisherCounts(state);
++    window.localStorage.setItem(storageKey, JSON.stringify(nextState));
++    writeMockSubscriptionGateCookie(getCurrentCustomerSubscription(nextState));
+   }
+ }
+ 
+@@ -597,11 +650,24 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
+ 
+   if (path === '/portal/settings' && method === 'PUT') {
+     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as SettingsData;
+-    if (!payload.email?.includes('@')) throw new ApiError('Enter a valid billing email address.', 400, 'invalid_email');
+-    state.settings = payload;
+-    state.dashboard.user.name = payload.displayName;
+-    state.dashboard.user.email = payload.email;
+-    state.dashboard.user.company = payload.company;
++    const hasSubscriptionProfile = getCurrentCustomerSubscription(state) !== null;
++    const nextSettings: SettingsData = hasSubscriptionProfile
++      ? payload
++      : {
++          ...payload,
++          displayName: state.settings.displayName,
++          email: state.settings.email,
++          company: state.settings.company,
++        };
++
++    if (hasSubscriptionProfile && !nextSettings.email?.includes('@')) {
++      throw new ApiError('Enter a valid billing email address.', 400, 'invalid_email');
++    }
++
++    state.settings = nextSettings;
++    state.dashboard.user.name = nextSettings.displayName;
++    state.dashboard.user.email = nextSettings.email;
++    state.dashboard.user.company = nextSettings.company;
+     writeState(state);
+     return state.settings as T;
+   }
+diff --git a/packages/portal/lib/subscription-gate-cookie.ts b/packages/portal/lib/subscription-gate-cookie.ts
+new file mode 100644
+index 0000000..fff9801
+--- /dev/null
++++ b/packages/portal/lib/subscription-gate-cookie.ts
+@@ -0,0 +1,24 @@
++import type { Subscription } from '@fastsaas/shared';
++
++export const mockSubscriptionGateCookieName = 'fastsaas.portal.subscription-gate';
++
++export function hasMockSubscriptionAccess(subscription: Subscription | null): boolean {
++  return subscription !== null;
++}
++
++export function decodeMockSubscriptionGateCookie(value: string | undefined): boolean {
++  return value === '1';
++}
++
++export function writeMockSubscriptionGateCookie(subscription: Subscription | null) {
++  if (typeof document === 'undefined') {
++    return;
++  }
++
++  if (hasMockSubscriptionAccess(subscription)) {
++    document.cookie = `${mockSubscriptionGateCookieName}=1; Path=/; SameSite=Lax; Max-Age=31536000`;
++    return;
++  }
++
++  document.cookie = `${mockSubscriptionGateCookieName}=; Path=/; SameSite=Lax; Max-Age=0`;
++}

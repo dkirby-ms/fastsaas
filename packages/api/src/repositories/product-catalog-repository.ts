@@ -93,6 +93,7 @@ export interface ReplaceMarketplaceCatalogSnapshotInput {
 
 export interface ProductCatalogRepository {
   listProducts(publisherTenantId: string): Promise<StoredMarketplaceProduct[]>;
+  listAllPlans(publisherTenantId: string): Promise<StoredMarketplacePlan[]>;
   getProductById(publisherTenantId: string, productId: string): Promise<StoredMarketplaceProduct | null>;
   getProductDetailById(publisherTenantId: string, productId: string): Promise<StoredMarketplaceProductDetail | null>;
   listResourcesByProductId(publisherTenantId: string, productId: string): Promise<StoredMarketplaceResource[]>;
@@ -265,6 +266,19 @@ export class InMemoryProductCatalogRepository implements ProductCatalogRepositor
       .map((product) => clone(product));
   }
 
+  async listAllPlans(publisherTenantId: string): Promise<StoredMarketplacePlan[]> {
+    const tenantProducts = this.productsByTenant.get(publisherTenantId);
+    if (!tenantProducts) {
+      return [];
+    }
+
+    return [...tenantProducts.values()]
+      .sort((left, right) => left.alias.localeCompare(right.alias))
+      .flatMap((product) =>
+        clone(this.plansByProduct.get(product.id) ?? []).sort((left, right) => left.externalPlanId.localeCompare(right.externalPlanId))
+      );
+  }
+
   async getProductById(publisherTenantId: string, productId: string): Promise<StoredMarketplaceProduct | null> {
     return clone(this.productsByTenant.get(publisherTenantId)?.get(productId) ?? null);
   }
@@ -383,6 +397,24 @@ export class KyselyProductCatalogRepository implements ProductCatalogRepository 
           .execute();
 
         return rows.map((row) => mapProduct(row));
+      },
+      { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
+    );
+  }
+
+  async listAllPlans(publisherTenantId: string): Promise<StoredMarketplacePlan[]> {
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const rows = await trx
+          .selectFrom('marketplace_plans')
+          .selectAll()
+          .where('publisher_tenant_id', '=', publisherTenantId)
+          .orderBy('product_id', 'asc')
+          .orderBy('external_plan_id', 'asc')
+          .execute();
+
+        return rows.map((row) => mapPlan(row));
       },
       { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
     );

@@ -19,11 +19,6 @@ import {
   type AuditLogRepository
 } from './repositories/audit-log-repository';
 import {
-  InMemoryPartnerCenterRepository,
-  KyselyPartnerCenterRepository,
-  type PartnerCenterRepository
-} from './repositories/partner-center-repository';
-import {
   InMemoryMarketplaceJobRepository,
   KyselyMarketplaceJobRepository,
   type MarketplaceJobRepository
@@ -50,16 +45,14 @@ import {
 } from './repositories/tenant-member-repository';
 import { ConfigureJobPoller } from './jobs/configure-job-poller';
 import { AuditService } from './services/audit-service';
+import { AssetVisibilityService } from './services/asset-visibility-service';
 import { JobPollingService } from './services/job-polling-service';
 import { MarketplaceOAuthService } from './services/marketplace-oauth-service';
-import { PartnerCenterAuthService } from './services/partner-center-auth';
-import { PartnerCenterService } from './services/partner-center-service';
 import { ProductCatalogService } from './services/product-catalog-service';
 import { PublisherService } from './services/publisher-service';
 import { SubmissionMonitoringService } from './services/submission-monitoring-service';
 import { SubscriptionService } from './services/subscription-service';
 import { TenantMemberService } from './services/tenant-member-service';
-import { AssetVisibilityService } from './services/asset-visibility-service';
 
 function createSubscriptionRepository(database?: Kysely<Database>): SubscriptionRepository {
   return database ? new KyselySubscriptionRepository(database) : new InMemorySubscriptionRepository();
@@ -75,10 +68,6 @@ function createPublisherPlanRepository(database?: Kysely<Database>): PublisherPl
 
 function createTenantMemberRepository(database?: Kysely<Database>): TenantMemberRepository {
   return database ? new KyselyTenantMemberRepository(database) : new InMemoryTenantMemberRepository();
-}
-
-function createPartnerCenterRepository(database?: Kysely<Database>): PartnerCenterRepository {
-  return database ? new KyselyPartnerCenterRepository(database) : new InMemoryPartnerCenterRepository();
 }
 
 function createMarketplaceJobRepository(database?: Kysely<Database>): MarketplaceJobRepository {
@@ -127,7 +116,6 @@ async function bootstrap(): Promise<void> {
   const auditLogRepository = createAuditLogRepository(database);
   const publisherPlanRepository = createPublisherPlanRepository(database);
   const tenantMemberRepository = createTenantMemberRepository(database);
-  const partnerCenterRepository = createPartnerCenterRepository(database);
   const marketplaceJobRepository = createMarketplaceJobRepository(database);
   const productCatalogRepository = createProductCatalogRepository(database);
   const marketplaceFulfillmentOAuthService = new MarketplaceOAuthService({
@@ -150,29 +138,13 @@ async function bootstrap(): Promise<void> {
     logger: logger.child({ component: 'marketplace-oauth' }),
     marketplace: config.marketplace
   });
-  const partnerCenterAuthService = new PartnerCenterAuthService({
-    logger: logger.child({ component: 'partner-center-auth' }),
-    keyVaultUrl: process.env.AZURE_KEY_VAULT_URL,
-    allowEnvironmentSecretReferences: (process.env.NODE_ENV ?? 'development') !== 'production'
+  const jobPollingService = new JobPollingService(marketplaceJobRepository, undefined, logger.child({ component: 'job-polling' }), {
+    pollBaseDelayMs: config.jobPolling.pollBaseDelayMs,
+    pollMaxDelayMs: config.jobPolling.pollMaxDelayMs,
+    pollJitterRatio: config.jobPolling.pollJitterRatio,
+    maxPollDurationMs: config.jobPolling.maxPollDurationMs,
+    tokenProvider: marketplaceOAuthService
   });
-  const partnerCenterService = new PartnerCenterService(
-    partnerCenterRepository,
-    partnerCenterAuthService,
-    logger.child({ component: 'partner-center' })
-  );
-  const jobPollingService = new JobPollingService(
-    marketplaceJobRepository,
-    partnerCenterRepository,
-    partnerCenterAuthService,
-    logger.child({ component: 'job-polling' }),
-    {
-      pollBaseDelayMs: config.jobPolling.pollBaseDelayMs,
-      pollMaxDelayMs: config.jobPolling.pollMaxDelayMs,
-      pollJitterRatio: config.jobPolling.pollJitterRatio,
-      maxPollDurationMs: config.jobPolling.maxPollDurationMs,
-      tokenProvider: marketplaceOAuthService
-    }
-  );
   const configureJobPoller = new ConfigureJobPoller(
     marketplaceJobRepository,
     jobPollingService,
@@ -187,22 +159,16 @@ async function bootstrap(): Promise<void> {
   );
   const productCatalogService = new ProductCatalogService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
-    authProvider: partnerCenterAuthService,
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'product-catalog' })
   });
   const submissionMonitoringService = new SubmissionMonitoringService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
-    authProvider: partnerCenterAuthService,
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'submission-monitoring' })
   });
   const assetVisibilityService = new AssetVisibilityService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
-    authProvider: partnerCenterAuthService,
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'asset-visibility' })
   });
@@ -212,7 +178,7 @@ async function bootstrap(): Promise<void> {
     subscriptionService,
     auditService,
     publisherService,
-    partnerCenterService,
+    publisherPlanRepository,
     jobPollingService,
     productCatalogService,
     submissionMonitoringService,

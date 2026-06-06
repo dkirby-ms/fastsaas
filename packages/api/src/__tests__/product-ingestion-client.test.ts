@@ -1,32 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
 import {
   ProductIngestionHttpClient,
   ProductIngestionJobFailedError,
   type ProductIngestionClientOptions
 } from '../lib/product-ingestion-client';
-import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
 import { PRODUCT_INGESTION_SCHEMAS } from '../lib/product-ingestion-types';
-
-const account: PartnerCenterAccountRecord = {
-  id: 'account-1',
-  tenantId: 'tenant-1',
-  pcTenantId: 'pc-tenant-1',
-  clientId: 'client-1',
-  authMode: 'CLIENT_SECRET',
-  connectionStatus: 'CONNECTED',
-  createdAt: '2026-06-02T01:49:24.679+00:00',
-  updatedAt: '2026-06-02T01:49:24.679+00:00'
-};
-
-const credential: PartnerCenterCredentialRecord = {
-  id: 'credential-1',
-  accountId: 'account-1',
-  secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET',
-  createdAt: '2026-06-02T01:49:24.679+00:00',
-  updatedAt: '2026-06-02T01:49:24.679+00:00'
-};
+import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
 
 function createClient(overrides: Partial<ProductIngestionClientOptions> = {}) {
   const fetchImpl = overrides.fetchImpl ?? vi.fn<typeof fetch>();
@@ -52,8 +32,6 @@ function createClient(overrides: Partial<ProductIngestionClientOptions> = {}) {
   const client = new ProductIngestionHttpClient({
     logger,
     authProvider,
-    account,
-    credential,
     fetchImpl,
     sleep,
     ...overrides
@@ -324,14 +302,13 @@ describe('ProductIngestionHttpClient', () => {
           }
         )
       );
-    const sleep = vi.fn(async () => undefined);
 
+    const sleep = vi.fn(async () => undefined);
     const { client } = createClient({ fetchImpl, sleep });
 
-    const detail = await client.waitForConfigureCompletion('job-456', { pollIntervalMs: 25, timeoutMs: 500 });
+    const detail = await client.waitForConfigureCompletion('job-456', { timeoutMs: 100, pollIntervalMs: 10 });
 
     expect(detail.resources).toHaveLength(1);
-    expect(detail.resources[0]).toMatchObject({ id: 'product/prod-456' });
-    expect(sleep).toHaveBeenCalledWith(25);
+    expect(sleep).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,8 +5,6 @@ import { SecretClient } from '@azure/keyvault-secrets';
 import { SignJWT } from 'jose';
 import type { Logger } from 'pino';
 
-import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
-
 const GRAPH_SCOPE = 'https://graph.microsoft.com/.default';
 const DEFAULT_GRAPH_BASE_URL = 'https://graph.microsoft.com';
 const DEFAULT_PRODUCT_INGESTION_API_VERSION = '2022-03-01-preview5';
@@ -33,15 +31,17 @@ interface KeyVaultSecretReference {
   version?: string;
 }
 
+export type PartnerCenterAuthMode = 'CLIENT_SECRET' | 'CLIENT_CERTIFICATE';
+
 export interface PartnerCenterValidationResult {
   organizationId?: string;
   displayName?: string;
 }
 
 export interface PartnerCenterAuthProvider {
-  acquireGraphToken(account: PartnerCenterAccountRecord, credential: PartnerCenterCredentialRecord): Promise<string>;
-  validateConnection(account: PartnerCenterAccountRecord, credential: PartnerCenterCredentialRecord): Promise<PartnerCenterValidationResult>;
-  invalidate(accountId: string): void;
+  acquireGraphToken(): Promise<string>;
+  validateConnection(): Promise<PartnerCenterValidationResult>;
+  invalidate(accountId?: string): void;
 }
 
 export class PartnerCenterAuthError extends Error {
@@ -58,6 +58,12 @@ export class PartnerCenterAuthError extends Error {
 
 export interface PartnerCenterAuthServiceOptions {
   logger: Logger;
+  tenantId: string;
+  clientId: string;
+  secretReference: string;
+  authMode?: PartnerCenterAuthMode;
+  rotationMetadata?: Record<string, unknown>;
+  cacheKey?: string;
   fetchImpl?: typeof fetch;
   graphBaseUrl?: string;
   productIngestionApiVersion?: string;
@@ -193,7 +199,7 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return text.length > 0 ? text : undefined;
 }
 
-// TODO(issue #78): This tenant-scoped Partner Center auth flow is legacy compatibility.
+// TODO(issue #78): This auth flow is legacy compatibility.
 // Single-publisher deployments should prefer MarketplaceOAuthService.
 export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
   private readonly fetchImpl: typeof fetch;
@@ -203,9 +209,9 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
   private readonly allowEnvironmentSecretReferences: boolean;
   private readonly secretResolver: (secretReference: string) => Promise<string>;
   private readonly now: () => Date;
-  private readonly tokenCache = new Map<string, { token: string; expiresAt: number }>();
   private readonly secretClients = new Map<string, SecretClient>();
   private readonly keyVaultCredential = new DefaultAzureCredential();
+  private cachedToken?: { token: string; expiresAt: number };
 
   constructor(private readonly options: PartnerCenterAuthServiceOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -217,30 +223,30 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     this.now = options.now ?? (() => new Date());
   }
 
-  invalidate(accountId: string): void {
-    this.tokenCache.delete(accountId);
+  invalidate(_accountId?: string): void {
+    this.cachedToken = undefined;
   }
 
-  async acquireGraphToken(account: PartnerCenterAccountRecord, credential: PartnerCenterCredentialRecord): Promise<string> {
-    const cachedToken = this.tokenCache.get(account.id);
+  async acquireGraphToken(): Promise<string> {
+    const cachedToken = this.cachedToken;
     const now = this.now().getTime();
     if (cachedToken && cachedToken.expiresAt > now + TOKEN_REFRESH_BUFFER_MS) {
       return cachedToken.token;
     }
 
-    const tokenEndpoint = `https://login.microsoftonline.com/${encodeURIComponent(account.pcTenantId)}/oauth2/v2.0/token`;
+    const tokenEndpoint = `https://login.microsoftonline.com/${encodeURIComponent(this.options.tenantId)}/oauth2/v2.0/token`;
     const requestBody = new URLSearchParams({
-      client_id: account.clientId,
+      client_id: this.options.clientId,
       scope: GRAPH_SCOPE,
       grant_type: 'client_credentials'
     });
 
-    const secretValue = await this.secretResolver(credential.secretReference);
-    if (account.authMode === 'CLIENT_SECRET') {
+    const secretValue = await this.secretResolver(this.options.secretReference);
+    if ((this.options.authMode ?? 'CLIENT_SECRET') === 'CLIENT_SECRET') {
       requestBody.set('client_secret', secretValue);
     } else {
       requestBody.set('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
-      requestBody.set('client_assertion', await this.createClientAssertion(account, credential, secretValue, tokenEndpoint));
+      requestBody.set('client_assertion', await this.createClientAssertion(secretValue, tokenEndpoint));
     }
 
     const response = await this.fetchImpl(tokenEndpoint, {
@@ -255,7 +261,7 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
       const responseBody = await parseResponseBody(response);
       this.options.logger.warn(
         {
-          accountId: account.id,
+          connectionId: this.connectionId,
           action: 'acquire-graph-token',
           statusCode: response.status,
           responseBody
@@ -277,22 +283,19 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     }
 
     const expiresInSeconds = typeof payload.expires_in === 'number' ? payload.expires_in : 3600;
-    this.tokenCache.set(account.id, {
+    this.cachedToken = {
       token: payload.access_token,
       expiresAt: now + expiresInSeconds * 1000
-    });
+    };
 
     return payload.access_token;
   }
 
-  async validateConnection(
-    account: PartnerCenterAccountRecord,
-    credential: PartnerCenterCredentialRecord
-  ): Promise<PartnerCenterValidationResult> {
-    const token = await this.acquireGraphToken(account, credential);
-    await this.validateProductIngestionAccess(account.id, token);
+  async validateConnection(): Promise<PartnerCenterValidationResult> {
+    const token = await this.acquireGraphToken();
+    await this.validateProductIngestionAccess(token);
 
-    const organization = await this.tryGetOrganization(account.id, token);
+    const organization = await this.tryGetOrganization(token);
     const resolvedOrganization = Array.isArray(organization?.value) ? organization.value[0] : undefined;
 
     return {
@@ -301,7 +304,11 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     };
   }
 
-  private async validateProductIngestionAccess(accountId: string, token: string): Promise<void> {
+  private get connectionId(): string {
+    return this.options.cacheKey ?? this.options.clientId;
+  }
+
+  private async validateProductIngestionAccess(token: string): Promise<void> {
     const validationUrl = new URL('/rp/product-ingestion/product', `${this.graphBaseUrl}/`);
     validationUrl.searchParams.set('$version', this.productIngestionApiVersion);
     validationUrl.searchParams.set('$maxpagesize', '1');
@@ -317,7 +324,7 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
       const responseBody = await parseResponseBody(response);
       this.options.logger.warn(
         {
-          accountId,
+          connectionId: this.connectionId,
           action: 'validate-product-ingestion-access',
           statusCode: response.status,
           responseBody
@@ -334,7 +341,7 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     }
   }
 
-  private async tryGetOrganization(accountId: string, token: string): Promise<GraphOrganizationResponseShape | undefined> {
+  private async tryGetOrganization(token: string): Promise<GraphOrganizationResponseShape | undefined> {
     try {
       const response = await this.fetchImpl(`${this.graphBaseUrl}/v1.0/organization?$select=id,displayName`, {
         method: 'GET',
@@ -347,7 +354,7 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
         const responseBody = await parseResponseBody(response);
         this.options.logger.info(
           {
-            accountId,
+            connectionId: this.connectionId,
             action: 'lookup-organization',
             statusCode: response.status,
             responseBody
@@ -361,7 +368,7 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     } catch (error) {
       this.options.logger.info(
         {
-          accountId,
+          connectionId: this.connectionId,
           action: 'lookup-organization',
           err: error
         },
@@ -430,19 +437,14 @@ export class PartnerCenterAuthService implements PartnerCenterAuthProvider {
     return client;
   }
 
-  private async createClientAssertion(
-    account: PartnerCenterAccountRecord,
-    credential: PartnerCenterCredentialRecord,
-    privateKeyPem: string,
-    audience: string
-  ): Promise<string> {
-    const certificateThumbprint = this.resolveCertificateThumbprint(credential.rotationMetadata);
+  private async createClientAssertion(privateKeyPem: string, audience: string): Promise<string> {
+    const certificateThumbprint = this.resolveCertificateThumbprint(this.options.rotationMetadata);
     const issuedAt = Math.floor(this.now().getTime() / 1000);
 
     return new SignJWT({})
       .setProtectedHeader({ alg: 'RS256', typ: 'JWT', x5t: certificateThumbprint })
-      .setIssuer(account.clientId)
-      .setSubject(account.clientId)
+      .setIssuer(this.options.clientId)
+      .setSubject(this.options.clientId)
       .setAudience(audience)
       .setJti(randomUUID())
       .setIssuedAt(issuedAt)

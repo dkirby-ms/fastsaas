@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProductIngestionClientLike } from '../lib/product-ingestion-client';
 import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionConfigureDetail, type ProductIngestionConfigureStatus } from '../lib/product-ingestion-types';
 import { InMemoryMarketplaceJobRepository, type MarketplaceJobRecord } from '../repositories/marketplace-job-repository';
-import { InMemoryPartnerCenterRepository } from '../repositories/partner-center-repository';
 import type { PartnerCenterAuthProvider } from './partner-center-auth';
 import { JobPollingService, calculatePollDelayMs } from './job-polling-service';
 
@@ -46,17 +45,6 @@ function createDetail(): ProductIngestionConfigureDetail {
   };
 }
 
-async function seedPartnerCenter(repository: InMemoryPartnerCenterRepository, tenantId = 'publisher-tenant'): Promise<void> {
-  await repository.saveConnection({
-    tenantId,
-    pcTenantId: 'pc-tenant',
-    clientId: 'pc-client',
-    authMode: 'CLIENT_SECRET',
-    connectionStatus: 'CONNECTED',
-    secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET'
-  });
-}
-
 async function seedJob(repository: InMemoryMarketplaceJobRepository, overrides: Partial<MarketplaceJobRecord> = {}): Promise<MarketplaceJobRecord> {
   return repository.createJob({
     publisherTenantId: overrides.publisherTenantId ?? 'publisher-tenant',
@@ -74,15 +62,14 @@ async function seedJob(repository: InMemoryMarketplaceJobRepository, overrides: 
 
 function createService(client: ProductIngestionClientLike, overrides: { now?: () => Date; random?: () => number; maxPollDurationMs?: number } = {}) {
   const repository = new InMemoryMarketplaceJobRepository();
-  const partnerCenterRepository = new InMemoryPartnerCenterRepository();
-  const service = new JobPollingService(repository, partnerCenterRepository, authProvider, logger, {
+  const service = new JobPollingService(repository, authProvider, logger, {
     now: overrides.now,
     random: overrides.random,
     maxPollDurationMs: overrides.maxPollDurationMs,
     clientFactory: () => client
   });
 
-  return { repository, partnerCenterRepository, service };
+  return { repository, service };
 }
 
 describe('JobPollingService', () => {
@@ -104,11 +91,10 @@ describe('JobPollingService', () => {
       cancelConfigure: vi.fn(),
       waitForConfigureCompletion: vi.fn()
     };
-    const { repository, partnerCenterRepository, service } = createService(client, {
+    const { repository, service } = createService(client, {
       now: () => nowValues.shift() ?? new Date('2026-06-02T12:03:27.730Z'),
       random: () => 0
     });
-    await seedPartnerCenter(partnerCenterRepository);
     const job = await seedJob(repository);
 
     const running = await service.pollJob(job);
@@ -172,11 +158,10 @@ describe('JobPollingService', () => {
       cancelConfigure: vi.fn(),
       waitForConfigureCompletion: vi.fn()
     };
-    const { repository, partnerCenterRepository, service } = createService(client, {
+    const { repository, service } = createService(client, {
       now: () => new Date('2026-06-02T12:03:22.730Z'),
       random: () => 0
     });
-    await seedPartnerCenter(partnerCenterRepository);
     const job = await seedJob(repository);
 
     const failed = await service.pollJob(job);
@@ -208,11 +193,10 @@ describe('JobPollingService', () => {
       cancelConfigure: vi.fn(async () => createStatus({ jobStatus: 'completed', jobResult: 'cancelled', jobEnd: '2026-06-02T12:05:22.730Z' })),
       waitForConfigureCompletion: vi.fn()
     };
-    const { repository, partnerCenterRepository, service } = createService(client, {
+    const { repository, service } = createService(client, {
       now: () => new Date('2026-06-02T12:04:22.730Z'),
       random: () => 0
     });
-    await seedPartnerCenter(partnerCenterRepository);
     await seedJob(repository, {
       status: 'running',
       result: { poll: { attemptCount: 1, nextPollAt: '2026-06-02T12:05:22.730Z' } }
@@ -247,12 +231,11 @@ describe('JobPollingService', () => {
       cancelConfigure: vi.fn(),
       waitForConfigureCompletion: vi.fn()
     };
-    const { repository, partnerCenterRepository, service } = createService(client, {
+    const { repository, service } = createService(client, {
       now: () => new Date('2026-06-02T12:13:22.730Z'),
       random: () => 0,
       maxPollDurationMs: 60_000
     });
-    await seedPartnerCenter(partnerCenterRepository);
     const job = await seedJob(repository, {
       createdAt: '2026-06-02T12:03:22.730Z',
       status: 'running'

@@ -15,7 +15,6 @@ import type { ProductIngestionConfigureDetail, ProductIngestionConfigureStatus, 
 import { SystemClock } from '../../metering/clock';
 import { InMemoryUsageEventRepository } from '../../metering/repository';
 import { InMemoryMarketplaceJobRepository } from '../../repositories/marketplace-job-repository';
-import { InMemoryPartnerCenterRepository } from '../../repositories/partner-center-repository';
 import { InMemoryPublisherPlanRepository } from '../../repositories/publisher-plan-repository';
 import { InMemoryProductCatalogRepository } from '../../repositories/product-catalog-repository';
 import { InMemorySubscriptionRepository } from '../../repositories/subscription-repository';
@@ -23,7 +22,6 @@ import { InMemoryTenantMemberRepository } from '../../repositories/tenant-member
 import type { MarketplaceBearerTokenProvider } from '../../services/marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from '../../services/partner-center-auth';
 import { JobPollingService } from '../../services/job-polling-service';
-import { PartnerCenterService } from '../../services/partner-center-service';
 import { ProductCatalogService } from '../../services/product-catalog-service';
 import { PublisherService } from '../../services/publisher-service';
 import { SubmissionMonitoringService } from '../../services/submission-monitoring-service';
@@ -56,6 +54,7 @@ export interface SecurityHarness {
   subscriptionRepository: InMemorySubscriptionRepository;
   tenantMemberRepository: InMemoryTenantMemberRepository;
   marketplaceJobRepository: InMemoryMarketplaceJobRepository;
+  publisherPlanRepository: InMemoryPublisherPlanRepository;
   productCatalogRepository: InMemoryProductCatalogRepository;
   createToken(options?: TokenOptions): Promise<string>;
   setFulfillmentResolveOverride(marketplaceToken: string, override: FulfillmentResolveOverride): void;
@@ -267,7 +266,6 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   const subscriptionRepository = new InMemorySubscriptionRepository();
   const tenantMemberRepository = new InMemoryTenantMemberRepository();
   const publisherPlanRepository = new InMemoryPublisherPlanRepository();
-  const partnerCenterRepository = new InMemoryPartnerCenterRepository();
   const marketplaceJobRepository = new InMemoryMarketplaceJobRepository();
   const productCatalogRepository = new InMemoryProductCatalogRepository();
   const fulfillmentOverrides = new Map<string, FulfillmentResolveOverride>();
@@ -292,28 +290,20 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   );
   const partnerCenterAuthProvider = createPartnerCenterAuthProvider();
   const marketplaceTokenProvider = createMarketplaceTokenProvider();
-  const partnerCenterService = new PartnerCenterService(
-    partnerCenterRepository,
-    partnerCenterAuthProvider,
-    logger.child({ component: 'partner-center-test' })
-  );
   const jobPollingService = new JobPollingService(
     marketplaceJobRepository,
-    partnerCenterRepository,
     partnerCenterAuthProvider,
     logger.child({ component: 'job-polling-test' }),
     { clientFactory: () => createProductIngestionClient(productIngestionState), random: () => 0, tokenProvider: marketplaceTokenProvider }
   );
   const productCatalogService = new ProductCatalogService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
     authProvider: partnerCenterAuthProvider,
     tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'product-catalog-test' })
   });
   const submissionMonitoringService = new SubmissionMonitoringService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
     authProvider: partnerCenterAuthProvider,
     tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'submission-monitoring-test' }),
@@ -321,7 +311,6 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
   });
   const assetVisibilityService = new AssetVisibilityService({
     repository: productCatalogRepository,
-    partnerCenterRepository,
     authProvider: partnerCenterAuthProvider,
     tokenProvider: marketplaceTokenProvider,
     logger: logger.child({ component: 'asset-visibility-test' }),
@@ -332,7 +321,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     subscriptionRepository,
     subscriptionService,
     publisherService,
-    partnerCenterService,
+    publisherPlanRepository,
     jobPollingService,
     productCatalogService,
     submissionMonitoringService,
@@ -457,6 +446,7 @@ export async function createSecurityHarness(): Promise<SecurityHarness> {
     subscriptionRepository,
     tenantMemberRepository,
     marketplaceJobRepository,
+    publisherPlanRepository,
     productCatalogRepository,
     createToken,
     setFulfillmentResolveOverride(marketplaceToken, override) {

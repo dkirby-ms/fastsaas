@@ -14,7 +14,6 @@ const customerNavigation = [
 
 const publisherNavigation = [
   { href: '/publisher', label: 'Overview' },
-  { href: '/publisher/products', label: 'Products' },
   { href: '/publisher/plans', label: 'Plans' },
   { href: '/publisher/tenants', label: 'Tenants' },
 ];

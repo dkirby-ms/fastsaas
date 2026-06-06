@@ -64,6 +64,12 @@ describe('publisher administration routes', () => {
       scopes: [harness.config.auth.requiredScope]
     });
 
+    // Create the plan so the update succeeds (no longer seeded by defaults)
+    await request(harness.app)
+      .post('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ id: 'growth', name: 'Growth', description: 'Default growth plan', priceMonthly: '$249', status: 'active' });
+
     const subscriptionsResponse = await request(harness.app)
       .get('/v1/publisher/subscriptions')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -100,6 +106,16 @@ describe('publisher administration routes', () => {
       roles: ['Owner'],
       scopes: [harness.config.auth.requiredScope]
     });
+
+    // Create plans needed by this test (no longer seeded by defaults)
+    await request(harness.app)
+      .post('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ id: 'starter', name: 'Starter', description: 'Test plan', priceMonthly: '$79', status: 'active' });
+    await request(harness.app)
+      .post('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ id: 'growth', name: 'Growth', description: 'Test plan', priceMonthly: '$249', status: 'active' });
 
     const createResponse = await request(harness.app)
       .post('/v1/publisher/tenants')

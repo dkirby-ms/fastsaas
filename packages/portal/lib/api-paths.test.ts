@@ -23,6 +23,7 @@ test('publisher admin paths encode plan and tenant IDs for live APIs', () => {
   const planId = 'plan/basic?draft=true';
   const tenantId = 'tenant/abc?state=suspended';
 
+  assert.equal(publisherAdminPaths.marketplacePlans, '/v1/publisher/marketplace-plans');
   assert.equal(publisherAdminPaths.plan(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue');
   assert.equal(publisherAdminPaths.tenant(tenantId), '/v1/publisher/tenants/tenant%2Fabc%3Fstate%3Dsuspended');
   assert.equal(
@@ -34,6 +35,7 @@ test('publisher admin paths encode plan and tenant IDs for live APIs', () => {
 test('publisher admin mock paths encode tenant IDs identically', () => {
   const tenantId = 'sub/abc?next=cancel';
 
+  assert.equal(publisherAdminMockPaths.marketplacePlans, '/publisher/marketplace-plans');
   assert.equal(
     publisherAdminMockPaths.tenantAction(tenantId, 'cancel'),
     '/publisher/tenants/sub%2Fabc%3Fnext%3Dcancel/cancel',

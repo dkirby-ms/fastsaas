@@ -1,26 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
 import { PartnerCenterAuthService } from '../services/partner-center-auth';
-
-const account: PartnerCenterAccountRecord = {
-  id: 'account-1',
-  tenantId: 'tenant-1',
-  pcTenantId: 'pc-tenant-1',
-  clientId: 'client-1',
-  authMode: 'CLIENT_SECRET',
-  connectionStatus: 'PENDING',
-  createdAt: '2026-06-02T00:44:50.069+00:00',
-  updatedAt: '2026-06-02T00:44:50.069+00:00'
-};
-
-const credential: PartnerCenterCredentialRecord = {
-  id: 'credential-1',
-  accountId: 'account-1',
-  secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET',
-  createdAt: '2026-06-02T00:44:50.069+00:00',
-  updatedAt: '2026-06-02T00:44:50.069+00:00'
-};
 
 describe('PartnerCenterAuthService', () => {
   it('caches Graph tokens until they near expiration', async () => {
@@ -35,12 +15,15 @@ describe('PartnerCenterAuthService', () => {
 
     const service = new PartnerCenterAuthService({
       logger: { info() {}, warn() {}, error() {}, child() { return this; } } as never,
+      tenantId: 'pc-tenant-1',
+      clientId: 'client-1',
+      secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET',
       fetchImpl: fetchMock,
       secretResolver: async () => 'super-secret'
     });
 
-    const firstToken = await service.acquireGraphToken(account, credential);
-    const secondToken = await service.acquireGraphToken(account, credential);
+    const firstToken = await service.acquireGraphToken();
+    const secondToken = await service.acquireGraphToken();
 
     expect(firstToken).toBe('graph-token-1');
     expect(secondToken).toBe('graph-token-1');
@@ -71,11 +54,14 @@ describe('PartnerCenterAuthService', () => {
 
     const service = new PartnerCenterAuthService({
       logger: { info() {}, warn() {}, error() {}, child() { return this; } } as never,
+      tenantId: 'pc-tenant-1',
+      clientId: 'client-1',
+      secretReference: 'env:PARTNER_CENTER_CLIENT_SECRET',
       fetchImpl: fetchMock,
       secretResolver: async () => 'super-secret'
     });
 
-    const result = await service.validateConnection(account, credential);
+    const result = await service.validateConnection();
 
     expect(result).toEqual({ organizationId: 'org-1', displayName: 'Contoso' });
     expect(fetchMock).toHaveBeenCalledTimes(3);

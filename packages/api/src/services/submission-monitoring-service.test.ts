@@ -2,7 +2,6 @@ import type { Logger } from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionResourceTreeResponse } from '../lib/product-ingestion-types';
-import { InMemoryPartnerCenterRepository } from '../repositories/partner-center-repository';
 import { InMemoryProductCatalogRepository } from '../repositories/product-catalog-repository';
 import { SubmissionMonitoringService } from './submission-monitoring-service';
 
@@ -18,18 +17,6 @@ function createLogger(): Logger {
 describe('SubmissionMonitoringService', () => {
   it('returns environment states, history, and validation issues', async () => {
     const repository = new InMemoryProductCatalogRepository();
-    const partnerCenterRepository = new InMemoryPartnerCenterRepository();
-    await partnerCenterRepository.saveConnection({
-      tenantId: 'publisher-tenant',
-      pcTenantId: 'pc-tenant',
-      clientId: 'client-id',
-      authMode: 'CLIENT_SECRET',
-      connectionStatus: 'CONNECTED',
-      secretReference: 'env:PARTNER_CENTER_SECRET',
-      lastValidatedAt: '2026-06-02T16:54:45.149+00:00',
-      lastRotatedAt: '2026-06-02T16:54:45.149+00:00',
-      expiresAt: null
-    });
 
     const product = await repository.replaceCatalogSnapshot({
       publisherTenantId: 'publisher-tenant',
@@ -164,9 +151,12 @@ describe('SubmissionMonitoringService', () => {
 
     const service = new SubmissionMonitoringService({
       repository,
-      partnerCenterRepository,
       logger: createLogger(),
       now: () => new Date('2026-06-02T16:54:45.149+00:00'),
+      tokenProvider: {
+        getAccessToken: vi.fn(async () => 'token'),
+        invalidate: vi.fn()
+      },
       clientFactory: () => ({
         getProductByExternalId: vi.fn(),
         getResourceTree: vi.fn(async (_productId: string, environment?: 'draft' | 'preview' | 'live') => {
@@ -282,19 +272,13 @@ describe('SubmissionMonitoringService', () => {
       })
     });
 
-    const diff = await service.getProductDiff('publisher-tenant', product.product.id);
+    const response = await service.getProductDiff('publisher-tenant', product.product.id);
 
-    expect(diff.hasChanges).toBe(true);
-    expect(diff.changes).toEqual(
+    expect(response.hasChanges).toBe(true);
+    expect(response.changes).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          resourceType: 'product',
-          changeType: 'modified'
-        }),
-        expect.objectContaining({
-          resourceType: 'listing',
-          changeType: 'added'
-        })
+        expect.objectContaining({ changeType: 'modified', resourceType: 'product' }),
+        expect.objectContaining({ changeType: 'added', resourceName: 'listing-en-us' })
       ])
     );
   });

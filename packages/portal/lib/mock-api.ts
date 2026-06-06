@@ -1,5 +1,7 @@
 import type {
+  CreatePublisherPlanInput,
   DashboardData,
+  MarketplacePlanSummary,
   PlansResponse,
   PortalAction,
   PublisherDashboardData,
@@ -15,26 +17,13 @@ import type {
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
-import type { ListingAsset, ListingTrailer, PlanPricing } from '@fastsaas/shared';
-import type {
-  ProductAudiencesResponse,
-  PublisherProductDetail,
-  PublisherProductSummary,
-} from '@/lib/publisher/types';
+import type { PlanPricing } from '@fastsaas/shared';
 import { hasPublisherAccess } from '@/lib/roles';
 import { writeMockSubscriptionGateCookie } from '@/lib/subscription-gate-cookie';
-
-interface MockPublisherProduct extends PublisherProductDetail {
-  assets: ListingAsset[];
-  trailers: ListingTrailer[];
-  audiences: ProductAudiencesResponse;
-  pricing: Record<string, PlanPricing>;
-}
 
 interface PublisherMockState {
   plans: PublisherPlan[];
   tenants: PublisherTenantDetail[];
-  products: MockPublisherProduct[];
 }
 
 interface MockPortalState {
@@ -71,9 +60,9 @@ const defaultActions = (state: NonNullable<DashboardData['subscription']>['state
 
 function defaultPublisherPlans(): PublisherPlan[] {
   return [
-    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', priceMonthly: '$79', status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'] },
-    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', priceMonthly: '$249', status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'] },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', priceMonthly: '$499', status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'] },
+    { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', priceMonthly: '$79', status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
+    { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', priceMonthly: '$249', status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', priceMonthly: '$499', status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 }
 
@@ -103,109 +92,7 @@ function defaultPublisherTenants(): PublisherTenantDetail[] {
   ];
 }
 
-function defaultPublisherProducts(): MockPublisherProduct[] {
-  return [
-    {
-      id: 'product-fastsaas-core',
-      externalOfferId: 'fastsaas-core',
-      durableProductId: 'durable-fastsaas-core',
-      productType: 'SaaS',
-      alias: 'FastSaaS Core Platform',
-      lifecycleState: 'generallyAvailable',
-      lastSyncedAt: '2026-06-02T12:00:00.000Z',
-      createdAt: '2026-05-29T12:00:00.000Z',
-      updatedAt: '2026-06-02T12:00:00.000Z',
-      plans: [
-        { id: 'starter', externalPlanId: 'starter', durablePlanId: 'durable-plan-starter', status: 'active', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
-        { id: 'growth', externalPlanId: 'growth', durablePlanId: 'durable-plan-growth', status: 'active', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
-        { id: 'scale', externalPlanId: 'scale', durablePlanId: 'durable-plan-scale', status: 'draft', createdAt: '2026-05-29T12:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
-      ],
-      submissions: [
-        { id: 'submission-live-core', durableSubmissionId: 'durable-submission-live-core', targetType: 'live', status: 'published', createdAt: '2026-06-01T10:00:00.000Z', updatedAt: '2026-06-02T12:00:00.000Z' },
-      ],
-      assets: [
-        { id: 'asset-core-1', resourceName: 'Hero screenshot', assetType: 'screenshot', url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80', description: 'Main analytics dashboard', displayOrder: 1 },
-        { id: 'asset-core-2', resourceName: 'Tenant overview', assetType: 'screenshot', url: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80', description: 'Publisher tenant visibility', displayOrder: 2 },
-        { id: 'asset-core-3', resourceName: 'Primary logo', assetType: 'logo', url: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80', description: 'Marketplace logo lockup', displayOrder: 3 },
-      ],
-      trailers: [
-        { id: 'trailer-core-1', resourceName: 'Platform walkthrough', trailerType: 'video', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', thumbnailUrl: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80', duration: 92 },
-      ],
-      audiences: {
-        preview: [
-          { id: 'preview-core-1', resourceName: 'Preview cohort A', audienceType: 'preview', count: 24, description: 'Pilot customers validating the June release.' },
-        ],
-        private: [
-          { id: 'private-core-1', resourceName: 'Strategic accounts', audienceType: 'private', segmentDescription: 'Named enterprise buyers invited through private marketplace offers.' },
-        ],
-      },
-      pricing: {
-        starter: {
-          planId: 'starter',
-          planName: 'Starter',
-          markets: [
-            { region: 'United States', currency: 'USD', price: 79, marketAvailability: 'available' },
-            { region: 'United Kingdom', currency: 'GBP', price: 65, marketAvailability: 'available' },
-          ],
-          billingTerms: [{ billingTermType: 'monthly', duration: 1, durationUnit: 'month' }],
-          availability: { lifecycleState: 'generallyAvailable', availableForPurchase: true },
-        },
-        growth: {
-          planId: 'growth',
-          planName: 'Growth',
-          markets: [
-            { region: 'United States', currency: 'USD', price: 249, marketAvailability: 'available' },
-            { region: 'Canada', currency: 'CAD', price: 339, marketAvailability: 'preview' },
-          ],
-          billingTerms: [
-            { billingTermType: 'monthly', duration: 1, durationUnit: 'month' },
-            { billingTermType: 'annual', duration: 1, durationUnit: 'year' },
-          ],
-          availability: { lifecycleState: 'generallyAvailable', availableForPurchase: true },
-        },
-        scale: {
-          planId: 'scale',
-          planName: 'Scale',
-          markets: [{ region: 'United States', currency: 'USD', price: 499, marketAvailability: 'preview' }],
-          billingTerms: [{ billingTermType: 'annual', duration: 1, durationUnit: 'year' }],
-          availability: { lifecycleState: 'preview', availableForPurchase: false },
-        },
-      },
-    },
-    {
-      id: 'product-fastsaas-analytics',
-      externalOfferId: 'fastsaas-analytics',
-      durableProductId: 'durable-fastsaas-analytics',
-      productType: 'SaaS',
-      alias: 'FastSaaS Analytics Add-on',
-      lifecycleState: 'preview',
-      lastSyncedAt: '2026-06-01T18:30:00.000Z',
-      createdAt: '2026-05-30T12:00:00.000Z',
-      updatedAt: '2026-06-01T18:30:00.000Z',
-      plans: [
-        { id: 'growth', externalPlanId: 'growth', durablePlanId: 'durable-plan-growth-addon', status: 'active', createdAt: '2026-05-30T12:00:00.000Z', updatedAt: '2026-06-01T18:30:00.000Z' },
-      ],
-      submissions: [
-        { id: 'submission-preview-addon', durableSubmissionId: 'durable-submission-preview-addon', targetType: 'preview', status: 'published', createdAt: '2026-06-01T09:30:00.000Z', updatedAt: '2026-06-01T18:30:00.000Z' },
-      ],
-      assets: [],
-      trailers: [],
-      audiences: {
-        preview: [],
-        private: [],
-      },
-      pricing: {
-        growth: {
-          planId: 'growth',
-          planName: 'Growth',
-          markets: [{ region: 'United States', currency: 'USD', price: 59, marketAvailability: 'preview' }],
-          billingTerms: [{ billingTermType: 'monthly', duration: 1, durationUnit: 'month' }],
-          availability: { lifecycleState: 'preview', availableForPurchase: false },
-        },
-      },
-    },
-  ];
-}
+
 
 const defaultState = (): MockPortalState => ({
   dashboard: {
@@ -217,7 +104,7 @@ const defaultState = (): MockPortalState => ({
   plans: defaultCustomerPlans(),
   settings: defaultCustomerSettings(),
   subscriptions: [],
-  publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants(), products: defaultPublisherProducts() },
+  publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants() },
 });
 
 const isBrowser = () => typeof window !== 'undefined';
@@ -398,6 +285,7 @@ function buildCustomerDashboard(state: MockPortalState): DashboardData {
     usage: {
       activeMembers: dashboardState === 'canceled' ? 0 : Math.max(1, Math.min(seatsPurchased, Math.round(seatsPurchased * 0.7))),
       seatsPurchased,
+      seatLimit: seatsPurchased,
       apiRequestsThisMonth: dashboardState === 'canceled' ? 0 : seatsPurchased * 5200,
     },
     actions: dashboardState === 'trialing' ? [] : defaultActions(dashboardState),
@@ -445,7 +333,6 @@ function hydrateState(saved: string | null): MockPortalState {
       publisher: {
         plans: parsed.publisher?.plans ?? base.publisher.plans,
         tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
-        products: parsed.publisher?.products ?? base.publisher.products,
       },
     }));
   } catch {
@@ -475,18 +362,49 @@ function getPublisherPlan(state: MockPortalState, planId: string) {
   return state.publisher.plans.find((plan) => plan.id === planId);
 }
 
-function getPublisherProduct(state: MockPortalState, productId: string) {
-  return state.publisher.products.find((product) => product.id === productId);
+function normalizeMarketplacePlanId(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
-function mapPublisherProductSummary(product: MockPublisherProduct): PublisherProductSummary {
-  const { assets, trailers, audiences, pricing, plans, submissions, ...summary } = product;
-  return summary;
+function normalizeSeatLimit(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(1, Math.trunc(value));
 }
 
-function mapPublisherProductDetail(product: MockPublisherProduct): PublisherProductDetail {
-  const { assets, trailers, audiences, pricing, ...detail } = product;
-  return detail;
+function createPublisherPlanId(state: MockPortalState, requestedId: string | undefined, name: string) {
+  const baseId = (requestedId?.trim() || name.trim())
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `plan-${Date.now()}`;
+  let candidate = baseId;
+  let suffix = 2;
+
+  while (state.publisher.plans.some((plan) => plan.id === candidate)) {
+    candidate = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+function toMarketplacePricingSummary(pricing: PlanPricing | undefined): Record<string, unknown> | null {
+  return pricing ? JSON.parse(JSON.stringify(pricing)) as Record<string, unknown> : null;
+}
+
+function listMarketplacePlans(state: MockPortalState): MarketplacePlanSummary[] {
+  const defaultProductId = 'default-product';
+  return state.publisher.plans.map((plan) => ({
+    id: plan.id,
+    externalPlanId: plan.id,
+    durablePlanId: `durable-${plan.id}`,
+    productId: defaultProductId,
+    status: plan.status,
+    pricingSummary: null,
+  }));
 }
 
 function buildPublisherDashboard(state: MockPortalState): PublisherDashboardData {
@@ -767,45 +685,36 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     return buildPublisherDashboard(state) as T;
   }
 
-  if (path === '/publisher/products' && method === 'GET') {
-    return state.publisher.products.map((product) => mapPublisherProductSummary(product)) as T;
-  }
-
-  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/assets')) {
-    const productId = decodePathSegment(path.split('/')[3]);
-    const product = productId ? getPublisherProduct(state, productId) : undefined;
-    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
-    return { assets: product.assets, trailers: product.trailers } as T;
-  }
-
-  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/audiences')) {
-    const productId = decodePathSegment(path.split('/')[3]);
-    const product = productId ? getPublisherProduct(state, productId) : undefined;
-    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
-    return product.audiences as T;
-  }
-
-  if (path.startsWith('/publisher/products/') && method === 'GET' && path.endsWith('/pricing')) {
-    const segments = path.split('/');
-    const productId = decodePathSegment(segments[3]);
-    const planId = decodePathSegment(segments[5]);
-    const product = productId ? getPublisherProduct(state, productId) : undefined;
-    if (!product || !planId) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
-    const pricing = product.pricing[planId];
-    if (!pricing) throw new ApiError('The selected plan could not be found.', 404, 'publisher_plan_not_found');
-    const currentPlan = getPublisherPlan(state, planId);
-    return { ...pricing, planName: currentPlan?.name ?? pricing.planName } as T;
-  }
-
-  if (path.startsWith('/publisher/products/') && method === 'GET') {
-    const productId = decodePathSegment(path.split('/')[3]);
-    const product = productId ? getPublisherProduct(state, productId) : undefined;
-    if (!product) throw new ApiError('The selected product could not be found.', 404, 'publisher_product_not_found');
-    return mapPublisherProductDetail(product) as T;
-  }
-
   if (path === '/publisher/plans' && method === 'GET') {
     return { plans: state.publisher.plans } as T;
+  }
+
+  if (path === '/publisher/marketplace-plans' && method === 'GET') {
+    return listMarketplacePlans(state) as T;
+  }
+
+  if (path === '/publisher/plans' && method === 'POST') {
+    const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as CreatePublisherPlanInput;
+    const name = payload.name?.trim();
+    const description = payload.description?.trim();
+    const priceMonthly = payload.priceMonthly?.trim();
+    if (!name || !description || !priceMonthly) {
+      throw new ApiError('Name, description, and monthly price are required.', 400, 'publisher_plan_invalid');
+    }
+    const plan: PublisherPlan = {
+      id: createPublisherPlanId(state, payload.id, name),
+      name,
+      description,
+      priceMonthly,
+      status: payload.status ?? 'draft',
+      activeSubscriptions: 0,
+      features: payload.features ?? [],
+      marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId),
+      seatLimit: normalizeSeatLimit(payload.seatLimit),
+    };
+    state.publisher.plans = [plan, ...state.publisher.plans];
+    writeState(state);
+    return plan as T;
   }
 
   if (path.startsWith('/publisher/plans/') && method === 'PUT') {
@@ -814,7 +723,15 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     const planIndex = state.publisher.plans.findIndex((plan) => plan.id === planId);
     if (planIndex === -1 || !planId) throw new ApiError('The selected plan could not be found.', 404, 'publisher_plan_not_found');
     const current = state.publisher.plans[planIndex];
-    const nextPlan: PublisherPlan = { ...current, name: payload.name?.trim() || current.name, description: payload.description?.trim() || current.description, priceMonthly: payload.priceMonthly?.trim() || current.priceMonthly, status: payload.status ?? current.status };
+    const nextPlan: PublisherPlan = {
+      ...current,
+      name: payload.name?.trim() || current.name,
+      description: payload.description?.trim() || current.description,
+      priceMonthly: payload.priceMonthly?.trim() || current.priceMonthly,
+      status: payload.status ?? current.status,
+      marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId) ?? null,
+      seatLimit: normalizeSeatLimit(payload.seatLimit),
+    };
     state.publisher.plans[planIndex] = nextPlan;
     state.publisher.tenants = state.publisher.tenants.map((tenant) => tenant.planId === planId ? { ...tenant, planName: nextPlan.name, monthlyRecurringRevenue: nextPlan.priceMonthly } : tenant);
     writeState(state);

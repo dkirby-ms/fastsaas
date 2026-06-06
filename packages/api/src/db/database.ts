@@ -1,10 +1,4 @@
-import type {
-  PartnerCenterAuthMode,
-  PartnerCenterConnectionStatus,
-  PublisherPlanStatus,
-  SubscriptionStatus,
-  UsageEventRecord
-} from '@fastsaas/shared';
+import type { PublisherPlanStatus, SubscriptionStatus, UsageEventRecord } from '@fastsaas/shared';
 
 import type { RbacRole } from '../middleware/rbac';
 import { Kysely, PostgresDialect, type ColumnType } from 'kysely';
@@ -111,6 +105,8 @@ export interface PublisherPlansTable {
   price_monthly: string;
   status: PublisherPlanStatus;
   features: StringArrayColumn;
+  marketplace_plan_id: string | null;
+  seat_limit: number | null;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 }
@@ -121,29 +117,6 @@ export interface TenantMembersTable {
   user_id: string;
   email: string | null;
   role: RbacRole;
-  created_at: GeneratedTimestamp;
-  updated_at: GeneratedTimestamp;
-}
-
-export interface PartnerCenterAccountsTable {
-  id: GeneratedUuid;
-  tenant_id: string;
-  pc_tenant_id: string;
-  client_id: string;
-  auth_mode: PartnerCenterAuthMode;
-  connection_status: PartnerCenterConnectionStatus;
-  last_validated_at: NullableTimestamp;
-  created_at: GeneratedTimestamp;
-  updated_at: GeneratedTimestamp;
-}
-
-export interface PartnerCenterCredentialsTable {
-  id: GeneratedUuid;
-  account_id: string;
-  secret_reference: string;
-  rotation_metadata: NullableJsonColumn;
-  last_rotated_at: NullableTimestamp;
-  expires_at: NullableTimestamp;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 }
@@ -231,8 +204,6 @@ export interface Database {
   marketplace_webhook_events: MarketplaceWebhookEventsTable;
   publisher_plans: PublisherPlansTable;
   tenant_members: TenantMembersTable;
-  partner_center_accounts: PartnerCenterAccountsTable;
-  partner_center_credentials: PartnerCenterCredentialsTable;
   marketplace_jobs: MarketplaceJobsTable;
   marketplace_products: MarketplaceProductsTable;
   marketplace_plans: MarketplacePlansTable;

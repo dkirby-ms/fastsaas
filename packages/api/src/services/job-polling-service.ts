@@ -23,7 +23,6 @@ import type {
   MarketplaceJobResultRecord,
   MarketplaceJobStatus
 } from '../repositories/marketplace-job-repository';
-import type { PartnerCenterConnectionRecord, PartnerCenterRepository } from '../repositories/partner-center-repository';
 import type { MarketplaceBearerTokenProvider } from './marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from './partner-center-auth';
 import type { PublisherActorContext } from './publisher-service';
@@ -83,7 +82,7 @@ export interface JobPollingServiceOptions {
 }
 
 export interface ProductIngestionClientFactoryOptions {
-  connection?: PartnerCenterConnectionRecord;
+  publisherTenantId: string;
   authProvider?: PartnerCenterAuthProvider;
   tokenProvider?: MarketplaceBearerTokenProvider;
   logger: Logger;
@@ -219,7 +218,7 @@ function buildJobDetail(job: MarketplaceJobRecord): PublisherMarketplaceJobDetai
 }
 
 function createDefaultClientFactory(): ProductIngestionClientFactory {
-  return ({ connection, authProvider, tokenProvider, logger }) => {
+  return ({ authProvider, tokenProvider, logger }) => {
     if (tokenProvider) {
       return new ProductIngestionHttpClient({
         logger,
@@ -227,15 +226,13 @@ function createDefaultClientFactory(): ProductIngestionClientFactory {
       });
     }
 
-    if (!connection || !authProvider) {
-      throw new Error('JobPollingService requires tokenProvider or authProvider with a Partner Center connection');
+    if (!authProvider) {
+      throw new Error('JobPollingService requires tokenProvider or authProvider');
     }
 
     return new ProductIngestionHttpClient({
       logger,
-      authProvider,
-      account: connection.account,
-      credential: connection.credential
+      authProvider
     });
   };
 }
@@ -272,7 +269,6 @@ export class JobPollingService {
 
   constructor(
     private readonly repository: MarketplaceJobRepository,
-    private readonly partnerCenterRepository: PartnerCenterRepository | undefined,
     private readonly authProvider: PartnerCenterAuthProvider | undefined,
     private readonly logger: Logger,
     private readonly options: JobPollingServiceOptions = {}
@@ -536,13 +532,12 @@ export class JobPollingService {
   }
 
   private async getClient(publisherTenantId: string): Promise<ProductIngestionClientLike> {
-    const connection = this.partnerCenterRepository ? await this.partnerCenterRepository.findByTenant(publisherTenantId) : null;
-    if (!connection && !this.options.tokenProvider) {
-      throw AppError.serviceUnavailable('Marketplace OAuth configuration or a connected Partner Center account is required for Product Ingestion jobs');
+    if (!this.options.tokenProvider && !this.authProvider) {
+      throw AppError.serviceUnavailable('Marketplace OAuth configuration or a Partner Center auth provider is required for Product Ingestion jobs');
     }
 
     return this.clientFactory({
-      connection: connection ?? undefined,
+      publisherTenantId,
       authProvider: this.authProvider,
       tokenProvider: this.options.tokenProvider,
       logger: this.logger.child({ component: 'product-ingestion-client', publisherTenantId })

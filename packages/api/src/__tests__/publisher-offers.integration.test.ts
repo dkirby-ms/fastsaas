@@ -73,6 +73,75 @@ describe('publisher offer routes', () => {
     expect(resourceTreeResponse.body.data.resources).toHaveLength(1);
   });
 
+  it('lists flattened marketplace plans across synced products', async () => {
+    const adminToken = await harness.createToken({
+      tenantId: 'publisher-admin',
+      roles: ['Admin'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+
+    const firstDetail = await harness.productCatalogRepository.replaceCatalogSnapshot({
+      publisherTenantId: 'publisher-admin',
+      syncedAt: '2026-06-06T00:00:00.000Z',
+      product: {
+        externalOfferId: 'offer-1',
+        durableProductId: 'product/offer-1',
+        productType: 'softwareAsAService',
+        alias: 'Offer One'
+      },
+      plans: [
+        {
+          externalPlanId: 'starter',
+          durablePlanId: 'plan/starter',
+          status: 'preview',
+          pricingSummary: { markets: ['US'] }
+        }
+      ],
+      submissions: [],
+      resources: []
+    });
+    await harness.productCatalogRepository.replaceCatalogSnapshot({
+      publisherTenantId: 'publisher-admin',
+      syncedAt: '2026-06-06T00:00:01.000Z',
+      product: {
+        externalOfferId: 'offer-2',
+        durableProductId: 'product/offer-2',
+        productType: 'softwareAsAService',
+        alias: 'Offer Two'
+      },
+      plans: [
+        {
+          externalPlanId: 'pro',
+          durablePlanId: 'plan/pro',
+          status: 'generallyAvailable'
+        }
+      ],
+      submissions: [],
+      resources: []
+    });
+
+    const response = await request(harness.app)
+      .get('/v1/publisher/marketplace-plans')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([
+      expect.objectContaining({
+        externalPlanId: 'starter',
+        durablePlanId: 'plan/starter',
+        productId: firstDetail.product.id,
+        status: 'preview',
+        pricingSummary: { markets: ['US'] }
+      }),
+      expect.objectContaining({
+        externalPlanId: 'pro',
+        durablePlanId: 'plan/pro',
+        status: 'generallyAvailable',
+        pricingSummary: null
+      })
+    ]);
+  });
+
   it('creates and filters offer submissions by offerId', async () => {
     const adminToken = await harness.createToken({
       tenantId: 'publisher-admin',

@@ -2,10 +2,9 @@ import type { Logger } from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionResourceTreeResponse } from '../lib/product-ingestion-types';
-import { InMemoryPartnerCenterRepository } from '../repositories/partner-center-repository';
 import { InMemoryProductCatalogRepository } from '../repositories/product-catalog-repository';
-import { ProductCatalogService } from './product-catalog-service';
 import type { PartnerCenterAuthProvider } from './partner-center-auth';
+import { ProductCatalogService } from './product-catalog-service';
 import type { PublisherActorContext } from './publisher-service';
 
 const actor: PublisherActorContext = {
@@ -124,18 +123,6 @@ function createAuthProvider(): PartnerCenterAuthProvider {
 
 async function createService(trees: ProductIngestionResourceTreeResponse[]) {
   const repository = new InMemoryProductCatalogRepository();
-  const partnerCenterRepository = new InMemoryPartnerCenterRepository();
-  await partnerCenterRepository.saveConnection({
-    tenantId: actor.tenantId,
-    pcTenantId: 'pc-tenant',
-    clientId: 'client-id',
-    authMode: 'CLIENT_SECRET',
-    connectionStatus: 'CONNECTED',
-    secretReference: 'env:PARTNER_CENTER_SECRET',
-    lastValidatedAt: '2026-06-02T12:03:22.730+00:00',
-    lastRotatedAt: '2026-06-02T12:03:22.730+00:00',
-    expiresAt: null
-  });
 
   const getProductByExternalId = vi.fn(async (externalId: string) => {
     if (externalId !== 'contoso-saas') {
@@ -156,7 +143,6 @@ async function createService(trees: ProductIngestionResourceTreeResponse[]) {
 
   const service = new ProductCatalogService({
     repository,
-    partnerCenterRepository,
     authProvider: createAuthProvider(),
     logger: createLogger(),
     clientFactory: () => ({
@@ -230,5 +216,81 @@ describe('ProductCatalogService', () => {
     expect(stored?.plans).toHaveLength(1);
     expect(stored?.submissions).toHaveLength(1);
     expect(stored?.product.alias).toBe('Contoso SaaS Premium');
+  });
+
+  it('lists flattened marketplace plans across all synced products', async () => {
+    const repository = new InMemoryProductCatalogRepository();
+    const service = new ProductCatalogService({
+      repository,
+      authProvider: createAuthProvider(),
+      logger: createLogger(),
+      clientFactory: () => ({
+        getProductByExternalId: vi.fn(),
+        getResourceTree: vi.fn(),
+        configure: vi.fn(),
+        getConfigureStatus: vi.fn(),
+        getConfigureJobDetails: vi.fn(),
+        cancelConfigure: vi.fn(),
+        waitForConfigureCompletion: vi.fn()
+      })
+    });
+
+    await repository.replaceCatalogSnapshot({
+      publisherTenantId: actor.tenantId,
+      syncedAt: '2026-06-06T00:00:00.000Z',
+      product: {
+        externalOfferId: 'offer-1',
+        durableProductId: 'product/offer-1',
+        productType: 'softwareAsAService',
+        alias: 'Offer One'
+      },
+      plans: [
+        {
+          externalPlanId: 'basic',
+          durablePlanId: 'plan/basic',
+          status: 'preview',
+          pricingSummary: { markets: ['US'] }
+        }
+      ],
+      submissions: [],
+      resources: []
+    });
+    const secondDetail = await repository.replaceCatalogSnapshot({
+      publisherTenantId: actor.tenantId,
+      syncedAt: '2026-06-06T00:00:01.000Z',
+      product: {
+        externalOfferId: 'offer-2',
+        durableProductId: 'product/offer-2',
+        productType: 'softwareAsAService',
+        alias: 'Offer Two'
+      },
+      plans: [
+        {
+          externalPlanId: 'enterprise',
+          durablePlanId: 'plan/enterprise',
+          status: 'generallyAvailable'
+        }
+      ],
+      submissions: [],
+      resources: []
+    });
+
+    const plans = await service.listMarketplacePlans(actor.tenantId);
+
+    expect(plans).toEqual([
+      expect.objectContaining({
+        externalPlanId: 'basic',
+        durablePlanId: 'plan/basic',
+        status: 'preview',
+        pricingSummary: { markets: ['US'] }
+      }),
+      expect.objectContaining({
+        externalPlanId: 'enterprise',
+        durablePlanId: 'plan/enterprise',
+        productId: secondDetail.product.id,
+        status: 'generallyAvailable',
+        pricingSummary: null
+      })
+    ]);
   });
 });

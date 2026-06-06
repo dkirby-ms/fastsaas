@@ -1,11 +1,8 @@
 import type {
   ApiResponse,
   ListingAsset,
+  MarketplacePlanSummary,
   ListingTrailer,
-  PartnerCenterConnectRequest,
-  PartnerCenterConnection,
-  PartnerCenterDisconnectResponse,
-  PartnerCenterStatusResponse,
   PlanPricing,
   PreviewAudience,
   PrivateAudience,
@@ -33,7 +30,6 @@ import type {
   PublisherMarketplaceJobDetail,
   PublisherMarketplaceJobListResponse
 } from '../../services/job-polling-service';
-import type { PartnerCenterService } from '../../services/partner-center-service';
 import type {
   ProductCatalogImportInput,
   ProductCatalogProduct,
@@ -55,7 +51,7 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
   }
 
   const candidate = body as Record<string, unknown>;
-  const { id, name, description, priceMonthly, status, features } = candidate;
+  const { id, name, description, priceMonthly, status, features, marketplacePlanId, seatLimit } = candidate;
 
   if (id !== undefined && typeof id !== 'string') {
     throw AppError.badRequest('id must be a string when provided');
@@ -81,13 +77,23 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
     throw AppError.badRequest('features must be an array of strings when provided');
   }
 
+  if (marketplacePlanId !== undefined && marketplacePlanId !== null && typeof marketplacePlanId !== 'string') {
+    throw AppError.badRequest('marketplacePlanId must be a string or null when provided');
+  }
+
+  if (seatLimit !== undefined && seatLimit !== null && (!Number.isInteger(seatLimit) || Number(seatLimit) <= 0)) {
+    throw AppError.badRequest('seatLimit must be a positive integer or null when provided');
+  }
+
   return {
     id,
     name,
     description,
     priceMonthly,
     status,
-    features: features as string[] | undefined
+    features: features as string[] | undefined,
+    ...(marketplacePlanId !== undefined ? { marketplacePlanId: marketplacePlanId as string | null } : {}),
+    ...(seatLimit !== undefined ? { seatLimit: seatLimit as number | null } : {})
   };
 }
 
@@ -128,49 +134,6 @@ function parseTenantBody(body: unknown): PublisherTenantUpsertInput {
   };
 }
 
-function parsePartnerCenterConnectBody(body: unknown): PartnerCenterConnectRequest {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw AppError.badRequest('Request body must be a JSON object');
-  }
-
-  const candidate = body as Record<string, unknown>;
-
-  if (typeof candidate.pcTenantId !== 'string') {
-    throw AppError.badRequest('pcTenantId is required');
-  }
-
-  if (typeof candidate.clientId !== 'string') {
-    throw AppError.badRequest('clientId is required');
-  }
-
-  if (candidate.authMode !== 'CLIENT_SECRET' && candidate.authMode !== 'CLIENT_CERTIFICATE') {
-    throw AppError.badRequest('authMode must be CLIENT_SECRET or CLIENT_CERTIFICATE');
-  }
-
-  if (typeof candidate.secretReference !== 'string') {
-    throw AppError.badRequest('secretReference is required');
-  }
-
-  if (
-    candidate.rotationMetadata !== undefined &&
-    (!candidate.rotationMetadata || typeof candidate.rotationMetadata !== 'object' || Array.isArray(candidate.rotationMetadata))
-  ) {
-    throw AppError.badRequest('rotationMetadata must be a JSON object when provided');
-  }
-
-  if (candidate.expiresAt !== undefined && typeof candidate.expiresAt !== 'string') {
-    throw AppError.badRequest('expiresAt must be a string when provided');
-  }
-
-  return {
-    pcTenantId: candidate.pcTenantId,
-    clientId: candidate.clientId,
-    authMode: candidate.authMode,
-    secretReference: candidate.secretReference,
-    rotationMetadata: candidate.rotationMetadata as Record<string, unknown> | undefined,
-    expiresAt: candidate.expiresAt
-  };
-}
 
 function parseProductImportBody(body: unknown): ProductCatalogImportInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -295,7 +258,6 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
 export function createPublisherRouter(
   config: ApiConfig,
   publisherService: PublisherService,
-  partnerCenterService: PartnerCenterService,
   jobPollingService: JobPollingService,
   productCatalogService?: ProductCatalogService,
   submissionMonitoringService?: SubmissionMonitoringService,
@@ -335,129 +297,6 @@ export function createPublisherRouter(
         const actor = buildActorContext(req);
         const dashboard = await publisherService.getDashboard(actor.tenantId);
         res.status(200).json({ status: 'success', data: dashboard, meta: buildResponseMeta(req, config.apiVersion) });
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /v1/publisher/partner-center/connect:
-   *   post:
-   *     summary: Connect a Partner Center account
-   *     description: Legacy compatibility endpoint for tenant-scoped Partner Center metadata. Single-publisher deployments use shared MARKETPLACE_* environment credentials automatically for Product Ingestion.
-   *     tags:
-   *       - Publisher
-   *     security:
-   *       - bearerAuth: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required: [pcTenantId, clientId, authMode, secretReference]
-   *             properties:
-   *               pcTenantId:
-   *                 type: string
-   *               clientId:
-   *                 type: string
-   *               authMode:
-   *                 type: string
-   *                 enum: [CLIENT_SECRET, CLIENT_CERTIFICATE]
-   *               secretReference:
-   *                 type: string
-   *                 description: Azure Key Vault secret URI or keyvault:SECRET_NAME in deployed environments; env:VARIABLE_NAME is supported for local/test flows.
-   *               rotationMetadata:
-   *                 type: object
-   *               expiresAt:
-   *                 type: string
-   *                 format: date-time
-   *     responses:
-   *       200:
-   *         description: Partner Center connection validated
-   *       400:
-   *         description: Request body is invalid or credentials cannot be validated
-   *       401:
-   *         description: Missing or invalid bearer token
-   *       403:
-   *         description: Token missing required scope or publisher management permission
-   *       503:
-   *         description: Partner Center validation or secret resolution is unavailable
-   */
-  router.post(
-    '/partner-center/connect',
-    authorizeRoute({ resource: 'publisher', action: 'manage' }),
-    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterConnection>>, next) => {
-      try {
-        const actor = buildActorContext(req);
-        const connection = await partnerCenterService.connect(actor, parsePartnerCenterConnectBody(req.body));
-        res.status(200).json({ status: 'success', data: connection, meta: buildResponseMeta(req, config.apiVersion) });
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /v1/publisher/partner-center/status:
-   *   get:
-   *     summary: Get Partner Center connection status
-   *     description: Returns legacy tenant-scoped Partner Center connection metadata. Product Ingestion uses shared MARKETPLACE_* environment credentials by default.
-   *     tags:
-   *       - Publisher
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Partner Center connection status
-   *       401:
-   *         description: Missing or invalid bearer token
-   *       403:
-   *         description: Token missing required scope or publisher view permission
-   */
-  router.get(
-    '/partner-center/status',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
-    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterStatusResponse>>, next) => {
-      try {
-        const actor = buildActorContext(req);
-        const status = await partnerCenterService.getStatus(actor.tenantId);
-        res.status(200).json({ status: 'success', data: status, meta: buildResponseMeta(req, config.apiVersion) });
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  /**
-   * @swagger
-   * /v1/publisher/partner-center/disconnect:
-   *   delete:
-   *     summary: Remove the Partner Center connection
-   *     description: Deletes legacy tenant-scoped Partner Center metadata. Shared MARKETPLACE_* environment credentials remain the primary Product Ingestion auth path.
-   *     tags:
-   *       - Publisher
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Partner Center connection removed
-   *       401:
-   *         description: Missing or invalid bearer token
-   *       403:
-   *         description: Token missing required scope or publisher management permission
-   */
-  router.delete(
-    '/partner-center/disconnect',
-    authorizeRoute({ resource: 'publisher', action: 'manage' }),
-    async (req: ApiRequest, res: Response<ApiResponse<PartnerCenterDisconnectResponse>>, next) => {
-      try {
-        const actor = buildActorContext(req);
-        const result = await partnerCenterService.disconnect(actor);
-        res.status(200).json({ status: 'success', data: result, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);
       }
@@ -1034,6 +873,20 @@ export function createPublisherRouter(
       }
     };
 
+    const listMarketplacePlans = async (
+      req: ApiRequest,
+      res: Response<ApiResponse<MarketplacePlanSummary[]>>,
+      next: (error?: unknown) => void
+    ) => {
+      try {
+        const actor = buildActorContext(req);
+        const plans = await productCatalogService.listMarketplacePlans(actor.tenantId);
+        res.status(200).json({ status: 'success', data: plans, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    };
+
     const importProduct = async (req: ApiRequest, res: Response<ApiResponse<ProductCatalogProductDetail>>, next: (error?: unknown) => void) => {
       try {
         const actor = buildActorContext(req);
@@ -1248,6 +1101,7 @@ export function createPublisherRouter(
       }
     };
 
+    router.get('/marketplace-plans', authorizeRoute({ resource: 'publisher', action: 'view' }), listMarketplacePlans);
     router.get('/products', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
     router.get('/offers', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
 

@@ -10,6 +10,7 @@ export interface PortalUser {
 export interface UsageSummary {
   activeMembers: number;
   seatsPurchased: number;
+  seatLimit?: number | null;
   apiRequestsThisMonth: number;
 }
 
@@ -293,10 +294,21 @@ export interface PublisherPlan {
   status: PublisherPlanStatus;
   activeSubscriptions: number;
   features: string[];
+  marketplacePlanId?: string | null;
+  seatLimit?: number | null;
 }
 
 export interface PublisherPlansResponse {
   plans: PublisherPlan[];
+}
+
+export interface MarketplacePlanSummary {
+  id: string;
+  externalPlanId: string;
+  durablePlanId: string;
+  productId: string;
+  status: string;
+  pricingSummary?: Record<string, unknown> | null;
 }
 
 export type PublisherTenantStatus = SubscriptionState;
@@ -342,6 +354,13 @@ export interface PublisherPlanUpdateInput {
   description: string;
   priceMonthly: string;
   status: PublisherPlanStatus;
+  marketplacePlanId?: string | null;
+  seatLimit?: number | null;
+}
+
+export interface CreatePublisherPlanInput extends PublisherPlanUpdateInput {
+  id?: string;
+  features?: string[];
 }
 
 export interface PublisherTenantUpsertInput {
@@ -350,43 +369,6 @@ export interface PublisherTenantUpsertInput {
   planId: string;
   seats: number;
   status: PublisherTenantStatus;
-}
-
-export type PartnerCenterAuthMode = 'CLIENT_SECRET' | 'CLIENT_CERTIFICATE';
-
-export type PartnerCenterConnectionStatus = 'PENDING' | 'CONNECTED' | 'FAILED' | 'EXPIRED';
-
-export interface PartnerCenterConnectRequest {
-  pcTenantId: string;
-  clientId: string;
-  authMode: PartnerCenterAuthMode;
-  secretReference: string;
-  rotationMetadata?: Record<string, unknown>;
-  expiresAt?: string;
-}
-
-export interface PartnerCenterConnection {
-  id: string;
-  pcTenantId: string;
-  clientId: string;
-  authMode: PartnerCenterAuthMode;
-  connectionStatus: PartnerCenterConnectionStatus;
-  lastValidatedAt?: string;
-  credentialId: string;
-  rotationMetadata?: Record<string, unknown>;
-  lastRotatedAt?: string;
-  expiresAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PartnerCenterStatusResponse {
-  connected: boolean;
-  connection?: PartnerCenterConnection;
-}
-
-export interface PartnerCenterDisconnectResponse {
-  disconnected: boolean;
 }
 
 export interface PublisherSubmissionValidationIssue {

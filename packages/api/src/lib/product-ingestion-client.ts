@@ -1,6 +1,5 @@
 import type { Logger } from 'pino';
 
-import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
 import type { MarketplaceBearerTokenProvider } from '../services/marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from '../services/partner-center-auth';
 import {
@@ -157,8 +156,6 @@ export interface ProductIngestionClientOptions {
   logger: Logger;
   tokenProvider?: MarketplaceBearerTokenProvider;
   authProvider?: PartnerCenterAuthProvider;
-  account?: PartnerCenterAccountRecord;
-  credential?: PartnerCenterCredentialRecord;
   fetchImpl?: typeof fetch;
   baseUrl?: string;
   apiVersion?: string;
@@ -241,8 +238,8 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? 5_000;
     this.sleep = options.sleep ?? (async (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-    if (!options.tokenProvider && (!options.authProvider || !options.account || !options.credential)) {
-      throw new Error('ProductIngestionClient requires tokenProvider or authProvider/account/credential');
+    if (!options.tokenProvider && !options.authProvider) {
+      throw new Error('ProductIngestionClient requires tokenProvider or authProvider');
     }
   }
 
@@ -426,8 +423,8 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
       return this.options.tokenProvider.getAccessToken();
     }
 
-    if (this.options.authProvider && this.options.account && this.options.credential) {
-      return this.options.authProvider.acquireGraphToken(this.options.account, this.options.credential);
+    if (this.options.authProvider) {
+      return this.options.authProvider.acquireGraphToken();
     }
 
     throw new ProductIngestionError('Product Ingestion authentication is not configured', 'resolve-access-token', 503);

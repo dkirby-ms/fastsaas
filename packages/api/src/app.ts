@@ -12,7 +12,6 @@ import { createPortalRouter } from './routes/portal';
 import { createV1Router } from './routes/v1';
 import { createMarketplaceWebhookRouter } from './routes/webhooks/marketplace';
 import { createAuditLoggingMiddleware, type AuditService } from './services/audit-service';
-import type { PartnerCenterService } from './services/partner-center-service';
 import type { ProductCatalogService } from './services/product-catalog-service';
 import type { JobPollingService } from './services/job-polling-service';
 import type { PublisherService } from './services/publisher-service';
@@ -20,17 +19,18 @@ import type { SubmissionMonitoringService } from './services/submission-monitori
 import type { SubscriptionService } from './services/subscription-service';
 import type { TenantMemberService } from './services/tenant-member-service';
 import type { AssetVisibilityService } from './services/asset-visibility-service';
+import type { PublisherPlanRepository } from './repositories/publisher-plan-repository';
 
 export interface AppDependencies extends MeteringRuntimeDependencies {
   subscriptionService?: SubscriptionService;
   auditService?: AuditService;
   publisherService?: PublisherService;
-  partnerCenterService?: PartnerCenterService;
   jobPollingService?: JobPollingService;
   productCatalogService?: ProductCatalogService;
   submissionMonitoringService?: SubmissionMonitoringService;
   assetVisibilityService?: AssetVisibilityService;
   tenantMemberService?: TenantMemberService;
+  publisherPlanRepository?: PublisherPlanRepository;
 }
 
 export function createApp(config: ApiConfig = createConfig(), dependencies: AppDependencies = {}) {
@@ -53,8 +53,16 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
 
   app.use(healthRouter);
 
-  if (dependencies.subscriptionService) {
-    app.use('/portal', createPortalRouter(config, dependencies.subscriptionService, dependencies.tenantMemberService));
+  if (dependencies.subscriptionService && dependencies.publisherPlanRepository) {
+    app.use(
+      '/portal',
+      createPortalRouter(
+        config,
+        dependencies.subscriptionService,
+        dependencies.publisherPlanRepository,
+        dependencies.tenantMemberService
+      )
+    );
   }
 
   app.get('/openapi.json', (_req, res) => {
@@ -73,7 +81,6 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
       dependencies.subscriptionService,
       dependencies.auditService,
       dependencies.publisherService,
-      dependencies.partnerCenterService,
       dependencies.jobPollingService,
       dependencies.productCatalogService,
       dependencies.submissionMonitoringService,

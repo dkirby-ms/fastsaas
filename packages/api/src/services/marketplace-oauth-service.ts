@@ -1,7 +1,6 @@
 import type { Logger } from 'pino';
 
 import type { ApiConfig } from '../config';
-import type { PartnerCenterAccountRecord, PartnerCenterCredentialRecord } from '../repositories/partner-center-repository';
 import { PartnerCenterAuthError, type PartnerCenterAuthProvider, type PartnerCenterValidationResult } from './partner-center-auth';
 
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60_000;
@@ -156,14 +155,11 @@ export class MarketplaceOAuthService implements MarketplaceBearerTokenProvider, 
     return payload.access_token;
   }
 
-  async acquireGraphToken(_account: PartnerCenterAccountRecord, _credential: PartnerCenterCredentialRecord): Promise<string> {
+  async acquireGraphToken(): Promise<string> {
     return this.getAccessToken();
   }
 
-  async validateConnection(
-    _account: PartnerCenterAccountRecord,
-    _credential: PartnerCenterCredentialRecord
-  ): Promise<PartnerCenterValidationResult> {
+  async validateConnection(): Promise<PartnerCenterValidationResult> {
     await this.getAccessToken();
     return {};
   }

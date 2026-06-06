@@ -82,18 +82,16 @@ import {
   type ProductIngestionResourceTreeResponse,
   type SubmissionResource
 } from '../lib/product-ingestion-types';
-import type { PartnerCenterConnectionRecord, PartnerCenterRepository } from '../repositories/partner-center-repository';
 import type { ProductCatalogRepository, StoredMarketplaceResource, StoredMarketplaceSubmission } from '../repositories/product-catalog-repository';
 import type { MarketplaceBearerTokenProvider } from './marketplace-oauth-service';
 import type { PartnerCenterAuthProvider } from './partner-center-auth';
 
 export interface SubmissionMonitoringServiceOptions {
   repository: ProductCatalogRepository;
-  partnerCenterRepository?: PartnerCenterRepository;
   authProvider?: PartnerCenterAuthProvider;
   tokenProvider?: MarketplaceBearerTokenProvider;
   logger: Logger;
-  clientFactory?: (args: { account?: PartnerCenterConnectionRecord }) => ProductIngestionClientLike;
+  clientFactory?: (args: { publisherTenantId: string }) => ProductIngestionClientLike;
   now?: () => Date;
 }
 
@@ -377,23 +375,21 @@ export class SubmissionMonitoringService {
   constructor(private readonly options: SubmissionMonitoringServiceOptions) {
     this.clientFactory =
       options.clientFactory ??
-      (({ account }) => {
+      (({ publisherTenantId }) => {
         if (this.options.tokenProvider) {
           return new ProductIngestionClient({
-            logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account?.account.tenantId }),
+            logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: publisherTenantId }),
             tokenProvider: this.options.tokenProvider
           });
         }
 
-        if (!this.options.authProvider || !account) {
-          throw new Error('SubmissionMonitoringService requires tokenProvider or authProvider with a Partner Center connection');
+        if (!this.options.authProvider) {
+          throw new Error('SubmissionMonitoringService requires tokenProvider or authProvider');
         }
 
         return new ProductIngestionClient({
-          logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account.account.tenantId }),
-          authProvider: this.options.authProvider,
-          account: account.account,
-          credential: account.credential
+          logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: publisherTenantId }),
+          authProvider: this.options.authProvider
         });
       });
     this.now = options.now ?? (() => new Date());
@@ -564,15 +560,11 @@ export class SubmissionMonitoringService {
   }
 
   private async loadClient(publisherTenantId: string): Promise<ProductIngestionClientLike> {
-    const connection = this.options.partnerCenterRepository
-      ? await this.options.partnerCenterRepository.findByTenant(publisherTenantId)
-      : null;
-
-    if (!connection && !this.options.tokenProvider) {
-      throw AppError.serviceUnavailable('Marketplace OAuth configuration or a legacy Partner Center connection is required for submission monitoring');
+    if (!this.options.tokenProvider && !this.options.authProvider) {
+      throw AppError.serviceUnavailable('Marketplace OAuth configuration or a Partner Center auth provider is required for submission monitoring');
     }
 
-    return this.clientFactory({ account: connection ?? undefined });
+    return this.clientFactory({ publisherTenantId });
   }
 
   private async getTree(

@@ -3,7 +3,6 @@ import type { Logger } from 'pino';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionResourceTreeResponse } from '../lib/product-ingestion-types';
-import { InMemoryPartnerCenterRepository } from '../repositories/partner-center-repository';
 import { InMemoryProductCatalogRepository } from '../repositories/product-catalog-repository';
 import { AssetVisibilityService } from '../services/asset-visibility-service';
 import { createSecurityHarness, type SecurityHarness } from './security/test-harness';
@@ -20,18 +19,6 @@ function createLogger(): Logger {
 describe('AssetVisibilityService', () => {
   it('parses live resource-tree data into shared visibility types and caches the tree', async () => {
     const repository = new InMemoryProductCatalogRepository();
-    const partnerCenterRepository = new InMemoryPartnerCenterRepository();
-    await partnerCenterRepository.saveConnection({
-      tenantId: 'publisher-tenant',
-      pcTenantId: 'pc-tenant',
-      clientId: 'client-id',
-      authMode: 'CLIENT_SECRET',
-      connectionStatus: 'CONNECTED',
-      secretReference: 'env:PARTNER_CENTER_SECRET',
-      lastValidatedAt: '2026-06-03T14:39:04.834+00:00',
-      lastRotatedAt: '2026-06-03T14:39:04.834+00:00',
-      expiresAt: null
-    });
 
     const detail = await repository.replaceCatalogSnapshot({
       publisherTenantId: 'publisher-tenant',
@@ -134,7 +121,10 @@ describe('AssetVisibilityService', () => {
     const getResourceTree = vi.fn(async () => liveTree);
     const service = new AssetVisibilityService({
       repository,
-      partnerCenterRepository,
+      tokenProvider: {
+        getAccessToken: vi.fn(async () => 'token'),
+        invalidate: vi.fn()
+      },
       logger: createLogger(),
       now: () => new Date('2026-06-03T14:39:04.834+00:00'),
       cacheTtlMs: 60_000,

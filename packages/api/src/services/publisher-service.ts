@@ -38,32 +38,6 @@ export interface CreatePublisherPlanInput extends PublisherPlanUpdateInput {
   features?: string[];
 }
 
-const DEFAULT_PLAN_CATALOG: ReadonlyArray<Omit<PublisherPlan, 'activeSubscriptions'>> = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    description: 'Self-serve onboarding for early marketplace customers.',
-    priceMonthly: '$79',
-    status: 'active',
-    features: ['10 seats included', 'Email support', 'Single environment']
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    description: 'Balanced controls for growing marketplace tenants.',
-    priceMonthly: '$249',
-    status: 'active',
-    features: ['25 seats included', 'Priority support', 'Usage analytics']
-  },
-  {
-    id: 'scale',
-    name: 'Scale',
-    description: 'Enterprise controls and publisher-ready governance.',
-    priceMonthly: '$499',
-    status: 'active',
-    features: ['Unlimited seats', 'Dedicated support', 'Custom exports']
-  }
-] as const;
 
 function parseMoney(value: string): number {
   const parsed = Number(value.replace(/[^\d.]/g, ''));
@@ -167,10 +141,6 @@ function buildTenantAuditEntry(entry: SubscriptionAuditEntry): PublisherTenantAu
 
 function mergePlanDefinitions(plans: readonly StoredPublisherPlan[]): Map<string, Omit<PublisherPlan, 'activeSubscriptions'>> {
   const merged = new Map<string, Omit<PublisherPlan, 'activeSubscriptions'>>();
-
-  for (const plan of DEFAULT_PLAN_CATALOG) {
-    merged.set(plan.id, { ...plan });
-  }
 
   for (const plan of plans) {
     merged.set(plan.id, {

@@ -5,6 +5,7 @@ import type { ApiConfig } from '../config';
 import type { ApiRequest } from '../http';
 import { authenticateRequest, requireScopes } from '../middleware/auth';
 import { injectTenantContext } from '../middleware/tenant-context';
+import type { PublisherPlanRepository } from '../repositories/publisher-plan-repository';
 import type { SubscriptionService } from '../services/subscription-service';
 import type { TenantMemberService } from '../services/tenant-member-service';
 
@@ -58,6 +59,10 @@ function getCurrentSubscription(subscriptions: Subscription[]): Subscription | n
   return [...subscriptions].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null;
 }
 
+function getFallbackActiveMembers(state: NonNullable<DashboardData['subscription']>['state'], seatsPurchased: number): number {
+  return state === 'canceled' ? 0 : Math.max(1, Math.min(seatsPurchased, Math.round(seatsPurchased * 0.7)));
+}
+
 function buildPortalUser(req: ApiRequest, subscription: Subscription | null): DashboardData['user'] {
   const email = readString(req.auth?.email) ?? readString(req.auth?.preferred_username) ?? '';
   const fallbackName = email ? email.split('@')[0] : req.context?.userId ?? '';
@@ -70,7 +75,11 @@ function buildPortalUser(req: ApiRequest, subscription: Subscription | null): Da
   };
 }
 
-function buildDashboard(req: ApiRequest, subscription: Subscription | null): DashboardData {
+function buildDashboard(
+  req: ApiRequest,
+  subscription: Subscription | null,
+  options: { activeMembers?: number; plan?: { name: string; seatLimit: number | null } | null } = {}
+): DashboardData {
   const user = buildPortalUser(req, subscription);
 
   if (!subscription) {
@@ -84,7 +93,7 @@ function buildDashboard(req: ApiRequest, subscription: Subscription | null): Das
 
   const state = mapPortalSubscriptionState(subscription.status);
   const seatsPurchased = subscription.seats;
-  const planName = readString(subscription.metadata.planName) ?? subscription.planId;
+  const planName = options.plan?.name ?? readString(subscription.metadata.planName) ?? subscription.planId;
 
   return {
     user,
@@ -98,15 +107,21 @@ function buildDashboard(req: ApiRequest, subscription: Subscription | null): Das
       amount: readString(subscription.metadata.amount) ?? readString(subscription.metadata.priceMonthly) ?? '$0'
     },
     usage: {
-      activeMembers: state === 'canceled' ? 0 : Math.max(1, Math.min(seatsPurchased, Math.round(seatsPurchased * 0.7))),
+      activeMembers: options.activeMembers ?? getFallbackActiveMembers(state, seatsPurchased),
       seatsPurchased,
+      seatLimit: options.plan ? options.plan.seatLimit : seatsPurchased,
       apiRequestsThisMonth: state === 'canceled' ? 0 : seatsPurchased * 5200
     },
     actions: state === 'trialing' ? [] : defaultActions(state)
   };
 }
 
-export function createPortalRouter(config: ApiConfig, subscriptionService: SubscriptionService, tenantMemberService?: TenantMemberService) {
+export function createPortalRouter(
+  config: ApiConfig,
+  subscriptionService: SubscriptionService,
+  publisherPlanRepository: PublisherPlanRepository,
+  tenantMemberService?: TenantMemberService
+) {
   const router = Router();
 
   router.use(
@@ -118,7 +133,20 @@ export function createPortalRouter(config: ApiConfig, subscriptionService: Subsc
   router.get('/dashboard', async (req: ApiRequest, res: Response<DashboardData>, next) => {
     try {
       const subscriptions = await subscriptionService.listSubscriptions(req.context!.tenantId);
-      res.status(200).json(buildDashboard(req, getCurrentSubscription(subscriptions)));
+      const subscription = getCurrentSubscription(subscriptions);
+      const [plan, activeMembers] = subscription
+        ? await Promise.all([
+            publisherPlanRepository.findByMarketplacePlanId(subscription.planId),
+            tenantMemberService?.listMembers(req.context!.tenantId).then((members) => members.length)
+          ])
+        : [null, undefined];
+
+      res.status(200).json(
+        buildDashboard(req, subscription, {
+          plan: plan ? { name: plan.name, seatLimit: plan.seatLimit } : null,
+          activeMembers
+        })
+      );
     } catch (error) {
       next(error);
     }

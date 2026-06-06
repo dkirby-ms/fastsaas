@@ -43,6 +43,28 @@ describe('GET /portal/dashboard', () => {
   });
 
   it('returns dashboard subscription data when the tenant has a subscription', async () => {
+    await harness.publisherPlanRepository.savePlan({
+      publisherTenantId: 'publisher-tenant',
+      id: 'growth-linked',
+      name: 'Growth Linked',
+      description: 'Linked marketplace growth plan.',
+      priceMonthly: '$249',
+      status: 'active',
+      features: ['25 seats included'],
+      marketplacePlanId: 'growth',
+      seatLimit: 25
+    });
+    await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        harness.tenantMemberRepository.upsertByTenantAndUserId({
+          tenantId: 'tenant-with-subscription',
+          userId: `member-${index + 1}`,
+          email: `member-${index + 1}@example.com`,
+          role: 'Member'
+        })
+      )
+    );
+
     await harness.createSubscriptionFixture({
       tenantId: 'tenant-with-subscription',
       planId: 'growth',
@@ -79,13 +101,14 @@ describe('GET /portal/dashboard', () => {
       tenantId: 'tenant-with-subscription',
       state: 'trialing',
       planId: 'growth',
-      planName: 'Growth',
+      planName: 'Growth Linked',
       billingCycle: 'annual',
       amount: '$249'
     });
     expect(response.body.usage).toEqual({
       activeMembers: 8,
       seatsPurchased: 12,
+      seatLimit: 25,
       apiRequestsThisMonth: 62400
     });
     expect(response.body.actions).toEqual([]);

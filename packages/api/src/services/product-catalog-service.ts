@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import type { MarketplacePlanSummary } from '@fastsaas/shared';
 
 import { AppError } from '../errors/app-error';
 import { ProductIngestionClient, type ProductIngestionClientLike, type ProductIngestionError } from '../lib/product-ingestion-client';
@@ -13,7 +14,6 @@ import {
   type ProductResource,
   type SubmissionResource
 } from '../lib/product-ingestion-types';
-import type { PartnerCenterConnectionRecord, PartnerCenterRepository } from '../repositories/partner-center-repository';
 import type {
   ProductCatalogRepository,
   ReplaceMarketplaceCatalogSnapshotInput,
@@ -68,11 +68,10 @@ export interface ProductCatalogImportInput {
 
 export interface ProductCatalogServiceOptions {
   repository: ProductCatalogRepository;
-  partnerCenterRepository?: PartnerCenterRepository;
   authProvider?: PartnerCenterAuthProvider;
   tokenProvider?: MarketplaceBearerTokenProvider;
   logger: Logger;
-  clientFactory?: (args: { account?: PartnerCenterConnectionRecord }) => ProductIngestionClientLike;
+  clientFactory?: (args: { publisherTenantId: string }) => ProductIngestionClientLike;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -263,23 +262,21 @@ export class ProductCatalogService {
   constructor(private readonly options: ProductCatalogServiceOptions) {
     this.clientFactory =
       options.clientFactory ??
-      (({ account }) => {
+      (({ publisherTenantId }) => {
         if (this.options.tokenProvider) {
           return new ProductIngestionClient({
-            logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account?.account.tenantId }),
+            logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: publisherTenantId }),
             tokenProvider: this.options.tokenProvider
           });
         }
 
-        if (!this.options.authProvider || !account) {
-          throw new Error('ProductCatalogService requires tokenProvider or authProvider with a Partner Center connection');
+        if (!this.options.authProvider) {
+          throw new Error('ProductCatalogService requires tokenProvider or authProvider');
         }
 
         return new ProductIngestionClient({
-          logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: account.account.tenantId }),
-          authProvider: this.options.authProvider,
-          account: account.account,
-          credential: account.credential
+          logger: this.options.logger.child({ component: 'product-ingestion-client', tenantId: publisherTenantId }),
+          authProvider: this.options.authProvider
         });
       });
   }
@@ -287,6 +284,18 @@ export class ProductCatalogService {
   async listProducts(publisherTenantId: string): Promise<ProductCatalogProduct[]> {
     const products = await this.options.repository.listProducts(publisherTenantId);
     return products.map((product) => mapProduct(product));
+  }
+
+  async listMarketplacePlans(publisherTenantId: string): Promise<MarketplacePlanSummary[]> {
+    const plans = await this.options.repository.listAllPlans(publisherTenantId);
+    return plans.map((plan) => ({
+      id: plan.id,
+      externalPlanId: plan.externalPlanId,
+      durablePlanId: plan.durablePlanId,
+      productId: plan.productId,
+      status: plan.status,
+      pricingSummary: plan.pricingSummary ?? null
+    }));
   }
 
   async getProduct(publisherTenantId: string, productId: string): Promise<ProductCatalogProductDetail> {
@@ -361,15 +370,11 @@ export class ProductCatalogService {
   }
 
   private async loadClient(publisherTenantId: string): Promise<ProductIngestionClientLike> {
-    const connection = this.options.partnerCenterRepository
-      ? await this.options.partnerCenterRepository.findByTenant(publisherTenantId)
-      : null;
-
-    if (!connection && !this.options.tokenProvider) {
-      throw AppError.badRequest('Marketplace OAuth configuration or a legacy Partner Center connection is required before importing marketplace products');
+    if (!this.options.tokenProvider && !this.options.authProvider) {
+      throw AppError.badRequest('Marketplace OAuth configuration or a Partner Center auth provider is required before importing marketplace products');
     }
 
-    return this.clientFactory({ account: connection ?? undefined });
+    return this.clientFactory({ publisherTenantId });
   }
 
   private async persistResourceTree(

@@ -80,7 +80,7 @@ export function DashboardClient() {
           <dl className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Plan</dt><dd className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-50">{subscription.planName}</dd></div>
             <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Cycle</dt><dd className="mt-2 text-lg font-semibold capitalize text-slate-950 dark:text-slate-50">{subscription.billingCycle}</dd></div>
-            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Seat usage</dt><dd className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-50">{usage.activeMembers} / {usage.seatsPurchased}</dd></div>
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-4"><dt className="text-sm text-slate-500 dark:text-slate-400">Seat usage</dt><dd className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-50">{usage.activeMembers} / {usage.seatLimit ?? usage.seatsPurchased}</dd></div>
           </dl>
         </article>
 
