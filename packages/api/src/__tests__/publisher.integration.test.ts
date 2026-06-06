@@ -68,7 +68,7 @@ describe('publisher administration routes', () => {
     await request(harness.app)
       .post('/v1/publisher/plans')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ id: 'growth', name: 'Growth', description: 'Default growth plan', priceMonthly: '$249', status: 'active' });
+      .send({ id: 'growth', name: 'Growth', description: 'Default growth plan', status: 'active' });
 
     const subscriptionsResponse = await request(harness.app)
       .get('/v1/publisher/subscriptions')
@@ -84,7 +84,6 @@ describe('publisher administration routes', () => {
       .send({
         name: 'Growth Plus',
         description: 'Updated publisher-managed growth plan.',
-        priceMonthly: '$299',
         status: 'active'
       });
 
@@ -111,11 +110,11 @@ describe('publisher administration routes', () => {
     await request(harness.app)
       .post('/v1/publisher/plans')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ id: 'starter', name: 'Starter', description: 'Test plan', priceMonthly: '$79', status: 'active' });
+      .send({ id: 'starter', name: 'Starter', description: 'Test plan', status: 'active' });
     await request(harness.app)
       .post('/v1/publisher/plans')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ id: 'growth', name: 'Growth', description: 'Test plan', priceMonthly: '$249', status: 'active' });
+      .send({ id: 'growth', name: 'Growth', description: 'Test plan', status: 'active' });
 
     const createResponse = await request(harness.app)
       .post('/v1/publisher/tenants')

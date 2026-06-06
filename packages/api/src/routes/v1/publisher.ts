@@ -54,7 +54,7 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
   }
 
   const candidate = body as Record<string, unknown>;
-  const { id, name, description, priceMonthly, status, features, marketplacePlanId, seatLimit } = candidate;
+  const { id, name, description, status, features, marketplacePlanId, seatLimit } = candidate;
 
   if (id !== undefined && typeof id !== 'string') {
     throw AppError.badRequest('id must be a string when provided');
@@ -66,10 +66,6 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
 
   if (typeof description !== 'string') {
     throw AppError.badRequest('description is required');
-  }
-
-  if (typeof priceMonthly !== 'string') {
-    throw AppError.badRequest('priceMonthly is required');
   }
 
   if (status !== 'active' && status !== 'draft') {
@@ -92,7 +88,6 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
     id,
     name,
     description,
-    priceMonthly,
     status,
     features: features as string[] | undefined,
     ...(marketplacePlanId !== undefined ? { marketplacePlanId: marketplacePlanId as string | null } : {}),
@@ -525,15 +520,13 @@ export function createPublisherRouter(
    *         application/json:
    *           schema:
    *             type: object
-   *             required: [name, description, priceMonthly, status]
+   *             required: [name, description, status]
    *             properties:
    *               id:
    *                 type: string
    *               name:
    *                 type: string
    *               description:
-   *                 type: string
-   *               priceMonthly:
    *                 type: string
    *               status:
    *                 type: string
@@ -591,15 +584,13 @@ export function createPublisherRouter(
    *         application/json:
    *           schema:
    *             type: object
-   *             required: [name, description, priceMonthly, status]
+   *             required: [name, description, status]
    *             properties:
    *               id:
    *                 type: string
    *               name:
    *                 type: string
    *               description:
-   *                 type: string
-   *               priceMonthly:
    *                 type: string
    *               status:
    *                 type: string

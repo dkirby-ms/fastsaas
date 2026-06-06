@@ -48,7 +48,6 @@ describe('GET /portal/dashboard', () => {
       id: 'growth-linked',
       name: 'Growth Linked',
       description: 'Linked marketplace growth plan.',
-      priceMonthly: '$249',
       status: 'active',
       features: ['25 seats included'],
       marketplacePlanId: 'growth',

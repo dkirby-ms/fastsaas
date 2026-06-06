@@ -102,7 +102,6 @@ export interface PublisherPlansTable {
   id: string;
   name: string;
   description: string;
-  price_monthly: string;
   status: PublisherPlanStatus;
   features: StringArrayColumn;
   marketplace_plan_id: string | null;

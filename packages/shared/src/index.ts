@@ -281,7 +281,7 @@ export interface PublisherDashboardPlanSummary {
 export interface PublisherDashboardData {
   subscriptionCount: number;
   activeTenants: number;
-  monthlyRecurringRevenue: string;
+  monthlyRecurringRevenue: string | null;
   churnRiskCount: number;
   plans: PublisherDashboardPlanSummary[];
 }
@@ -290,7 +290,7 @@ export interface PublisherPlan {
   id: string;
   name: string;
   description: string;
-  priceMonthly: string;
+  pricingSummary?: Record<string, unknown> | null;
   status: PublisherPlanStatus;
   activeSubscriptions: number;
   features: string[];
@@ -300,6 +300,7 @@ export interface PublisherPlan {
 
 export interface PublisherPlansResponse {
   plans: PublisherPlan[];
+  warning?: string;
 }
 
 export interface PlanFeatureGate {
@@ -345,7 +346,7 @@ export interface PublisherTenantSummary {
   planId: string;
   planName: string;
   status: PublisherTenantStatus;
-  monthlyRecurringRevenue: string;
+  monthlyRecurringRevenue: string | null;
   seats: number;
   subscriptionId?: string;
   lastUpdated: string;
@@ -377,7 +378,6 @@ export interface PublisherTenantsResponse {
 export interface PublisherPlanUpdateInput {
   name: string;
   description: string;
-  priceMonthly: string;
   status: PublisherPlanStatus;
   marketplacePlanId?: string | null;
   seatLimit?: number | null;

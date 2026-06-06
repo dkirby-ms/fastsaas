@@ -39,19 +39,6 @@ export interface CreatePublisherPlanInput extends PublisherPlanUpdateInput {
 }
 
 
-function parseMoney(value: string): number {
-  const parsed = Number(value.replace(/[^\d.]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0
-  }).format(amount);
-}
-
 function slugify(value: string): string {
   return value
     .trim()
@@ -147,7 +134,7 @@ function mergePlanDefinitions(plans: readonly StoredPublisherPlan[]): Map<string
       id: plan.id,
       name: plan.name,
       description: plan.description,
-      priceMonthly: plan.priceMonthly,
+      pricingSummary: plan.pricingSummary,
       status: plan.status,
       features: [...plan.features]
     });
@@ -165,7 +152,7 @@ function resolvePlanDefinition(
       id: planId,
       name: titleize(planId),
       description: 'Marketplace plan imported from live subscription data.',
-      priceMonthly: '$0',
+      pricingSummary: null,
       status: 'draft',
       features: ['Imported from live subscription data']
     }
@@ -192,7 +179,7 @@ function mapSubscriptionToTenantSummary(
     planId: subscription.planId,
     planName: plan.name,
     status: mapPublisherStatus(subscription.status, subscription.metadata),
-    monthlyRecurringRevenue: plan.priceMonthly,
+    monthlyRecurringRevenue: null,
     seats: subscription.seats,
     subscriptionId: subscription.id,
     lastUpdated: subscription.updatedAt
@@ -238,9 +225,7 @@ export class PublisherService {
     return {
       subscriptionCount: subscriptions.length,
       activeTenants: tenants.filter((tenant) => tenant.status === 'active').length,
-      monthlyRecurringRevenue: formatMoney(
-        tenants.reduce((total, tenant) => total + parseMoney(tenant.monthlyRecurringRevenue), 0)
-      ),
+      monthlyRecurringRevenue: null,
       churnRiskCount: tenants.filter((tenant) => tenant.status === 'past_due' || tenant.status === 'suspended').length,
       plans: [...planCounts.entries()].map(([planId, tenantCount]) => ({
         planId,
@@ -291,14 +276,26 @@ export class PublisherService {
   async updatePlan(actor: PublisherActorContext, planId: string, input: PublisherPlanUpdateInput): Promise<PublisherPlansResponse> {
     const existingPlan = await this.getPlan(actor.tenantId, planId);
 
-    await this.publisherPlanRepository.savePlan({
+    const savedPlan = await this.publisherPlanRepository.savePlan({
       publisherTenantId: actor.tenantId,
       id: planId,
       ...this.normalizePlanInput({ ...input, features: existingPlan.features })
     });
 
     this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan updated');
-    return this.listPlans(actor.tenantId);
+
+    const result = await this.listPlans(actor.tenantId);
+
+    const transitioningToActive = existingPlan.status === 'draft' && savedPlan.status === 'active';
+    if (transitioningToActive && !savedPlan.marketplacePlanId) {
+      return {
+        ...result,
+        warning:
+          'This plan is not linked to a Partner Center plan. Marketplace purchasing will not be available until linked.'
+      };
+    }
+
+    return result;
   }
 
   async listSubscriptions(publisherTenantId: string): Promise<Subscription[]> {
@@ -470,7 +467,6 @@ export class PublisherService {
   private normalizePlanInput(input: CreatePublisherPlanInput): Omit<SavePublisherPlanInput, 'publisherTenantId' | 'id'> {
     const name = input.name?.trim();
     const description = input.description?.trim();
-    const priceMonthly = input.priceMonthly?.trim();
 
     if (!name) {
       throw AppError.badRequest('name is required');
@@ -480,16 +476,13 @@ export class PublisherService {
       throw AppError.badRequest('description is required');
     }
 
-    if (!priceMonthly) {
-      throw AppError.badRequest('priceMonthly is required');
-    }
-
     return {
       name,
       description,
-      priceMonthly,
       status: normalizePlanStatus(input.status),
-      features: normalizeFeatures(input.features, ['Publisher managed plan'])
+      features: normalizeFeatures(input.features, ['Publisher managed plan']),
+      ...(input.marketplacePlanId !== undefined ? { marketplacePlanId: input.marketplacePlanId } : {}),
+      ...(input.seatLimit !== undefined ? { seatLimit: input.seatLimit } : {})
     };
   }
 

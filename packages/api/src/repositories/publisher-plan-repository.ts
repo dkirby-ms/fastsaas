@@ -8,7 +8,7 @@ export interface StoredPublisherPlan {
   id: string;
   name: string;
   description: string;
-  priceMonthly: string;
+  pricingSummary: Record<string, unknown> | null;
   status: PublisherPlanStatus;
   features: string[];
   marketplacePlanId: string | null;
@@ -22,7 +22,6 @@ export interface SavePublisherPlanInput {
   id: string;
   name: string;
   description: string;
-  priceMonthly: string;
   status: PublisherPlanStatus;
   features: string[];
   marketplacePlanId?: string | null;
@@ -37,6 +36,10 @@ export interface PublisherPlanRepository {
 
 type PublisherPlanRow = Selectable<Database['publisher_plans']>;
 
+interface PlanListRow extends PublisherPlanRow {
+  pricing_summary: Record<string, unknown> | null;
+}
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -45,12 +48,12 @@ function asFeatures(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
-function mapPlan(row: PublisherPlanRow): StoredPublisherPlan {
+function mapPlan(row: PublisherPlanRow | PlanListRow, pricingSummary: Record<string, unknown> | null = null): StoredPublisherPlan {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    priceMonthly: row.price_monthly,
+    pricingSummary: 'pricing_summary' in row ? (row as PlanListRow).pricing_summary : pricingSummary,
     status: row.status,
     features: asFeatures(row.features),
     marketplacePlanId: row.marketplace_plan_id,
@@ -105,7 +108,7 @@ export class InMemoryPublisherPlanRepository implements PublisherPlanRepository 
       id: input.id,
       name: input.name,
       description: input.description,
-      priceMonthly: input.priceMonthly,
+      pricingSummary: null,
       status: input.status,
       features: clone(input.features),
       marketplacePlanId,
@@ -129,12 +132,39 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
       async (trx) => {
         const rows = await trx
           .selectFrom('publisher_plans')
-          .selectAll()
-          .where('publisher_tenant_id', '=', publisherTenantId)
-          .orderBy('name', 'asc')
+          .leftJoin('marketplace_plans', (join) =>
+            join
+              .onRef('publisher_plans.marketplace_plan_id', '=', 'marketplace_plans.external_plan_id')
+              .onRef('publisher_plans.publisher_tenant_id', '=', 'marketplace_plans.publisher_tenant_id')
+          )
+          .select([
+            'publisher_plans.id',
+            'publisher_plans.name',
+            'publisher_plans.description',
+            'publisher_plans.status',
+            'publisher_plans.features',
+            'publisher_plans.marketplace_plan_id',
+            'publisher_plans.seat_limit',
+            'publisher_plans.created_at',
+            'publisher_plans.updated_at',
+            'marketplace_plans.pricing_summary'
+          ])
+          .where('publisher_plans.publisher_tenant_id', '=', publisherTenantId)
+          .orderBy('publisher_plans.name', 'asc')
           .execute();
 
-        return rows.map((row) => mapPlan(row));
+        return rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          pricingSummary: row.pricing_summary,
+          status: row.status,
+          features: asFeatures(row.features),
+          marketplacePlanId: row.marketplace_plan_id,
+          seatLimit: row.seat_limit,
+          createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+          updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString()
+        }));
       },
       { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
     );
@@ -170,7 +200,6 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
             id: input.id,
             name: input.name,
             description: input.description,
-            price_monthly: input.priceMonthly,
             status: input.status,
             features: input.features,
             marketplace_plan_id: marketplacePlanId,
@@ -180,7 +209,6 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
             oc.columns(['publisher_tenant_id', 'id']).doUpdateSet({
               name: input.name,
               description: input.description,
-              price_monthly: input.priceMonthly,
               status: input.status,
               features: input.features,
               marketplace_plan_id: marketplacePlanId,
