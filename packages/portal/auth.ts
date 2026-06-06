@@ -181,7 +181,17 @@ function createAuthConfig(): NextAuthConfig {
     callbacks: {
       async jwt({ token, account, profile }) {
         if (account) {
-          return applyTokenClaims(
+          const claims = parseAccessTokenClaims(account.access_token);
+          const accessTokenRoles = normalizeRoles(claims.roles);
+          const profileRoles = normalizeRoles((profile as Record<string, unknown> | undefined)?.roles);
+
+          if (process.env.AUTH_DEBUG === 'true') {
+            console.debug('[auth] JWT callback: initial login');
+            console.debug('[auth] Access token roles:', accessTokenRoles);
+            console.debug('[auth] Profile roles:', profileRoles);
+          }
+
+          const updated = applyTokenClaims(
             {
               ...token,
               accessTokenExpires: account.expires_at ? account.expires_at * 1000 : Date.now() + 55 * 60 * 1000,
@@ -192,6 +202,16 @@ function createAuthConfig(): NextAuthConfig {
             account.access_token,
             profile as Record<string, unknown> | undefined,
           );
+
+          if (process.env.AUTH_DEBUG === 'true') {
+            console.debug('[auth] Final merged roles:', Array.isArray(updated.roles) ? updated.roles : []);
+          }
+
+          return updated;
+        }
+
+        if (process.env.AUTH_DEBUG === 'true') {
+          console.debug('[auth] JWT callback: session resumption, roles:', Array.isArray(token.roles) ? token.roles : []);
         }
 
         if (typeof token.accessTokenExpires === 'number' && Date.now() < token.accessTokenExpires - 60_000) {

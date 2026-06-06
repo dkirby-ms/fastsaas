@@ -11,7 +11,14 @@ export function normalizeRoles(roles?: readonly string[] | string | null): strin
 }
 
 export function hasPublisherAccess(roles?: readonly string[] | string | null): boolean {
-  return normalizeRoles(roles).some((role) => role === 'publisher' || role.startsWith('publisher_') || role.endsWith(':publisher'));
+  return normalizeRoles(roles).some(
+    (role) =>
+      role === 'publisher' ||
+      role === 'admin' ||
+      role === 'owner' ||
+      role.startsWith('publisher_') ||
+      role.endsWith(':publisher'),
+  );
 }
 
 export function getPortalRole(roles?: readonly string[] | string | null): PortalRole {
