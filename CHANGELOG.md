@@ -1,3 +1,9 @@
+## [0.21.0](https://github.com/dkirby-ms/fastsaas/compare/v0.20.0...v0.21.0) (2026-06-06)
+
+### Features
+
+* auth debug tooling for publisher role diagnosis ([#145](https://github.com/dkirby-ms/fastsaas/issues/145)) ([24b735d](https://github.com/dkirby-ms/fastsaas/commit/24b735d361226b2859efba7db8bb91a9cdfa774e))
+
 ## [0.20.0](https://github.com/dkirby-ms/fastsaas/compare/v0.19.2...v0.20.0) (2026-06-06)
 
 ### Features
