@@ -23,6 +23,7 @@ ENV API_BASE_URL=${API_BASE_URL} \
     APP_NAME=${APP_NAME} \
     HEALTH_PATH=${HEALTH_PATH}
 
+RUN npm run build --workspace=@fastsaas/shared
 RUN NEXTAUTH_SECRET=build-only-secret \
     ENTRA_TENANT_ID=build-tenant \
     ENTRA_CLIENT_ID=build-client \

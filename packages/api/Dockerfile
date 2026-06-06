@@ -5,6 +5,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages ./packages
 
 RUN npm ci
+RUN npm run build --workspace @fastsaas/shared
 RUN npm run build --workspace @fastsaas/api
 RUN npm prune --omit=dev
 RUN mkdir -p /app/release/packages/api /app/release/packages/shared \
