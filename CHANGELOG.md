@@ -1,3 +1,9 @@
+## [0.19.0](https://github.com/dkirby-ms/fastsaas/compare/v0.18.1...v0.19.0) (2026-06-06)
+
+### Features
+
+* plan catalog with marketplace linking, remove multi-publisher and products page ([6543973](https://github.com/dkirby-ms/fastsaas/commit/65439731bc3400eba7dbd01d761ff1f461f706ca))
+
 ## [0.18.1](https://github.com/dkirby-ms/fastsaas/compare/v0.18.0...v0.18.1) (2026-06-06)
 
 ### Bug Fixes
