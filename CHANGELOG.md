@@ -1,3 +1,9 @@
+## [0.21.1](https://github.com/dkirby-ms/fastsaas/compare/v0.21.0...v0.21.1) (2026-06-06)
+
+### Bug Fixes
+
+* force dynamic rendering on auth-debug page ([7e3dff8](https://github.com/dkirby-ms/fastsaas/commit/7e3dff89855e2b046f1e250cee6a87819a36a144))
+
 ## [0.21.0](https://github.com/dkirby-ms/fastsaas/compare/v0.20.0...v0.21.0) (2026-06-06)
 
 ### Features
