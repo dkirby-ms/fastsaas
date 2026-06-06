@@ -7,21 +7,32 @@ import type { PublisherTenantStatus, PublisherTenantUpsertInput } from '@fastsaa
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { portalApi } from '@/lib/api-client';
+import {
+  createPublisherTenantAction,
+  getPublisherPlansAction,
+  getPublisherTenantsAction,
+  type ActionResult,
+} from '@/app/(portal)/publisher/actions';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
 
 const emptyTenant: PublisherTenantUpsertInput = { displayName: '', primaryDomain: '', planId: 'starter', seats: 5, status: 'trialing' };
 const statusTone: Record<PublisherTenantStatus, string> = { active: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', trialing: 'bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300', past_due: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300', suspended: 'bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300', canceled: 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300' };
 
 export function PublisherTenantsClient() {
   const queryClient = useQueryClient();
-  const tenantsQuery = useQuery({ queryKey: ['publisher-tenants'], queryFn: portalApi.getPublisherTenants });
-  const plansQuery = useQuery({ queryKey: ['publisher-plans'], queryFn: portalApi.getPublisherPlans });
+  const tenantsQuery = useQuery({ queryKey: ['publisher-tenants'], queryFn: () => getPublisherTenantsAction().then(unwrapResult) });
+  const plansQuery = useQuery({ queryKey: ['publisher-plans'], queryFn: () => getPublisherPlansAction().then(unwrapResult) });
   const [formState, setFormState] = useState<PublisherTenantUpsertInput>(emptyTenant);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const createTenantMutation = useMutation({
-    mutationFn: portalApi.createPublisherTenant,
+    mutationFn: (payload: PublisherTenantUpsertInput) => createPublisherTenantAction(payload).then(unwrapResult),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['publisher-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['publisher-dashboard'] });

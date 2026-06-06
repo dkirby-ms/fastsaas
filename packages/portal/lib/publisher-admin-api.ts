@@ -12,14 +12,8 @@ export const publisherAdminContracts = [
   { method: 'POST', path: '/v1/publisher/tenants/:tenantId/:action', label: 'Tenant lifecycle actions' },
 ] as const;
 
+export { getPublisherIntegrationMode } from '@/lib/server-config';
+
 export function getPublisherApiBaseUrl() {
   return process.env.PUBLISHER_API_BASE_URL ?? process.env.API_BASE_URL ?? '';
-}
-
-export function getPublisherIntegrationMode(): 'mock' | 'live' {
-  if (process.env.USE_MOCK_API?.toLowerCase() !== 'false') {
-    return 'mock';
-  }
-
-  return getPublisherApiBaseUrl().length > 0 ? 'live' : 'mock';
 }

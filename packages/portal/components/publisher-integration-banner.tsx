@@ -1,4 +1,5 @@
-import { getPublisherIntegrationMode, publisherAdminContracts } from '@/lib/publisher-admin-api';
+import { getPublisherIntegrationMode } from '@/lib/server-config';
+import { publisherAdminContracts } from '@/lib/publisher-admin-api';
 
 export function PublisherIntegrationBanner() {
   const mode = getPublisherIntegrationMode();

@@ -1,25 +1,15 @@
 import type {
   ApiResponse,
   AuthContextData,
-  CreatePublisherPlanInput,
   DashboardData,
-  MarketplacePlanSummary,
   PlansResponse,
-  PublisherDashboardData,
-  PublisherPlanUpdateInput,
-  PublisherPlansResponse,
-  PublisherTenantDetail,
-  PublisherTenantUpsertInput,
-  PublisherTenantsResponse,
   SettingsData,
   Subscription,
 } from '@fastsaas/shared';
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
-import { customerApiPaths, publisherAdminMockPaths } from '@/lib/api-paths';
-import { getPublisherApiBaseUrl, publisherAdminPaths } from '@/lib/publisher-admin-api';
-import type { PlanPricing } from '@fastsaas/shared';
+import { customerApiPaths } from '@/lib/api-paths';
 import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
 
 export { ApiError } from '@/lib/errors';
@@ -169,16 +159,6 @@ async function requestPortal<T>(path: string, init?: RequestInit): Promise<T> {
   return requestJson<T>(path, init);
 }
 
-async function requestPublisherResource<T>(mockPath: string, livePath: string, init?: RequestInit): Promise<T> {
-  await assertAreaAccess('publisher');
-
-  if (shouldUseMockApi() || !getPublisherApiBaseUrl()) {
-    return mockRequest<T>(mockPath, init);
-  }
-
-  return requestApiResponseWithBase<T>(getPublisherApiBaseUrl(), livePath, init);
-}
-
 export const portalApi = {
   getDashboard: async () => {
     await assertAreaAccess('customer');
@@ -225,64 +205,6 @@ export const portalApi = {
 
     return requestApiResponse<AuthContextData>('/v1/auth/context');
   },
-  getPublisherDashboard: async () =>
-    requestPublisherResource<PublisherDashboardData>('/publisher/dashboard', publisherAdminPaths.dashboard),
-  getPublisherPlans: async () =>
-    requestPublisherResource<PublisherPlansResponse>('/publisher/plans', publisherAdminPaths.plans),
-  getMarketplacePlans: async () =>
-    requestPublisherResource<MarketplacePlanSummary[]>(
-      publisherAdminMockPaths.marketplacePlans,
-      publisherAdminPaths.marketplacePlans,
-    ),
-  createPublisherPlan: async (payload: CreatePublisherPlanInput) =>
-    requestPublisherResource(
-      publisherAdminMockPaths.plans,
-      publisherAdminPaths.plans,
-      { method: 'POST', body: JSON.stringify(payload) },
-    ),
-  updatePublisherPlan: async (planId: string, payload: PublisherPlanUpdateInput) =>
-    requestPublisherResource<PublisherPlansResponse>(publisherAdminMockPaths.plan(planId), publisherAdminPaths.plan(planId), {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  getPublisherTenants: async () =>
-    requestPublisherResource<PublisherTenantsResponse>('/publisher/tenants', publisherAdminPaths.tenants),
-  getPublisherTenant: async (tenantId: string) =>
-    requestPublisherResource<PublisherTenantDetail>(publisherAdminMockPaths.tenant(tenantId), publisherAdminPaths.tenant(tenantId)),
-  createPublisherTenant: async (payload: PublisherTenantUpsertInput) =>
-    requestPublisherResource<PublisherTenantDetail>('/publisher/tenants', publisherAdminPaths.tenants, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  updatePublisherTenant: async (tenantId: string, payload: PublisherTenantUpsertInput) =>
-    requestPublisherResource<PublisherTenantDetail>(publisherAdminMockPaths.tenant(tenantId), publisherAdminPaths.tenant(tenantId), {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    }),
-  activatePublisherTenant: async (subscriptionId: string) =>
-    requestPublisherResource<PublisherTenantDetail>(
-      publisherAdminMockPaths.tenantAction(subscriptionId, 'activate'),
-      publisherAdminPaths.tenantAction(subscriptionId, 'activate'),
-      {
-        method: 'POST',
-      },
-    ),
-  suspendPublisherTenant: async (subscriptionId: string) =>
-    requestPublisherResource<PublisherTenantDetail>(
-      publisherAdminMockPaths.tenantAction(subscriptionId, 'suspend'),
-      publisherAdminPaths.tenantAction(subscriptionId, 'suspend'),
-      {
-        method: 'POST',
-      },
-    ),
-  cancelPublisherTenant: async (subscriptionId: string) =>
-    requestPublisherResource<PublisherTenantDetail>(
-      publisherAdminMockPaths.tenantAction(subscriptionId, 'cancel'),
-      publisherAdminPaths.tenantAction(subscriptionId, 'cancel'),
-      {
-        method: 'POST',
-      },
-    ),
   createMarketplaceSubscription: async (marketplaceToken: string) => {
     await assertAreaAccess('customer');
 

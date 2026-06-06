@@ -5,11 +5,18 @@ import { useQuery } from '@tanstack/react-query';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { portalApi } from '@/lib/api-client';
+import { getPublisherDashboardAction } from '@/app/(portal)/publisher/actions';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+import type { ActionResult } from '@/app/(portal)/publisher/actions';
+
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
 
 export function PublisherDashboardClient() {
-  const dashboardQuery = useQuery({ queryKey: ['publisher-dashboard'], queryFn: portalApi.getPublisherDashboard });
+  const dashboardQuery = useQuery({ queryKey: ['publisher-dashboard'], queryFn: () => getPublisherDashboardAction().then(unwrapResult) });
 
   if (dashboardQuery.isLoading) return <LoadingPanel label="Loading publisher metrics" />;
   if (dashboardQuery.isError) {

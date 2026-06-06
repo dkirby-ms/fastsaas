@@ -5,8 +5,14 @@ import { useState } from 'react';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { portalApi } from '@/lib/api-client';
+import { getMarketplacePlansAction, type ActionResult } from '@/app/(portal)/publisher/actions';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
 
 function getStatusClasses(status: string) {
   const normalized = status.toLowerCase();
@@ -25,7 +31,7 @@ function getStatusClasses(status: string) {
 export function PublisherMarketplacePlansClient() {
   const marketplacePlansQuery = useQuery({
     queryKey: ['publisher-marketplace-plans'],
-    queryFn: portalApi.getMarketplacePlans,
+    queryFn: () => getMarketplacePlansAction().then(unwrapResult),
   });
   const [copiedPlanId, setCopiedPlanId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);

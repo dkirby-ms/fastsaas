@@ -117,3 +117,23 @@ FIDO delivered publisher portal basic workflows (issue #43):
 - **2026-06-04T18:21:05.078+00:00:** Microsoft SaaS Fulfillment v2 resolve calls in `packages/api/src/lib/marketplace-fulfillment.ts` must use `POST /api/saas/subscriptions/resolve` with the marketplace token in the `x-ms-marketplace-token` header, not a `token` query parameter.
 - **2026-06-04T18:21:05.078+00:00:** All Marketplace fulfillment client calls should send `x-ms-requestid` and `x-ms-correlationid`; the fulfillment client tests in `packages/api/src/__tests__/marketplace-fulfillment.test.ts` now assert those exact spec header names across resolve, activate, update, reinstate, and operation calls.
 - **2026-06-06T16:13:25Z:** Plan Catalog & UI Modernization — Rewrote publisher-plans-client.tsx with full CRUD operations and two-tab layout (Publisher Plans + Marketplace Plans). Frontend now consumes GET /v1/publisher/marketplace-plans from backend. Removed Products page from portal navigation. Plan management UI fully functional with marketplace linking support.
+
+## 2026-06-06T16:51:37Z — Publisher Portal Server Actions (Issue: env-var client bug)
+
+### Task
+Convert all publisher portal API calls from client-side React Query + `portalApi.*` to Next.js Server Actions, fixing a root-cause architectural bug where `USE_MOCK_API`/`API_BASE_URL` (server-only, no `NEXT_PUBLIC_`) were always `undefined` in the browser, causing the portal to always serve mock data.
+
+### Outcome
+- BUILD PASS / TYPECHECK PASS
+- Server actions in `app/(portal)/publisher/actions.ts` now handle all publisher data fetching + mutations server-side
+- Canonical mock/live gate in `lib/server-config.ts` with strict `USE_MOCK_API=false`+missing `API_BASE_URL` → error (no silent fallback)
+- All publisher client components updated to call server actions via React Query
+- Decision written to `.squad/decisions/inbox/fido-server-actions.md`
+
+## Learnings
+
+- **2026-06-06T16:51:37Z:** Publisher portal must use Server Actions for API calls — env vars `USE_MOCK_API` and `API_BASE_URL` are server-only (no `NEXT_PUBLIC_`), so they evaluate to `undefined` in the browser. The fix is architectural: all publisher data flows go through `app/(portal)/publisher/actions.ts` with `'use server'`.
+- **2026-06-06T16:51:37Z:** `mock-api.ts` uses `window.localStorage` and `next-auth/react`'s `getSession()` — both client-only. Server actions cannot call it. Create static default mock data inline in the server actions file for publisher routes.
+- **2026-06-06T16:51:37Z:** Use discriminated union `ActionResult<T>` (`{ ok: true; data } | { ok: false; status, code, message }`) when returning from server actions to client components. This avoids Error class identity loss from Next.js serialization. Client components reconstruct `ApiError` via `unwrapResult()` to preserve existing `isApiErrorStatus` / `getErrorMessage` patterns.
+- **2026-06-06T16:51:37Z:** Canonical server-side config lives in `packages/portal/lib/server-config.ts`. `publisher-admin-api.ts` re-exports `getPublisherIntegrationMode` from there. The `PublisherIntegrationBanner` (server component) imports from `server-config` directly.
+- **2026-06-06T16:51:37Z:** `USE_MOCK_API !== 'false'` → mock; `USE_MOCK_API === 'false'` + `API_BASE_URL` set → live; `USE_MOCK_API === 'false'` + no `API_BASE_URL` → throw (loud config error). `PUBLISHER_API_BASE_URL` overrides `API_BASE_URL` for publisher routes.
