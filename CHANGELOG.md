@@ -1,3 +1,9 @@
+## [0.19.2](https://github.com/dkirby-ms/fastsaas/compare/v0.19.1...v0.19.2) (2026-06-06)
+
+### Bug Fixes
+
+* move publisher portal API calls to server actions ([d2d0df0](https://github.com/dkirby-ms/fastsaas/commit/d2d0df0ac95b1f19fdad9519f473d94cd0071bec))
+
 ## [0.19.1](https://github.com/dkirby-ms/fastsaas/compare/v0.19.0...v0.19.1) (2026-06-06)
 
 ### Bug Fixes
