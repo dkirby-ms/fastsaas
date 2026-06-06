@@ -1,3 +1,9 @@
+## [0.20.0](https://github.com/dkirby-ms/fastsaas/compare/v0.19.2...v0.20.0) (2026-06-06)
+
+### Features
+
+* add Publisher role to API RBAC system ([bd722b5](https://github.com/dkirby-ms/fastsaas/commit/bd722b5688b6dad99cdf06549f3b0369993d20ff))
+
 ## [0.19.2](https://github.com/dkirby-ms/fastsaas/compare/v0.19.1...v0.19.2) (2026-06-06)
 
 ### Bug Fixes
