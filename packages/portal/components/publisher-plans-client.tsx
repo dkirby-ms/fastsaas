@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useMemo, useState } from 'react';
 import type {
   CreatePublisherPlanInput,
+  PlanFeatureGate,
   PublisherPlan,
   PublisherPlanStatus,
   PublisherPlanUpdateInput,
@@ -14,8 +15,11 @@ import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import {
   createPublisherPlanAction,
+  getFeatureGatesAction,
   getMarketplacePlansAction,
   getPublisherPlansAction,
+  removeFeatureGateAction,
+  setFeatureGatesAction,
   updatePublisherPlanAction,
   type ActionResult,
 } from '@/app/(portal)/publisher/actions';
@@ -114,6 +118,167 @@ function parsePlanFormState(formState: PlanFormState): { payload: PublisherPlanU
       seatLimit: seatLimitValue ? Number(seatLimitValue) : null,
     },
   };
+}
+
+function PartnerCenterWarning() {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300" role="alert">
+      <span aria-hidden="true" className="mt-0.5 shrink-0">⚠️</span>
+      <span>This plan is not linked to a Partner Center plan. Link it to enable marketplace purchasing.</span>
+    </div>
+  );
+}
+
+function FeatureGatesPanel({ planId }: { planId: string }) {
+  const queryClient = useQueryClient();
+  const [newKey, setNewKey] = useState('');
+  const [newEnabled, setNewEnabled] = useState(true);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const gatesQuery = useQuery({
+    queryKey: ['feature-gates', planId],
+    queryFn: () => getFeatureGatesAction(planId).then(unwrapResult),
+  });
+
+  const setMutation = useMutation({
+    mutationFn: ({ gates }: { gates: Array<{ featureKey: string; enabled: boolean }> }) =>
+      setFeatureGatesAction(planId, gates).then(unwrapResult),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feature-gates', planId] }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (featureKey: string) => removeFeatureGateAction(planId, featureKey).then(unwrapResult),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feature-gates', planId] }),
+  });
+
+  const gates: PlanFeatureGate[] = gatesQuery.data?.features ?? [];
+  const isBusy = setMutation.isPending || removeMutation.isPending;
+
+  const handleToggle = (gate: PlanFeatureGate) => {
+    const updated = gates.map((g) =>
+      g.featureKey === gate.featureKey ? { featureKey: g.featureKey, enabled: !g.enabled } : { featureKey: g.featureKey, enabled: g.enabled },
+    );
+    setMutation.mutate({ gates: updated });
+  };
+
+  const handleRemove = (featureKey: string) => {
+    removeMutation.mutate(featureKey);
+  };
+
+  const handleAdd = () => {
+    const key = newKey.trim();
+    if (!key) {
+      setAddError('Feature key is required.');
+      return;
+    }
+    if (gates.some((g) => g.featureKey === key)) {
+      setAddError('A gate with this key already exists.');
+      return;
+    }
+    setAddError(null);
+    const updated = [...gates.map((g) => ({ featureKey: g.featureKey, enabled: g.enabled })), { featureKey: key, enabled: newEnabled }];
+    setMutation.mutate(
+      { gates: updated },
+      {
+        onSuccess: () => {
+          setNewKey('');
+          setNewEnabled(true);
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="mt-8 space-y-4">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Feature Gates</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Control which features are enabled for this plan.</p>
+      </div>
+
+      {gatesQuery.isLoading ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading feature gates…</p>
+      ) : gatesQuery.isError ? (
+        <ErrorAlert message={getErrorMessage(gatesQuery.error, 'Could not load feature gates.')} />
+      ) : gates.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">No feature gates configured for this plan.</p>
+      ) : (
+        <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-slate-50 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-800/60">
+          {gates.map((gate) => (
+            <div key={gate.featureKey} className="flex items-center justify-between gap-4 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-mono text-sm font-medium text-slate-900 dark:text-slate-50">{gate.featureKey}</p>
+                {gate.createdAt ? (
+                  <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">Added {new Date(gate.createdAt).toLocaleDateString()}</p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => handleToggle(gate)}
+                  className={clsx(
+                    'rounded-full px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
+                    gate.enabled
+                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600',
+                  )}
+                >
+                  {gate.enabled ? 'Enabled' : 'Disabled'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => handleRemove(gate.featureKey)}
+                  className="rounded-full px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {setMutation.isError ? <ErrorAlert message={getErrorMessage(setMutation.error, 'Could not update feature gates.')} /> : null}
+      {removeMutation.isError ? <ErrorAlert message={getErrorMessage(removeMutation.error, 'Could not remove feature gate.')} /> : null}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">Add feature gate</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-48">
+            <label htmlFor="new-feature-key" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Feature key</label>
+            <input
+              id="new-feature-key"
+              type="text"
+              value={newKey}
+              onChange={(e) => { setNewKey(e.target.value); setAddError(null); }}
+              placeholder="e.g. advanced-reporting"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600 dark:bg-slate-800"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="new-feature-enabled"
+              type="checkbox"
+              checked={newEnabled}
+              onChange={(e) => setNewEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+            />
+            <label htmlFor="new-feature-enabled" className="text-sm text-slate-700 dark:text-slate-200">Enabled</label>
+          </div>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={handleAdd}
+            className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Add gate
+          </button>
+        </div>
+        {addError ? <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">{addError}</p> : null}
+      </div>
+    </div>
+  );
 }
 
 export function PublisherPlansClient() {
@@ -275,6 +440,11 @@ export function PublisherPlansClient() {
               <button type="button" onClick={() => openEditForm(plan)} className="mt-6 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:text-brand-300">
                 Edit
               </button>
+              {plan.status === 'active' && !plan.marketplacePlanId ? (
+                <div className="mt-4">
+                  <PartnerCenterWarning />
+                </div>
+              ) : null}
             </article>
           ))}
         </div>
@@ -287,6 +457,12 @@ export function PublisherPlansClient() {
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{editorState.mode === 'create' ? 'Set pricing, availability, seat limits, and marketplace linkage for the new catalog entry.' : `${selectedPlan?.activeSubscriptions ?? 0} active subscriptions currently use this plan.`}</p>
             </div>
           </div>
+
+          {editorState.mode === 'edit' && selectedPlan?.status === 'active' && !selectedPlan?.marketplacePlanId ? (
+            <div className="mt-4">
+              <PartnerCenterWarning />
+            </div>
+          ) : null}
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-name">Name</label><input id="plan-name" value={formState.name} onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" required /></div>
@@ -326,6 +502,8 @@ export function PublisherPlansClient() {
               Cancel
             </button>
           </div>
+
+          {editorState.mode === 'edit' ? <FeatureGatesPanel planId={editorState.planId} /> : null}
         </form>
       )}
     </section>

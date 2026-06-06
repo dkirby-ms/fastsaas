@@ -3,6 +3,7 @@
 import type {
   CreatePublisherPlanInput,
   MarketplacePlanSummary,
+  PlanFeatureGate,
   PublisherDashboardData,
   PublisherPlan,
   PublisherPlanUpdateInput,
@@ -11,6 +12,7 @@ import type {
   PublisherTenantSummary,
   PublisherTenantUpsertInput,
   PublisherTenantsResponse,
+  SetFeatureGatesRequest,
 } from '@fastsaas/shared';
 import { auth } from '@/auth';
 import { ApiError } from '@/lib/errors';
@@ -399,4 +401,77 @@ export async function suspendPublisherTenantAction(subscriptionId: string): Prom
 
 export async function cancelPublisherTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
   return tenantLifecycleAction(subscriptionId, 'cancel');
+}
+
+// ---- Feature gate mock data -----------------------------------------------
+
+function mockFeatureGates(planId: string): PlanFeatureGate[] {
+  if (planId === 'starter') {
+    return [
+      { publisherTenantId: '', planId, featureKey: 'basic-analytics', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
+      { publisherTenantId: '', planId, featureKey: 'email-support', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
+    ];
+  }
+  if (planId === 'growth') {
+    return [
+      { publisherTenantId: '', planId, featureKey: 'advanced-analytics', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
+      { publisherTenantId: '', planId, featureKey: 'priority-support', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
+      { publisherTenantId: '', planId, featureKey: 'multi-environment', enabled: false, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
+    ];
+  }
+  return [];
+}
+
+// ---- Feature gate actions -------------------------------------------------
+
+export async function getFeatureGatesAction(planId: string): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
+  return runAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) return { features: mockFeatureGates(planId) };
+
+    const token = await requirePublisherAccessToken();
+
+    return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token);
+  });
+}
+
+export async function setFeatureGatesAction(planId: string, gates: SetFeatureGatesRequest['gates']): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
+  return runAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) {
+      return {
+        features: gates.map((g) => ({
+          publisherTenantId: '',
+          planId,
+          featureKey: g.featureKey,
+          enabled: g.enabled,
+          metadata: (g.metadata as Record<string, unknown> | undefined) ?? null,
+          createdAt: new Date().toISOString(),
+        })),
+      };
+    }
+
+    const token = await requirePublisherAccessToken();
+
+    return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token, {
+      method: 'PUT',
+      body: JSON.stringify({ gates } satisfies SetFeatureGatesRequest),
+    });
+  });
+}
+
+export async function removeFeatureGateAction(planId: string, featureKey: string): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) return;
+
+    const token = await requirePublisherAccessToken();
+
+    await livePublisherRequest<void>(config.publisherApiBaseUrl, publisherAdminPaths.planFeature(planId, featureKey), token, {
+      method: 'DELETE',
+    });
+  });
 }
