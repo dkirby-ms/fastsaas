@@ -53,21 +53,6 @@ Created squad routing labels for future issue triaging:
 
 ---
 
-## 2026-05-29
-
-### FIDO Portal Scaffold Decision
-- **Date:** 2026-05-29T14:30:29.387-05:00
-- **Context:** Issue #4 customer portal MVP needs frontend progress before the API is fully integrated.
-- **Decision:** The portal scaffold in `packages/portal/` uses a single API client abstraction that can switch between real HTTP requests and a localStorage-backed mock adapter. Screen components consume TanStack Query hooks instead of talking to mock data directly.
-- **Why:** This keeps dashboard, plan, and settings screens stable while EECOM finishes backend routes, and it minimizes rework when live endpoints replace the mock adapter.
-- **Files:** `packages/portal/lib/api-client.ts`, `packages/portal/lib/mock-api.ts`, `packages/portal/components/dashboard-client.tsx`, `packages/portal/components/plan-client.tsx`, `packages/portal/components/settings-client.tsx`
-
-### GNC Staging Infrastructure Decision
-- **Timestamp:** 2026-05-29T14:30:29.387-05:00
-- **Context:** Issue #5 staging deployment foundation
-- **Decision:** Use a two-phase Bicep deployment. First deploy shared Azure resources with `deployContainerApps=false`, then build and push images to ACR, then redeploy with `deployContainerApps=true` so Container Apps always reference existing tags.
-- **Rationale:** This keeps one Bicep entrypoint, avoids failed Container Apps revisions caused by missing images, and supports rollback by redeploying an older image tag.
-
 ## 2026-05-30
 
 ### EECOM API Foundation Decision
@@ -1447,3 +1432,419 @@ Keep `/publisher/partner-center/*` for connection lifecycle. Move offer operatio
   - Health checks target the resolved portal URL and also probe the ACA hostname when the override is active.
   - Entra redirect URIs must still be updated manually to the same public URL outside Bicep.
 
+
+---
+
+## PENDING INBOX MERGE
+
+
+### copilot-directive-2026-06-03T184421.md
+
+### 2026-06-03T18:44:21Z: User directive
+**By:** dkirby-ms (via Copilot)
+**What:** Users without subscriptions should have the option to subscribe (not just an empty state — provide a path to subscribe).
+**Why:** User request — captured for team memory
+
+### copilot-directive-2026-06-03T191154.md
+
+### 2026-06-03T19:11:54Z: User directive
+**By:** dkirby-ms (via Copilot)
+**What:** Unsubscribed users should NOT be allowed to access the customer portal dashboard. After Entra ID authentication, if no active subscription exists for the user's tenant, redirect to an error page showing "No active subscription" with a link to Azure Marketplace. Do not build partial/read-only UI states for unsubscribed users.
+**Why:** User request — cleaner UX gate than building degraded states for users who shouldn't have access
+
+### copilot-directive-20260604T122440.md
+
+### 2026-06-04T12:24:40Z: User directive
+**By:** saitcho (via Copilot)
+**What:** When Azure/ACA issues are reported, ALWAYS check live logs and livesite info from Azure first — don't just look at code.
+**Why:** User request — captured for team memory
+
+### eecom-marketplace-auth-diagnosis.md
+
+# EECOM Marketplace Auth Diagnosis
+
+- **Date:** 2026-06-04T17:46:31.416+00:00
+- **Owner:** EECOM
+- **Status:** Proposed
+
+## Context
+A customer can complete the Azure Marketplace purchase redirect, authenticate into FastSaaS, and reach the landing page, but clicking **Activate Subscription** fails and the deployment logs show an authorization failure while calling Microsoft Marketplace APIs.
+
+## Findings
+
+### Exact code path
+1. `packages/portal/components/landing-client.tsx`
+   - `onActivate()` calls `portalApi.activateSubscription(resolveQuery.data.id)`.
+2. `packages/portal/lib/api-client.ts`
+   - `activateSubscription(subscriptionId)` sends `POST /v1/subscriptions/:subscriptionId/activate` with the customer session bearer token.
+3. `packages/api/src/routes/v1/subscriptions.ts`
+   - `POST /v1/subscriptions/:subscriptionId/activate` authenticates the caller, checks tenant ownership/RBAC, then calls `subscriptionService.activateSubscription(...)`.
+4. `packages/api/src/services/subscription-service.ts`
+   - `activateSubscription(...)` loads the tenant subscription, verifies the `PendingActivation -> Active` transition, then calls `fulfillmentClient.activateSubscription(...)` inside `withFulfillment('activate', ...)`.
+5. `packages/api/src/lib/marketplace-fulfillment.ts`
+   - `MarketplaceFulfillmentHttpClient.activateSubscription(...)` issues `POST https://marketplaceapi.microsoft.com/api/saas/subscriptions/{id}/activate?api-version=2018-08-31`.
+
+### How outbound Marketplace auth currently works
+- In `packages/api/src/server.ts`, the fulfillment client is constructed with:
+  - `baseUrl: config.marketplace.baseUrl`
+  - `apiVersion: config.marketplace.apiVersion`
+  - `clientSecret: config.marketplace.clientSecret`
+- In `packages/api/src/lib/marketplace-fulfillment.ts`, every fulfillment request sets:
+  - `Authorization: Bearer ${this.options.clientSecret}`
+- That means the activation path is **not** using OAuth client-credentials token exchange at all.
+
+### What credentials/env vars are actually used today
+- **Activation / fulfillment today:** effectively uses only `MARKETPLACE_CLIENT_SECRET` plus base URL + API version.
+- **Not used on fulfillment today:** `MARKETPLACE_CLIENT_ID`, `MARKETPLACE_TENANT_ID`, and `MARKETPLACE_TOKEN_SCOPE`.
+- **Used elsewhere:** `packages/api/src/services/marketplace-oauth-service.ts` does use `MARKETPLACE_CLIENT_ID`, `MARKETPLACE_CLIENT_SECRET`, `MARKETPLACE_TENANT_ID`, and `MARKETPLACE_TOKEN_SCOPE`, but only for Product Ingestion / publisher-side flows.
+
+### Root cause assessment
+#### Most likely root cause
+The Marketplace Fulfillment client is sending the long-lived app secret as if it were a bearer access token. Microsoft expects an **Azure AD access token** in the Authorization header, not the raw client secret. This matches both the code and the observed unauthorized failure.
+
+#### Secondary auth risk
+If fulfillment is rewired to use the existing OAuth provider without further config changes, the current default `MARKETPLACE_TOKEN_SCOPE` is `https://graph.microsoft.com/.default`, which is appropriate for Graph/Product Ingestion, not SaaS Fulfillment. For Fulfillment, the expected resource/scope is `https://marketplaceapi.microsoft.com/.default`.
+
+#### Token caching risk
+A token caching bug is unlikely to explain this incident because the activation path never uses `MarketplaceOAuthService`; there is no outbound OAuth token cache on the fulfillment path today.
+
+### Webhook auth mode impact (PR #130)
+PR #130 changed inbound webhook authentication behavior via `MARKETPLACE_WEBHOOK_AUTH_MODE` and `packages/api/src/middleware/marketplace-webhook-auth.ts`. That setting only affects `POST /api/webhooks/marketplace` and does **not** participate in the customer activation call path, so it is not the cause of the outbound fulfillment unauthorized error.
+
+### `/no-subscription` symptom
+The activate button path itself does not redirect to `/no-subscription` on error. `packages/portal/components/landing-client.tsx` only pushes `/dashboard` on activation success; `/no-subscription` is enforced separately in `packages/portal/app/(portal)/layout.tsx` when `/portal/dashboard` returns `subscription: null`. So the auth failure and the CTA-page redirect are related symptoms, but the redirect is not produced directly by the activation handler.
+
+## Recommended fix
+1. Change SaaS Fulfillment auth to use OAuth client credentials instead of raw-secret bearer headers.
+   - Reuse or adapt `MarketplaceOAuthService` for fulfillment calls.
+   - Pass `Authorization: Bearer <access_token>` where `<access_token>` comes from Azure AD.
+2. Split token scopes by integration boundary.
+   - Product Ingestion can keep Graph scope behavior if needed.
+   - Fulfillment should request `https://marketplaceapi.microsoft.com/.default`.
+3. Update startup/config validation so fulfillment auth fails fast when `MARKETPLACE_CLIENT_ID`, `MARKETPLACE_TENANT_ID`, or the fulfillment token scope are missing in non-dev environments.
+4. Add a focused regression test proving the fulfillment client uses an OAuth token provider rather than `MARKETPLACE_CLIENT_SECRET` directly.
+
+## Bottom line
+The clearest code-level diagnosis is: **activation is failing because FastSaaS is authenticating to the SaaS Fulfillment API with the raw `MARKETPLACE_CLIENT_SECRET` instead of an Azure AD access token.** PR #130 webhook auth changes are adjacent configuration work, but they do not affect the failing outbound activation call.
+### eecom-marketplace-auth-fix.md
+
+# EECOM Marketplace Fulfillment Auth Fix
+
+- **Date:** 2026-06-04T17:51:02.777+00:00
+- **Owner:** EECOM
+- **Context:** SaaS Fulfillment activation and related operations were failing because `packages/api/src/lib/marketplace-fulfillment.ts` sent `MARKETPLACE_CLIENT_SECRET` directly as a bearer token instead of exchanging it for an Azure AD access token.
+- **Decision:** Reuse `MarketplaceOAuthService` as the shared client-credentials token provider, but instantiate a dedicated fulfillment-scoped provider in `packages/api/src/server.ts` with scope `20e940b3-4c77-4b0b-9a53-9e16a1b010a7/.default` while leaving Product Ingestion on its existing Graph scope. `MarketplaceFulfillmentHttpClient` now depends on a token provider contract and applies the acquired bearer token to every outbound Fulfillment API request.
+- **Rationale:** This preserves the existing token-cache and Azure AD error-handling pattern, avoids a second auth stack, and keeps Product Ingestion and Fulfillment aligned on one OAuth implementation while still honoring their different resource scopes.
+- **Files:** `packages/api/src/lib/marketplace-fulfillment.ts`, `packages/api/src/server.ts`, `packages/api/src/services/marketplace-oauth-service.ts`
+
+### eecom-server-side-gate.md
+
+# EECOM — Server-Side Subscription Gate
+
+- **Date:** 2026-06-03T19:44:18.235+00:00
+- **Requester:** dkirby-ms
+- **Decision:** Enforce customer subscription access in `packages/portal/app/(portal)/layout.tsx` so customer routes redirect server-side to `/no-subscription` before rendering. Keep the existing client-side `CustomerSubscriptionGate` as a secondary UX layer.
+- **Mock-mode pattern:** Mirror mock subscription access into a lightweight cookie via `packages/portal/lib/subscription-gate-cookie.ts`, because the existing mock state lives in browser localStorage and is not available during server rendering.
+- **Rationale:** A layout-based guard matches the existing App Router auth pattern in the portal, avoids a redirect loop for `/no-subscription`, and closes the bypass where disabling JavaScript skipped the client-only gate.
+
+### eecom-subscription-bug.md
+
+# EECOM — Subscription Owner Bootstrap Gap
+
+- **Date:** 2026-06-03T19:56:26.136+00:00
+- **Requester:** dkirby-ms
+- **Decision:** Treat tenant-owner bootstrap as a subscription-ownership invariant, not a one-time side effect of `POST /v1/subscriptions`. Add a shared ensure-owner/backfill path that runs for duplicate-subscription recovery and any subscription activation/transfer path that can hand a tenant an active Marketplace subscription.
+- **Rationale:** The current implementation only calls `bootstrapOwnerIfNeeded()` from `SubscriptionService.subscribe()`. Existing subscriptions, duplicate purchase resolution in the landing flow, and webhook-driven transfer/reinstate paths can therefore succeed without any `tenant_members` row, leaving customer authorization dependent on historical state instead of the current subscription.
+- **Files:** `packages/api/src/services/subscription-service.ts`, `packages/api/src/routes/webhooks/marketplace.ts`, `packages/portal/components/landing-client.tsx`, `packages/api/src/services/tenant-member-service.ts`
+
+### eecom-webhook-auth-fix.md
+
+# EECOM Webhook Auth Fix
+
+- **Date:** 2026-06-03T20:01:15.610+00:00
+- **Owner:** EECOM
+- **Status:** Proposed
+
+## Context
+Staging production logs showed Azure Marketplace webhook calls reaching `POST /api/webhooks/marketplace` but being rejected with 401 because `packages/api/src/middleware/marketplace-webhook-auth.ts` required timestamp and signature headers on every request.
+
+## Decision
+Default marketplace webhook auth to `callback` mode through `MARKETPLACE_WEBHOOK_AUTH_MODE` in `packages/api/src/config.ts`. In callback mode, unsigned webhook requests are allowed through, but if Partner Center sends HMAC headers the middleware still validates them. Strict header enforcement remains available via `hmac`, and `none` is available only for explicit disablement.
+
+## Rationale
+Azure Marketplace SaaS fulfillment webhooks are commonly validated by calling Marketplace APIs back from the application rather than relying on mandatory signed headers. This change unblocks real Marketplace notifications immediately while preserving defense in depth for environments where webhook signing is configured.
+
+## Files
+- `packages/api/src/config.ts`
+- `packages/api/src/middleware/marketplace-webhook-auth.ts`
+- `packages/api/src/routes/webhooks/marketplace.ts`
+- `packages/api/src/__tests__/marketplace-webhook-auth.integration.test.ts`
+
+### eecom-webhook-graceful-handling.md
+
+# EECOM — Marketplace Webhook Graceful Handling
+
+- **Date:** 2026-06-05T17:44:07.201+00:00
+- **Owner:** EECOM
+- **Status:** Proposed
+
+## Context
+Azure Marketplace can deliver `Subscribe`, `Renew`, and lifecycle callbacks before FastSaaS has created or retained a matching local subscription row. Returning 4xx/5xx from `POST /api/webhooks/marketplace` causes Microsoft to retry the same event repeatedly, producing noise without creating new recovery options.
+
+## Decision
+Treat valid-but-unactionable marketplace webhooks as acknowledged no-ops. `Subscribe` and `Renew` are accepted by the webhook route and recorded as processed without local mutation, because FastSaaS still creates subscriptions from the portal landing token-resolution flow. For any other valid action where no local subscription exists, log a warning, record the webhook as processed/no-op, and still return HTTP 200 so Marketplace does not retry.
+
+## Rationale
+The source of truth for initial subscription creation remains the explicit portal onboarding flow, while webhook delivery timing stays outside FastSaaS control. Acknowledging these race-condition cases prevents retry storms and log spam without changing normal processing for subscriptions that do exist locally.
+
+## Files
+- `packages/shared/src/index.ts`
+- `packages/api/src/routes/webhooks/marketplace.ts`
+- `packages/api/src/services/subscription-service.ts`
+- `packages/api/src/services/subscription-service.test.ts`
+- `packages/api/src/__tests__/marketplace-webhook-auth.integration.test.ts`
+
+### fido-customer-portal-empty-state.md
+
+# FIDO Decision — Customer Portal Empty State
+
+- **Date:** 2026-06-03T18:41:46.175+00:00
+- **Owner:** FIDO
+- **Scope:** `packages/portal/`
+
+## Decision
+Customer portal customer views must derive dashboard and plan state from actual subscription presence instead of seeded mock dashboard data. When no subscription exists, the UI should render an explicit empty state and disable plan-change actions.
+
+## Why
+Signed-in customers without a subscription were seeing hardcoded welcome text and placeholder usage metrics, which misrepresented account status.
+
+## Implementation Notes
+- `DashboardData.subscription` and `DashboardData.usage` are nullable.
+- `PlansResponse.currentPlanId` is nullable.
+- `packages/portal/lib/mock-api.ts` now builds customer dashboard/plan responses from `subscriptions` plus session-backed profile data.
+- `packages/portal/components/dashboard-client.tsx` and `packages/portal/components/plan-client.tsx` render empty-state guidance when no subscription is present.
+
+### fido-fulfillment-spec-compliance.md
+
+# FIDO Decision — Fulfillment Spec Compliance
+
+- **Date:** 2026-06-04T18:21:05.078+00:00
+- **Owner:** FIDO
+- **Scope:** `packages/api/src/lib/marketplace-fulfillment.ts`
+
+## Decision
+Marketplace SaaS Fulfillment v2 calls must use Microsoft’s required protocol details exactly: resolve goes through `POST /api/saas/subscriptions/resolve`, the marketplace token is sent in `x-ms-marketplace-token`, and all fulfillment requests use `x-ms-requestid` / `x-ms-correlationid` headers.
+
+## Why
+These values are protocol requirements, not local conventions. Keeping the client and tests aligned with the published Microsoft contract prevents silent auth failures on resolve and keeps future fulfillment changes from regressing back to the rejected header names.
+
+## Implementation Notes
+- `resolveSubscription()` no longer appends `token` to the query string and now adds `x-ms-marketplace-token` only for resolve.
+- The shared fulfillment request helper emits `x-ms-requestid` and `x-ms-correlationid` for every method.
+- `packages/api/src/__tests__/marketplace-fulfillment.test.ts` covers the resolve POST flow and the spec header names across other fulfillment operations.
+
+### fido-marketplace-link.md
+
+# FIDO Decision — Marketplace Offer Link
+
+- **Date:** 2026-06-04T13:20:25.015+00:00
+- **Owner:** FIDO
+- **Scope:** `packages/portal/`
+
+## Decision
+The `/no-subscription` page must read its Azure Marketplace CTA destination from `NEXT_PUBLIC_MARKETPLACE_OFFER_URL` and fall back to the current preview offer URL when no deployment-specific override is set.
+
+## Why
+Marketplace offer URLs vary by deployment and environment, so hardcoding the generic marketplace home page sends unsubscribed customers to the wrong destination and makes environment-specific offers harder to manage.
+
+## Implementation Notes
+- `packages/portal/app/no-subscription/page.tsx` resolves the CTA href from `process.env.NEXT_PUBLIC_MARKETPLACE_OFFER_URL`.
+- `packages/portal/.env.example` documents the current preview offer URL as the default override value.
+
+### fido-profile-readonly.md
+
+# FIDO Decision: Customer profile fields require subscription
+
+- **Date:** 2026-06-03T19:10:03.229+00:00
+- **Owner:** FIDO
+- **Context:** Unsubscribed customer accounts have no `tenant_members` record, but the portal mock adapter was still allowing profile fields to mutate localStorage and appear persistent.
+- **Decision:** Treat customer profile identity fields (`displayName`, `email`, `company`) as read-only whenever `DashboardData.subscription === null`. Continue showing session-derived values, but ignore profile mutations in `packages/portal/lib/mock-api.ts` until a subscription exists.
+- **Why:** This keeps staging UX aligned with the real data model and avoids implying that unsubscribed users can save organization/contact data before they have a tenant-backed customer record.
+- **Files:** `packages/portal/components/settings-client.tsx`, `packages/portal/components/dashboard-client.tsx`, `packages/portal/lib/mock-api.ts`
+
+### fido-subscription-gate.md
+
+# FIDO Subscription Gate
+
+- **Date:** 2026-06-03T19:13:01.584+00:00
+- **Owner:** FIDO
+- **Context:** Unsubscribed customer tenants must not enter the dashboard experience after Entra ID sign-in, but the portal still relies on the localStorage-backed mock adapter where `defaultState()` starts with `subscription: null`.
+- **Decision:** Add a shared customer subscription gate in the portal shell path that checks `portalApi.getDashboard()` for customer routes and redirects unsubscribed tenants to `/no-subscription`. Keep `/no-subscription` outside the gated portal shell so it never loops, and let dashboard/plan/settings screens assume an active subscription once they render.
+- **Why:** This keeps the deny-access rule centralized for all customer routes, preserves publisher access, and matches the mock adapter’s default unsubscribed state without changing backend or infrastructure behavior.
+- **Files:** `packages/portal/components/customer-subscription-gate.tsx`, `packages/portal/components/portal-shell.tsx`, `packages/portal/app/no-subscription/page.tsx`, `packages/portal/components/dashboard-client.tsx`, `packages/portal/components/plan-client.tsx`, `packages/portal/components/settings-client.tsx`
+
+### gnc-atomic-deploy.md
+
+# GNC Decision: atomic staging container app updates
+
+- **Date:** 2026-06-03T18:21:29.489+00:00
+- **Requester:** dkirby-ms
+- **Scope:** `.github/workflows/deploy-app-staging.yml`
+- **Decision:** Keep staging secret provisioning as a dedicated first step, then update each Container App with one `az containerapp update` call that combines `--image` and `--set-env-vars`.
+- **Why:** The previous sequence started a new revision on the new image before secrets and env vars were current, briefly running stale configuration and forcing a second restart when env vars were applied. Combining image and env updates after secrets are in place produces one correctly-configured revision.
+- **Implementation Notes:**
+  - Run `az containerapp secret set` before any update that references `secretref:` values.
+  - Build the `az containerapp update` command from the generated env JSON so `--image` and `--set-env-vars` are applied together.
+  - Preserve in-place Container App updates so ingress settings such as custom domains stay intact.
+
+### gnc-docker-optimization.md
+
+# GNC Docker Optimization
+
+## Decision
+Use a build-stage `/app/release/` assembly step in both application Dockerfiles so the runtime stage copies its entire payload with a single `COPY --from=build /app/release/ ./` instruction.
+
+## Rationale
+This reduces final-image layers without changing the multi-stage structure, ports, health checks, or commands. For the API release payload, keep the root lockfiles plus workspace package manifests needed by npm workspace symlinks to resolve `@fastsaas/shared` at runtime. For the portal release payload, copy the Next.js standalone output and static assets into the release directory so the runner still receives the same files in one layer.
+
+### gnc-pin-actions.md
+
+# GNC Decision: pin GitHub Actions to commit SHAs
+
+- **Date:** 2026-06-04T13:20:25.015+00:00
+- **Owner:** GNC
+- **Context:** Issue #132 requires supply-chain hardening across the repository's GitHub Actions workflows. The repo previously referenced remote actions by movable major tags such as `v5`, `v8`, and `v3`, which weakens reproducibility and increases exposure to upstream tag retargeting.
+- **Decision:** All remote GitHub Actions under `.github/workflows/` should be pinned to full 40-character commit SHAs and retain the source version as an inline comment. Add `.github/dependabot.yml` with the `github-actions` ecosystem so Dependabot can open PRs when pinned SHAs need to move.
+- **Why:** Full SHAs make workflow execution deterministic and satisfy common supply-chain hardening guidance, while the inline version comments preserve readability for operators reviewing workflow changes. Dependabot keeps the hardening maintainable instead of leaving the SHAs to drift manually.
+- **Files:** `.github/workflows/*.yml`, `.github/dependabot.yml`
+
+### gnc-remove-hmac.md
+
+# GNC Decision: remove dead marketplace webhook HMAC auth
+
+- **Date:** 2026-06-03T20:21:01.497+00:00
+- **Owner:** GNC
+- **Context:** Microsoft Partner Center does not provide a webhook secret field, so the Marketplace webhook HMAC path in `packages/api/src/middleware/marketplace-webhook-auth.ts` cannot be configured in production and had become dead code after JWT Bearer validation was added.
+- **Decision:** Simplify marketplace webhook auth to two modes only: `jwt` (default, validate Microsoft Entra Bearer tokens via JWKS) and `none` (local development bypass). Remove HMAC signature validation, `callback` / `hmac` modes, `MARKETPLACE_WEBHOOK_SECRET`, and `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS` from the API config surface.
+- **Why:** This matches the documented Partner Center webhook contract, removes an unreachable auth branch, and eliminates misleading configuration that suggested a shared-secret option existed.
+- **Files:** `packages/api/src/middleware/marketplace-webhook-auth.ts`, `packages/api/src/config.ts`, `packages/api/.env.example`, `packages/api/src/__tests__/marketplace-webhook-auth.integration.test.ts`, `packages/api/src/config.test.ts`
+
+### gnc-webhook-jwt-validation.md
+
+# GNC Webhook JWT Validation
+
+- **Date:** 2026-06-03T20:11:42.315+00:00
+- **Owner:** GNC
+- **Context:** `callback` marketplace webhook auth was allowing requests with no HMAC headers and no Bearer token, which left the fulfillment callback path unauthenticated.
+- **Decision:** In `packages/api/src/middleware/marketplace-webhook-auth.ts`, `callback` mode must require either the existing HMAC header validation path or a Microsoft Entra Bearer token whose issuer matches the configured marketplace tenant, whose audience matches `marketplace.expectedAudience` (defaulting to `marketplace.clientId`), and whose signature and expiry are validated through JWKS. Requests with neither HMAC headers nor a Bearer token now return `401` unless `webhookAuthMode` is `none`.
+- **Why:** This closes the unauthenticated callback gap while preserving Microsoft’s documented fulfillment lifecycle authentication flow. Keeping the JWKS URI configurable through `MARKETPLACE_JWKS_URI` also makes the behavior testable without weakening the production default.
+- **Files:** `packages/api/src/middleware/marketplace-webhook-auth.ts`, `packages/api/src/config.ts`, `packages/api/src/__tests__/marketplace-webhook-auth.integration.test.ts`, `packages/api/src/config.test.ts`
+
+### kranz-pr129-re-review.md
+
+# Re-Review PR #129 - Subscription Gate Server-Side Enforcement
+
+**Date:** 2026-06-03T19:51:13.672+00:00
+**Author:** Kranz
+**Status:** APPROVED
+**Issue:** #129
+
+## Context
+PR #129 was previously rejected because the subscription gate was enforced only client-side, allowing users with disabled JavaScript or network manipulation to bypass the check and access the dashboard layout. EECOM provided a revised implementation.
+
+## Decision
+Approved the revised implementation of PR #129.
+
+The fix introduces a server-side redirect in `packages/portal/app/(portal)/layout.tsx`. It correctly exempts publisher routes by verifying roles (`!hasPublisherAccess(session.roles)`). If the user is a customer and lacks an active subscription, they are redirected to `/no-subscription` before any route underneath the `(portal)` layout is rendered. The `/no-subscription` route is placed at the root level of `app/` (i.e. outside `(portal)`), which prevents redirect loops.
+
+The implementation relies on `await cookies()` to mock state during development (since localStorage isn't available server-side), but falls back to a real server-to-server API call (`GET /portal/dashboard`) using the user's `session.accessToken` in production. This is an appropriate pattern for Next.js App Router layouts needing real-time backend state. 
+
+Typecheck passes for both API and Portal. The architecture now satisfies the security and UX requirements.
+
+### kranz-pr129-review.md
+
+# Kranz PR #129 Review
+
+- **Date:** 2026-06-03T19:22:53.200+00:00
+- **Owner:** Kranz
+- **PR:** #129 (`feat/subscription-gate`)
+- **Verdict:** REJECTED
+- **Reassigned to:** FIDO
+
+## Decision
+The customer subscription gate may not rely on a client-only redirect inside `PortalShell`. Unsubscribed users must be blocked by a server-side route/layout guard (or equivalent backend-enforced redirect) before `/dashboard`, `/plan`, or `/settings` can render.
+
+## Why
+`/no-subscription` is outside `app/(portal)/layout.tsx`, so the new page itself does not create a redirect loop, and the UX copy/link/sign-out flow is appropriate. But `packages/portal/lib/route-access.ts` still only checks auth + publisher/customer role, while `packages/portal/components/customer-subscription-gate.tsx` performs the subscription check after hydration via React Query. That means the denial can be bypassed by disabled JavaScript or client tampering, which does not satisfy the requirement that unsubscribed users should not access the customer portal dashboard at all.
+
+## Validation
+- Reviewed PR diff for `packages/portal/app/no-subscription/page.tsx`, `packages/portal/components/customer-subscription-gate.tsx`, `packages/portal/components/sign-out-button.tsx`, `packages/portal/components/portal-shell.tsx`, `packages/portal/components/dashboard-client.tsx`, `packages/portal/components/plan-client.tsx`, `packages/portal/components/settings-client.tsx`, and `packages/portal/lib/mock-api.ts`
+- Verified `packages/portal/app/no-subscription/page.tsx` lives outside `app/(portal)/layout.tsx`
+- Verified `requireCustomerAccess()` in `packages/portal/lib/route-access.ts` does not enforce subscription presence
+- Ran `npm run typecheck --workspace=@fastsaas/portal`
+- Ran `npm run build --workspace=@fastsaas/portal`
+
+## Required Fix
+Move the subscription presence check into the server-side customer access path so authenticated-but-unsubscribed users are redirected to `/no-subscription` before customer routes render. Keep `/no-subscription` outside the gated layout and retain the current UX shell there.
+
+### kranz-pr142-review.md
+
+# Kranz PR #142 Review Decision
+
+- **Date:** 2026-06-04T18:00:03.588+00:00
+- **Owner:** Kranz
+- **Context:** PR #142 correctly replaces the raw `MARKETPLACE_CLIENT_SECRET` bearer usage with an Azure AD client-credentials token provider for Marketplace Fulfillment, but the fulfillment HTTP client still needs to satisfy Microsoft Learn's request contract for the SaaS Fulfillment APIs v2.
+- **Decision:** Treat Marketplace Fulfillment auth as two inseparable requirements: (1) acquire a publisher bearer token from `https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token` using scope `20e940b3-4c77-4b0b-9a53-9e16a1b010a7/.default`; and (2) send fulfillment requests in the documented wire format, including `POST /api/saas/subscriptions/resolve` with `x-ms-marketplace-token`, plus `x-ms-requestid` and `x-ms-correlationid` headers on fulfillment and operations calls.
+- **Rationale:** Fixing only the bearer token acquisition is insufficient if Resolve still uses the wrong verb/header contract, because subscription activation depends on a successful Resolve step before Activate. This decision keeps FastSaaS aligned with Microsoft’s published SaaS Fulfillment lifecycle and subscription API contract, not just the OAuth portion.
+- **Files:** `packages/api/src/lib/marketplace-fulfillment.ts`, `packages/api/src/server.ts`, `packages/api/src/services/marketplace-oauth-service.ts`, `packages/api/src/__tests__/marketplace-fulfillment.test.ts`
+- **Docs:** `https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-life-cycle`, `https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-registration`, `https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-subscription-api`, `https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-fulfillment-operations-api`
+
+### kranz-pr-reviews.md
+
+# Kranz Decision — PR review cycle (#135, #136, #137)
+
+- **Date:** 2026-06-04T13:39:39.814+00:00
+- **Owner:** Kranz
+- **Context:** Review of three squad PRs against issues #133, #134, and #132.
+
+## Decisions
+- **PR #135:** APPROVE. The portal change is correctly scoped and aligns the `/no-subscription` CTA with the environment-specific marketplace offer URL requirement.
+- **PR #136:** REQUEST CHANGES. The issue-template updates are acceptable, but the branch is contaminated with unrelated #133 portal changes; under lockout, reassign the cleanup to GNC and require a templates-only resubmission.
+- **PR #137:** APPROVE. Pinning remote GitHub Actions to full SHAs plus adding `.github/dependabot.yml` satisfies the supply-chain hardening goal with the right maintenance path.
+
+## Why
+Review gating should preserve strict issue scope, especially for repo-hygiene work where accidental stacked commits are easy to miss. Environment-driven portal links and SHA-pinned workflows both align with existing FastSaaS conventions for deployment configurability and supply-chain hardening.
+
+### kranz-webhook-auth-review.md
+
+# Webhook Auth Security Model
+
+**Date:** 2026-06-03T20:07:42.184+00:00
+**Status:** Accepted
+
+## Context
+PR #130 introduced a `callback` auth mode to bypass HMAC signature validation when Azure Marketplace does not send signature headers (which occurs when no webhook secret is configured in Partner Center). While this fixes the staging blocker where valid webhooks were rejected, it introduced a severe security vulnerability.
+
+The `SubscriptionService` does not re-verify the status of lifecycle events (`Suspend`, `Unsubscribe`, `Reinstate`) via the Fulfillment API; it trusts the webhook payload directly. By allowing unsigned requests without alternative authentication, an attacker could arbitrarily cancel or suspend any tenant's subscription by spoofing a webhook with a known `marketplaceSubscriptionId`.
+
+## Decision
+1. **Entra JWT Validation Required:** If we permit webhooks without HMAC signatures, the webhook endpoint MUST validate the Microsoft Entra Token (JWT Bearer Token) provided in the request header, as mandated by Microsoft's SaaS fulfillment lifecycle documentation.
+2. **No Unauthenticated Fallbacks:** Webhooks must never fall back to unauthenticated processing. They must require either a valid HMAC signature OR a valid Microsoft Entra JWT.
+3. **Strict Mode Default:** Until JWT validation is implemented, we must reject unauthenticated webhooks. PR #130 is rejected and reassigned to FIDO to implement Entra JWT validation.
+
+### kranz-webhook-jwt-review.md
+
+# Decision: Marketplace Webhook JWT Validation
+
+**Date:** 2026-06-03T20:32:01.774+00:00
+**Agent:** Kranz
+
+## Context
+Azure Marketplace webhooks without a configured Partner Center secret require an alternative authentication mechanism to prevent unauthenticated requests from manipulating subscription lifecycle events. GNC implemented Microsoft Entra ID JWT Bearer token validation for the webhook endpoint.
+
+## Decision
+1. **JWT Validation:** Webhook authentication MUST validate Entra ID Bearer tokens, specifically verifying the signature against Microsoft's JWKS, the expected audience (ISV client ID), and the issuer/tenant claims (Microsoft / ISV tenant).
+2. **Production Guard:** A local dev bypass mode (`MARKETPLACE_WEBHOOK_AUTH_MODE=none`) is acceptable but MUST be strictly guarded against use in production at configuration startup (similar to `AUTH_BYPASS_ENABLED`).
+
+## Consequences
+- The API configuration parser must throw an error if `MARKETPLACE_WEBHOOK_AUTH_MODE=none` is provided when `NODE_ENV=production`.

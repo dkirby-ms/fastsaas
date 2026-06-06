@@ -1,0 +1,91 @@
+# GNC — History Archive
+
+## Archived Sections (2026-05-29 to 2026-05-31)
+
+### Project Context
+- **Project:** FastSaaS — Next-gen Microsoft Commercial Marketplace SaaS accelerator
+- **Stack:** Node.js 22, TypeScript, Turborepo monorepo
+- **Infra:** Azure Container Apps, Bicep/Terraform, Docker, GitHub Actions
+- **User:** dkirby-ms
+
+### Phase 1 Assignment
+- **Issue #5:** Containerized staging deployment
+  - Completed Docker, Dockerfiles, Bicep infrastructure-as-code, GitHub Actions workflows, deployment runbook
+  - Two-phase deployment strategy (shared resources first, then app deployment)
+  - Ready for cross-team staging integration
+
+### Delivery Summary (2026-05-29 to 2026-05-31)
+
+**Infrastructure & Deployment:**
+- Complete Bicep modules with two-phase strategy (`deployContainerApps` flag)
+- GitHub Actions fail-issue workflow (`.github/workflows/deploy-staging-failure-issue.yml`)
+- Bicep patterns: `existing` resources, container-app env arrays, naming, private endpoints
+- Deployment automation: infrastructure bootstrap, ACR builds, Container Apps release
+- Comprehensive deployment README with troubleshooting, secrets, architecture decisions
+
+**Environment & Auth:**
+- Staging region: `centralus` (PostgreSQL/Azure Cache offer restrictions in other regions)
+- Portal auth mirrors Entra contract (NextAuth Azure AD, Bearer token forwarding)
+- API auth: RS256/JWKS validation, tenant context from tid/oid, dev-only bypass via AUTH_BYPASS_ENABLED
+- Request ID sanitization for safe logging
+
+**Recent Infrastructure Fixes:**
+- **Issue #25 (Resolved):** PostgreSQL/Redis provisioning failures in westus2/eastus2 → moved to centralus, disabled Redis provisioning pending migration
+- **PR #28 (Merged):** Staging-scoped Redis disable, preserved deployRedis=true baseline for other environments
+- **PR #29 (In Review):** Migrated from retired Azure Cache for Redis to Azure Managed Redis using Microsoft.Cache/redisEnterprise with MemoryOptimized_M10 SKU, port 10000 encryption, private-link support
+
+**Standardization:**
+- Placeholder services use repository-backed Dockerfiles (not BuildKit-only heredocs or inline shell generation)
+- Dockerfile portability for Azure Container Registry compatibility
+
+### Current Status (2026-05-31T15:24Z)
+
+**Completed Background Tasks:**
+1. **copilot-setup-steps.yml** — Cloud agent configuration created and pushed to main
+2. **Issue #37 Repo Hygiene** — GitHub templates (YAML bug/feature), MIT License, enhanced .gitignore (commit 5da8f72)
+
+**Awaiting Review:**
+- PR #29 (Azure Managed Redis migration)
+
+**Next Phase:**
+- Await EECOM API/subscription/metering stabilization
+- Full Azure Managed Redis rollout across environments
+
+### Current Status (2026-05-31T16:05Z)
+
+**Completed:**
+- **Issue #38 Resolved** — Staging deploy health check failure fixed (commit e731019)
+  - Root cause: API container startup probe failed due to missing AZURE_AD_TENANT_ID and AZURE_AD_CLIENT_ID
+  - Solution: Moved env vars from post-deploy az containerapp update to Bicep template parameters
+  - Result: Container now has required credentials available during initial startup
+
+### Key Learnings (2026-05-31)
+- Infrastructure toggles (private ↔ public endpoints) require bidirectional logic: remove private + enable public access
+- Bicep: use `name` not `id` for `existing` resources; precompute container-app env arrays in variables
+- Staging deployment automation split into separate infra/app workflows for independent operations
+- Azure Container Registry requires portable Dockerfile syntax (no BuildKit heredocs)
+- Entra-compatible RS256/JWKS validation with sanitized request-ID reflection
+- **Container startup timing:** Environment variables required during startup (e.g., auth credentials) must be set via Bicep deployment, not via post-deploy az containerapp update. The startup probe runs before post-deploy configuration steps.
+
+### 2026-05-31T18:54 — CROSS-AGENT NOTIFICATION: API Docker Image Update
+
+EECOM fixed Prisma OpenSSL compatibility by switching API container base from `node:22-alpine` to `node:22-slim` (commit 29855d3). Staging deploy pipeline will now pull images built from Debian-slim base instead of Alpine. No workflow changes required; full compatibility with `deploy-app-staging.yml`.
+
+### 2026-05-31 — Health Check Fix (Issue #41)
+
+**Completed:**
+- Hardened API startup so missing or late database configuration no longer prevents the process from binding its HTTP port.
+- Kept the `/health` endpoint database-free so Container App probes can succeed during degraded startup.
+- Extended deploy workflow health verification to poll both staging endpoints long enough for post-deploy Container App revisions to finish warming.
+
+### 2026-05-31T20:19:20.148+00:00 Learning
+- Semantic-release now lives at the repo root with `release.config.js`, using a single repository version stream for the private npm workspaces in `packages/api`, `packages/portal`, and `packages/shared`.
+
+### 2026-05-31T21:35:32.766Z Cross-Team Updates
+
+**From Scribe Consolidation (Squad Inbox → Decisions)**
+- **PR #61 unblocked:** Semantic-release version baseline (`v0.1.0`) established on merge-base commit. Kranz approval recorded. Ready for merge post-review.
+- **EECOM tenant RLS:** PR #64 merged in (Issue #45), enabling RLS policies across tenant-scoped tables. RETRO's security tests (PR #62) can now unskip 5 RLS-dependent test cases.
+
+### 2026-05-31T21:35:32.766+00:00 Learning
+- Marketplace webhook authentication is enforced before JSON parsing, using the raw request body plus the timestamp header to compute an HMAC-SHA256 digest, and the replay window defaults to five minutes via `MARKETPLACE_WEBHOOK_TIMESTAMP_TOLERANCE_MS`.
