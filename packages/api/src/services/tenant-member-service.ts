@@ -30,6 +30,7 @@ function isUniqueViolation(error: unknown): boolean {
 const INVITABLE_ROLES_BY_ACTOR: Record<RbacRole, readonly RbacRole[]> = {
   Owner: ['Admin', 'Owner', 'Member', 'Viewer'],
   Admin: ['Admin', 'Member'],
+  Publisher: [],
   Member: [],
   Viewer: []
 };

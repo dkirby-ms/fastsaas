@@ -4,7 +4,7 @@ import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
 import type { RequestAuditContext } from '../services/audit-service';
 
-export const RBAC_ROLES = ['Admin', 'Owner', 'Member', 'Viewer'] as const;
+export const RBAC_ROLES = ['Admin', 'Owner', 'Publisher', 'Member', 'Viewer'] as const;
 export const RBAC_RESOURCES = ['subscriptions', 'billing', 'users', 'metering', 'audit_logs', 'webhooks', 'publisher'] as const;
 export const RBAC_ACTIONS = ['view', 'write', 'manage', 'export'] as const;
 
@@ -43,6 +43,7 @@ export function toPermission(resource: RbacResource, action: RbacAction): RbacPe
 export const PERMISSIONS_MATRIX: PermissionMatrix = {
   Admin: RBAC_PERMISSION_DESCRIPTORS.map(({ resource, action }) => toPermission(resource, action)),
   Owner: RBAC_PERMISSION_DESCRIPTORS.map(({ resource, action }) => toPermission(resource, action)),
+  Publisher: RBAC_PERMISSION_DESCRIPTORS.filter(({ resource }) => resource === 'publisher').map(({ resource, action }) => toPermission(resource, action)),
   Member: [toPermission('subscriptions', 'view'), toPermission('users', 'view'), toPermission('metering', 'view')],
   Viewer: [toPermission('subscriptions', 'view'), toPermission('users', 'view'), toPermission('metering', 'view')]
 };

@@ -29,6 +29,20 @@ export const RBAC_MATRIX_FIXTURE: Record<RbacRole, Record<RbacPermission, boolea
     'publisher:view': true,
     'publisher:manage': true
   },
+  Publisher: {
+    'subscriptions:view': false,
+    'subscriptions:manage': false,
+    'billing:manage': false,
+    'users:view': false,
+    'users:manage': false,
+    'metering:view': false,
+    'metering:write': false,
+    'billing:export': false,
+    'audit_logs:view': false,
+    'webhooks:manage': false,
+    'publisher:view': true,
+    'publisher:manage': true
+  },
   Member: {
     'subscriptions:view': true,
     'subscriptions:manage': false,
