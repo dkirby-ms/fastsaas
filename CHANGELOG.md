@@ -1,3 +1,9 @@
+## [0.18.1](https://github.com/dkirby-ms/fastsaas/compare/v0.18.0...v0.18.1) (2026-06-06)
+
+### Bug Fixes
+
+* build @fastsaas/shared before API and portal in Dockerfiles ([6cda369](https://github.com/dkirby-ms/fastsaas/commit/6cda369a8200dfcdb258349ad8fedee902ad74a5))
+
 ## [0.18.0](https://github.com/dkirby-ms/fastsaas/compare/v0.17.12...v0.18.0) (2026-06-05)
 
 ### Features
