@@ -1,11 +1,11 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { getMarketplacePlansAction, type ActionResult } from '@/app/(portal)/publisher/actions';
+import { getMarketplacePlansAction, importProductAction, type ActionResult } from '@/app/(portal)/publisher/actions';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
@@ -29,12 +29,32 @@ function getStatusClasses(status: string) {
 }
 
 export function PublisherMarketplacePlansClient() {
+  const queryClient = useQueryClient();
   const marketplacePlansQuery = useQuery({
     queryKey: ['publisher-marketplace-plans'],
     queryFn: () => getMarketplacePlansAction().then(unwrapResult),
   });
   const [copiedPlanId, setCopiedPlanId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [importId, setImportId] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = importId.trim();
+    if (!trimmed) return;
+    setImporting(true);
+    setImportError(null);
+    const result = await importProductAction(trimmed);
+    setImporting(false);
+    if (!result.ok) {
+      setImportError(result.message);
+    } else {
+      setImportId('');
+      await queryClient.invalidateQueries({ queryKey: ['publisher-marketplace-plans'] });
+    }
+  };
 
   const handleCopy = async (externalPlanId: string) => {
     try {
@@ -69,6 +89,29 @@ export function PublisherMarketplacePlansClient() {
           Review synced marketplace plans and copy the External Plan ID when linking publisher plans.
         </p>
       </header>
+
+      <div className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-panel dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Import from Partner Center</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Enter a Partner Center offer ID to import its plans into FastSaaS.</p>
+        <form onSubmit={handleImport} className="mt-4 flex gap-3">
+          <input
+            type="text"
+            value={importId}
+            onChange={(e) => setImportId(e.target.value)}
+            placeholder="Partner Center offer ID"
+            disabled={importing}
+            className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-50 dark:placeholder-slate-500"
+          />
+          <button
+            type="submit"
+            disabled={importing || !importId.trim()}
+            className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-60 dark:bg-brand-500 dark:hover:bg-brand-400"
+          >
+            {importing ? 'Importing…' : 'Import'}
+          </button>
+        </form>
+        {importError ? <div className="mt-3"><ErrorAlert message={importError} /></div> : null}
+      </div>
 
       {copyError ? <ErrorAlert message={copyError} /> : null}
 

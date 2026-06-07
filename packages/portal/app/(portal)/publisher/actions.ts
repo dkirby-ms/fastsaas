@@ -428,6 +428,21 @@ export async function setFeatureGatesAction(planId: string, gates: SetFeatureGat
   });
 }
 
+export async function importProductAction(externalId: string): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) return;
+
+    const token = await requirePublisherAccessToken();
+
+    await livePublisherRequest<unknown>(config.publisherApiBaseUrl, publisherAdminPaths.importProduct, token, {
+      method: 'POST',
+      body: JSON.stringify({ externalId }),
+    });
+  });
+}
+
 export async function removeFeatureGateAction(planId: string, featureKey: string): Promise<ActionResult<void>> {
   return runAction(async () => {
     const config = getServerConfig();
