@@ -1,3 +1,9 @@
+## [0.22.1](https://github.com/dkirby-ms/fastsaas/compare/v0.22.0...v0.22.1) (2026-06-07)
+
+### Bug Fixes
+
+* add detailed error logging to Partner Center product import ([87553d6](https://github.com/dkirby-ms/fastsaas/commit/87553d6b5e7b5c68cadf3fda5ac69f9488cbdc40)), closes [#131](https://github.com/dkirby-ms/fastsaas/issues/131)
+
 ## [0.22.0](https://github.com/dkirby-ms/fastsaas/compare/v0.21.1...v0.22.0) (2026-06-07)
 
 ### Features
