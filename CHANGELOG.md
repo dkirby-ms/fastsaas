@@ -1,3 +1,9 @@
+## [0.23.0](https://github.com/dkirby-ms/fastsaas/compare/v0.22.3...v0.23.0) (2026-06-07)
+
+### Features
+
+* plan-gated feature entitlements system with 4 demo features ([#153](https://github.com/dkirby-ms/fastsaas/issues/153)) ([b60f6c3](https://github.com/dkirby-ms/fastsaas/commit/b60f6c30cd6a294f3b8a24f9247b6d6fc2f7cf0a)), closes [#147](https://github.com/dkirby-ms/fastsaas/issues/147) [#148](https://github.com/dkirby-ms/fastsaas/issues/148) [#151](https://github.com/dkirby-ms/fastsaas/issues/151) [#150](https://github.com/dkirby-ms/fastsaas/issues/150) [#152](https://github.com/dkirby-ms/fastsaas/issues/152) [#149](https://github.com/dkirby-ms/fastsaas/issues/149)
+
 ## [0.22.3](https://github.com/dkirby-ms/fastsaas/compare/v0.22.2...v0.22.3) (2026-06-07)
 
 ### Bug Fixes
