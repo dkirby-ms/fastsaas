@@ -1,21 +1,24 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { CustomerSubscriptionGate } from '@/components/customer-subscription-gate';
 import { SidebarNav } from '@/components/sidebar-nav';
 import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { getPortalRole } from '@/lib/roles';
+import { hasPublisherAccess } from '@/lib/roles';
 import { usePortalShellStore } from '@/lib/store';
 
 export function PortalShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const sidebarOpen = usePortalShellStore((state) => state.sidebarOpen);
   const toggleSidebar = usePortalShellStore((state) => state.toggleSidebar);
   const userName = session?.user?.name ?? 'Customer';
-  const portalRole = getPortalRole(session?.roles);
-  const portalTitle = portalRole === 'publisher' ? 'Publisher Portal' : 'Customer Portal';
-  const portalSubtitle = portalRole === 'publisher' ? 'Marketplace operations' : 'Customer self-service';
+  const isPublisherArea = pathname.startsWith('/publisher');
+  const portalTitle = isPublisherArea ? 'Publisher Portal' : 'Customer Portal';
+  const portalSubtitle = isPublisherArea ? 'Marketplace operations' : 'Customer self-service';
+  const isPublisher = hasPublisherAccess(session?.roles);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">

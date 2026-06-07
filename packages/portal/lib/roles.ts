@@ -21,3 +21,9 @@ export function getPortalRole(roles?: readonly string[] | string | null): Portal
 export function getDefaultPortalRoute(roles?: readonly string[] | string | null): string {
   return hasPublisherAccess(roles) ? '/publisher' : '/dashboard';
 }
+
+/** True when the user holds a publisher role — they may also hold customer
+ *  (subscription) access, making them a dual-role user. */
+export function isPublisher(roles?: readonly string[] | string | null): boolean {
+  return hasPublisherAccess(roles);
+}

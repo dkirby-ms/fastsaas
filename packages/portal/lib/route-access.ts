@@ -23,9 +23,9 @@ export async function requireCustomerAccess() {
     redirect('/sign-in');
   }
 
-  if (hasPublisherAccess(session.roles)) {
-    redirect('/publisher');
-  }
+  // Dual-role users (publisher role + customer subscription) are allowed in
+  // customer pages. The subscription gate in the portal layout handles
+  // redirecting users who have no active subscription.
 
   return session;
 }
