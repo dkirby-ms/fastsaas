@@ -1,3 +1,18 @@
+## [0.22.0](https://github.com/dkirby-ms/fastsaas/compare/v0.21.1...v0.22.0) (2026-06-07)
+
+### Features
+
+* add plan_feature_gates table, service, repository, and routes ([#146](https://github.com/dkirby-ms/fastsaas/issues/146)) ([f94099a](https://github.com/dkirby-ms/fastsaas/commit/f94099a6edb58b242a2b630c3f198263a1ff6a35))
+* **portal:** add feature gates tab and Partner Center warning to publisher plans ([#146](https://github.com/dkirby-ms/fastsaas/issues/146)) ([cc3c5a0](https://github.com/dkirby-ms/fastsaas/commit/cc3c5a01faad4958a74b08570a11e63ac06cb661))
+* **portal:** add Partner Center product import to Marketplace Plans tab ([4eb8ad6](https://github.com/dkirby-ms/fastsaas/commit/4eb8ad6f4385a39eb76eb962f4e4cb0292818675))
+* **portal:** migrate publisher plans from priceMonthly to pricingSummary ([#146](https://github.com/dkirby-ms/fastsaas/issues/146)) ([93b94cf](https://github.com/dkirby-ms/fastsaas/commit/93b94cff0c91466451f012097ebb1f74bc53d6a1))
+* **publisher-plans:** migrate pricing to marketplace catalog ([#146](https://github.com/dkirby-ms/fastsaas/issues/146)) ([b26ceb8](https://github.com/dkirby-ms/fastsaas/commit/b26ceb81edbf47d3207beafb60133f09fd626260))
+* support dual-role portal access ([#144](https://github.com/dkirby-ms/fastsaas/issues/144)) ([5c97831](https://github.com/dkirby-ms/fastsaas/commit/5c978312dbb5ad963d35f6fd7ebc1b4c9f84cf49))
+
+### Bug Fixes
+
+* **api:** rewrite plan-feature-gates test mocks to match real repository interface ([c720805](https://github.com/dkirby-ms/fastsaas/commit/c720805b3ff1787f9f969887ce765f6317eb1b00)), closes [#146](https://github.com/dkirby-ms/fastsaas/issues/146)
+
 ## [0.21.1](https://github.com/dkirby-ms/fastsaas/compare/v0.21.0...v0.21.1) (2026-06-06)
 
 ### Bug Fixes
