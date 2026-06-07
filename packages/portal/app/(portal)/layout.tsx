@@ -20,7 +20,15 @@ function normalizeBaseUrl(baseUrl: string) {
  * Default mock features returned in mock mode.
  * Represents a typical "Growth" plan customer for demo purposes.
  */
-const MOCK_CUSTOMER_FEATURES = ['basic-analytics', 'email-support', 'advanced-analytics', 'priority-support'];
+const MOCK_CUSTOMER_FEATURES = [
+  'basic-analytics',
+  'email-support',
+  'advanced-analytics',
+  'priority-support',
+  'dark-mode',
+  'export-csv',
+  'custom-webhooks',
+];
 
 /**
  * Fetches the enabled feature keys for the signed-in customer.
