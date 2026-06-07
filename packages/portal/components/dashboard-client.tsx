@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { useSession } from 'next-auth/react';
 import type { DashboardData, PortalAction } from '@fastsaas/shared';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
@@ -9,6 +10,7 @@ import { LoadingPanel } from '@/components/loading-panel';
 import { LockedFeature } from '@/components/locked-feature';
 import { portalApi } from '@/lib/api-client';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+import { hasPublisherAccess } from '@/lib/roles';
 
 const stateTone: Record<NonNullable<DashboardData['subscription']>['state'], string> = {
   active: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -48,6 +50,7 @@ function downloadMockCsv(subscription: NonNullable<DashboardData['subscription']
 }
 
 export function DashboardClient() {
+  const { data: session } = useSession();
   const queryClient = useQueryClient();
   const dashboardQuery = useQuery({ queryKey: ['portal-dashboard'], queryFn: portalApi.getDashboard });
   const actionMutation = useMutation({
@@ -61,7 +64,10 @@ export function DashboardClient() {
   if (dashboardQuery.isLoading) return <LoadingPanel label="Loading your subscription overview" />;
   if (dashboardQuery.isError) {
     if (isApiErrorStatus(dashboardQuery.error, 403)) {
-      return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account cannot open the customer portal.')} href="/publisher" cta="Open publisher portal" />;
+      if (hasPublisherAccess(session?.roles)) {
+        return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account cannot open the customer portal.')} href="/publisher" cta="Open publisher portal" />;
+      }
+      return <ForbiddenState title="No active subscription" message="You don't have an active subscription for this portal." href="/no-subscription" cta="Go to subscription page" />;
     }
     return <ErrorAlert message={getErrorMessage(dashboardQuery.error, 'We could not load your subscription overview.')} />;
   }

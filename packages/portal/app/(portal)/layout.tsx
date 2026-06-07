@@ -81,7 +81,8 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
     redirect('/sign-in');
   }
 
-  if (!hasPublisherAccess(session.roles) && !(await hasCustomerSubscription(session))) {
+  const hasSubscription = await hasCustomerSubscription(session).catch(() => false);
+  if (!hasPublisherAccess(session.roles) && !hasSubscription) {
     redirect('/no-subscription');
   }
 

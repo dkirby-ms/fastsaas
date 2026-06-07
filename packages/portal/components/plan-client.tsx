@@ -2,13 +2,16 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
+import { useSession } from 'next-auth/react';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import { portalApi } from '@/lib/api-client';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
+import { hasPublisherAccess } from '@/lib/roles';
 
 export function PlanClient() {
+  const { data: session } = useSession();
   const queryClient = useQueryClient();
   const plansQuery = useQuery({ queryKey: ['portal-plans'], queryFn: portalApi.getPlans });
   const updatePlanMutation = useMutation({
@@ -22,7 +25,10 @@ export function PlanClient() {
   if (plansQuery.isLoading) return <LoadingPanel label="Loading your plan options" />;
   if (plansQuery.isError) {
     if (isApiErrorStatus(plansQuery.error, 403)) {
-      return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account cannot open customer plan management.')} href="/publisher" cta="Open publisher portal" />;
+      if (hasPublisherAccess(session?.roles)) {
+        return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account cannot open customer plan management.')} href="/publisher" cta="Open publisher portal" />;
+      }
+      return <ForbiddenState title="No active subscription" message="You don't have an active subscription for this portal." href="/no-subscription" cta="Go to subscription page" />;
     }
     return <ErrorAlert message={getErrorMessage(plansQuery.error, 'We could not load your plan options.')} />;
   }
