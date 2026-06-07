@@ -59,3 +59,12 @@ RETRO finalized Phase 1.5 metering recovery and security test suite. PR #62 merg
 ### Cascading Blockers
 - PR #64 (RLS enforcement) reassigned to FIDO — 5 RETRO security tests remain skipped until RLS policies are active
 - Once PR #64 merges, RETRO can unskip: `npm run test:rls --workspace=@fastsaas/api`
+
+## 2026-06-07
+
+- Spin-down checkpoint: Test stub generation complete
+  - 26 test stubs written for PlanFeatureGateService ✓
+  - Test suite skeleton in place for team implementation ✓
+- Decisions reference available in team decisions log
+- Ready for next test phase (security, metering, RBAC)
+

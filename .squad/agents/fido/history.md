@@ -137,3 +137,16 @@ Convert all publisher portal API calls from client-side React Query + `portalApi
 - **2026-06-06T16:51:37Z:** Use discriminated union `ActionResult<T>` (`{ ok: true; data } | { ok: false; status, code, message }`) when returning from server actions to client components. This avoids Error class identity loss from Next.js serialization. Client components reconstruct `ApiError` via `unwrapResult()` to preserve existing `isApiErrorStatus` / `getErrorMessage` patterns.
 - **2026-06-06T16:51:37Z:** Canonical server-side config lives in `packages/portal/lib/server-config.ts`. `publisher-admin-api.ts` re-exports `getPublisherIntegrationMode` from there. The `PublisherIntegrationBanner` (server component) imports from `server-config` directly.
 - **2026-06-06T16:51:37Z:** `USE_MOCK_API !== 'false'` → mock; `USE_MOCK_API === 'false'` + `API_BASE_URL` set → live; `USE_MOCK_API === 'false'` + no `API_BASE_URL` → throw (loud config error). `PUBLISHER_API_BASE_URL` overrides `API_BASE_URL` for publisher routes.
+
+## 2026-06-07
+
+- Spin-down checkpoint: Plan Architecture v2 portal work complete
+  - Feature gates UI for plan management ✓
+  - Product import UI for marketplace plans tab ✓
+  - priceMonthly reference cleanup ✓
+  - Server Actions fix for mock data issue (IMPLEMENTED) ✓
+  - Portal Portal v2 and publisher routes working ✓
+- Decisions documented (mock data root cause, server actions decision, RBAC design)
+- All publisher portal components updated to use server actions
+- Ready for Product Ingestion work and marketplace catalog integration
+

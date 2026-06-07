@@ -113,3 +113,14 @@ Lead orchestration of Phase 1.5 tenant-isolation and publisher-admin PR reviews.
 - **2026-06-03T16:21:14.408+00:00:** Reviewed PR #125 (Dark mode & NEXTAUTH_URL fix). The deploy workflow fix by GNC successfully aligns the `NEXTAUTH_URL` and `PORTAL_URL` to support custom domains via `PORTAL_PUBLIC_URL`, ensuring PKCE cookies function securely on Entra callbacks. FIDO's dark mode implementation leverages standard context and anti-FOUC script correctly, but violated the monorepo rules by declaring `Theme` types locally inside `theme-provider.tsx` instead of `@fastsaas/shared`. PR was REJECTED and reassigned to EECOM to migrate the shared types.
 - **2026-06-03T16:56:07.551+00:00:** Re-reviewed PR #125 (Dark mode & NEXTAUTH_URL fix). EECOM successfully fixed the type boundary violation: all `Theme*` types now correctly exported from `@fastsaas/shared` and portal imports removed duplicates. Portal imports now resolve from shared types cleanly. GNC's `PORTAL_PUBLIC_URL` override logic is sound, worflow properly falls back to ACA FQDN when unset, health checks target resolved URL. FIDO's dark mode uses Tailwind v4 CSS-first `@custom-variant dark` with anti-FOUC bootstrap in layout.tsx—implementation is clean and prevents FOUC. ✅ **APPROVED** → **MERGED** (squash merge, branch deleted). Issue #84 closed. Post-merge: user must set `PORTAL_PUBLIC_URL` variable in GitHub and update Entra redirect URIs manually to match the public URL.
 - **2026-06-04T19:11:33.391+00:00:** Re-reviewed PR #142 after FIDO's revisions. Verified that the `resolve` endpoint now correctly uses POST with the `x-ms-marketplace-token` header and that request headers correctly use `x-ms-requestid` and `x-ms-correlationid`. Tests pass and typecheck succeeds. Approved PR #142.
+
+## 2026-06-07
+
+- Spin-down checkpoint: Plan Architecture v2 design complete
+  - Architecture proposal approved and implemented by team ✓
+  - Mock data root cause analysis archived ✓
+  - RBAC hybrid design recommendation documented ✓
+  - User directives on plan-role separation captured ✓
+- All key decisions consolidated in team decisions ledger
+- Ready for Product Ingestion design and RBAC implementation phases
+

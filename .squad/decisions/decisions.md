@@ -257,3 +257,70 @@
 - **Owner:** RETRO
 - **Decision:** The tenant-isolation security catalog in `packages/api/src/__tests__/security/` uses signed JWKS-backed integration fixtures against the Express API for repeatable coverage, while RLS-only assertions stay skipped behind `SECURITY_RLS_ENABLED` until #45 deploys database policies.
 - **Rationale:** This keeps the Phase 1.5 suite executable in CI and on feature branches now, without hiding the staging-only checks that depend on the parallel RLS rollout.
+
+## 2026-06-06
+
+### User Directive: Plans from Partner Center
+- **Date:** 2026-06-06T20:42:01Z
+- **By:** dkirby-ms (via Copilot)
+- **What:** Plans should always be sourced from Partner Center. The publisher portal should support building plans locally and mapping them 1:1 to their counterpart in Partner Center/Marketplace. Need a schema for mapping RBAC roles to specific plans published in Partner Center for feature gating.
+- **Why:** User request — captured for team memory
+
+### User Directive: Plans Don't Dictate User Roles
+- **Date:** 2026-06-06T20:48:23Z
+- **By:** dkirby-ms (via Copilot)
+- **What:** Plans should NOT dictate what role a user gets. Drop `plan_role_grants` from the architecture. Roles are managed independently (by tenant admins or the publisher), not derived from the purchased plan. Plans only gate features at the tenant level via `plan_feature_gates`.
+- **Why:** User request — architectural constraint. Clear separation: plans = feature access (tenant-level), roles = user permissions (admin-managed independently).
+
+### Root Cause Analysis: Publisher Portal Showing Mock Data in Staging
+- **Date:** 2026-06-06T16:47:26Z
+- **Author:** Kranz (Lead)
+- **Requested by:** dkirby-ms
+- **Status:** Analysis Complete — No fixes implemented
+- **Summary:** The publisher portal serves mock data in staging because environment variables that gate live-mode (`USE_MOCK_API`, `API_BASE_URL`) are **server-only** env vars but are read by **client-side** components. In the browser, both variables resolve to `undefined`, so `shouldUseMockApi()` always returns `true` client-side, regardless of what staging-portal.env contains. Secondary contributing factors — faulty `||` logic, three divergent copies of the gate function, and a missing `PUBLISHER_API_BASE_URL` — compound the problem and cause every surface-level fix to regress.
+- **Root causes:** (RC-1) Server-only env vars consumed in client components (PRIMARY); (RC-2) The `||` logic trap in `shouldUseMockApi()`; (RC-3) `shouldUseMockApi()` duplicated across three files with divergent logic; (RC-4) `requestPublisherResource()` has an additional independent mock gate; (RC-5) Dockerfile bakes a placeholder `API_BASE_URL` into the build; (RC-6) The `PublisherIntegrationBanner` creates a false "live mode" signal
+- **Recommended fix:** Move all publisher API calls to Server Actions / Route Handlers (Option A: Recommended), or expose gating vars via `NEXT_PUBLIC_` prefix (Option B), or add a `/api/config` internal route (Option C).
+- **Details:** See full analysis at `.squad/decisions/inbox/kranz-mock-data-root-cause.md` (archived with this entry).
+
+### Publisher Portal Server Actions Architecture Decision
+- **Date:** 2026-06-06T16:51:37Z
+- **Author:** FIDO
+- **Status:** Implemented
+- **Problem:** All publisher API calls in the portal were executed inside `'use client'` components via React Query query functions. The env vars controlling mock vs live mode (`USE_MOCK_API`, `API_BASE_URL`) are server-only — no `NEXT_PUBLIC_` prefix — so they evaluate to `undefined` in the browser. As a result, `shouldUseMockApi()` always returned `true` client-side, meaning the publisher portal always served mock data even in staging/production.
+- **Decision:** Move all publisher portal API calls to the server side using **Next.js Server Actions** (`'use server'`). Client components continue to use React Query for caching and UI state, but their `queryFn` / `mutationFn` call server actions instead of `portalApi.*` directly.
+- **Key changes:**
+  - New `packages/portal/lib/server-config.ts` — Canonical server-side mock/live gate. Single source of truth with strict logic.
+  - New `packages/portal/app/(portal)/publisher/actions.ts` — All publisher data fetching and mutations as `'use server'` functions. Returns discriminated union `ActionResult<T>` for safe error serialization.
+  - Modified publisher client components to call server actions via `unwrapResult()` which reconstructs `ApiError` from failure payload.
+  - Removed publisher-specific methods from `packages/portal/lib/api-client.ts` and deprecated `getPublisherIntegrationMode` in favor of `server-config`.
+- **Error propagation pattern:** Rather than throwing `ApiError` from server actions, all actions return `ActionResult<T>`. Client components use a local `unwrapResult()` helper that reconstructs `ApiError` from the failure payload.
+
+### Plan Architecture v2 — Partner Center as Pricing Source + Feature Gates
+- **Date:** 2026-06-06T20:51:13Z
+- **Owner:** Kranz (Lead)
+- **Status:** Revised — pending team review
+- **Problem:** The current model treats local `publisher_plans` as fully standalone definitions with an optional link to a Partner Center plan. This creates drift: pricing and availability live in Partner Center, but there is no enforcement that a plan is actually live in the marketplace before it is shown to customers. Additionally, there is no schema for tiering feature access based on which plan a tenant is subscribed to.
+- **Decisions:**
+  - **Source of Truth Split:** Partner Center owns plan existence/purchasability/pricing/trial/seats; local DB owns feature gates and portal description.
+  - **Data Model:** `publisher_plans` modified to remove `price_monthly` (pricing read at runtime from `marketplace_plans.pricing_summary`); new `plan_feature_gates` table maps named feature keys to plans.
+  - **Feature Gating:** New `PlanFeatureGateService` exposes `hasFeature()` and `listFeatures()` for runtime enforcement.
+  - **Roles independent:** Plans do not auto-assign roles. Tenant admins own role management. `TenantMemberService.bootstrapOwnerIfNeeded()` continues to handle first-admin onboarding.
+  - **Partner Center link recommended, not required:** Publishers may activate a plan without linking to Partner Center but receive a clear non-blocking warning in the portal.
+- **Migration path:** M1 (add `plan_feature_gates` table) → M4 (PlanFeatureGateService + portal UI) → M3 (update pricing reads) → M2 (remove `price_monthly`) → M5 (activation warning).
+- **Details:** See full proposal at `.squad/decisions/inbox/kranz-plan-architecture-v2.md` (archived with this entry).
+
+### RBAC Design for FastSaaS — Publisher & Customer Role Separation
+- **Date:** 2026-06-06
+- **Author:** Kranz (Lead)
+- **Status:** Draft — for review by David (dkirby-ms)
+- **Problem:** The current system assumes a fixed Entra tenant for portal auth, derives API tenant context directly from token claims, and lets subscription creation persist `tenantId` from the caller token even when Marketplace resolve returns a different `beneficiaryTenantId`. App roles defined on the portal app don't appear in access tokens for the API app, causing publisher routes to receive empty `roles` claims.
+- **Design recommendation:** Option C (Hybrid) — Two layers: (1) Coarse gate: Token `tid` must match `PUBLISHER_TENANT_ID` to access `/v1/publisher/*` routes; (2) Fine-grained gate: A `Publisher` app role on the API app registration controls which users within the publisher tenant actually have admin access. Token flow requires both `tid` match and `Publisher` role assignment.
+- **Key points:**
+  - Add `Publisher` app role to the API app registration manifest (defines roles on the resource app so they appear in access tokens for that resource).
+  - Assign existing publisher users to this role on the API enterprise app.
+  - Add `PUBLISHER_TENANT_ID` to API config.
+  - Customer RBAC remains entirely database-driven (`tenant_members` table).
+  - Handles dual-role users cleanly: a user from the publisher tenant with NO `Publisher` role acts as a customer.
+- **Migration path:** Phase 1 (add role to API app, assign users) → Phase 2 (add tenant ID gate in code) → Phase 3 (simplify customer roles to Admin/User) → Phase 4 (cleanup).
+- **Details:** See full design at `.squad/decisions/inbox/kranz-rbac-design.md` (archived with this entry).
+
