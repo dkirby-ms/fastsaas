@@ -1,3 +1,9 @@
+## [0.23.2](https://github.com/dkirby-ms/fastsaas/compare/v0.23.1...v0.23.2) (2026-06-07)
+
+### Bug Fixes
+
+* register plan_feature_gates and feature_definitions in migrator ([bc7d97c](https://github.com/dkirby-ms/fastsaas/commit/bc7d97c2cd5992d7ea588b927d95b6239057c12e))
+
 ## [0.23.1](https://github.com/dkirby-ms/fastsaas/compare/v0.23.0...v0.23.1) (2026-06-07)
 
 ### Bug Fixes
