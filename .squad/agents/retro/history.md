@@ -68,3 +68,35 @@ RETRO finalized Phase 1.5 metering recovery and security test suite. PR #62 merg
 - Decisions reference available in team decisions log
 - Ready for next test phase (security, metering, RBAC)
 
+
+## 2026-06-07 — Feature Entitlements Validation Tests
+
+### Issue Completed
+**#149: Feature Entitlements Validation Tests** — Built 15 new tests covering:
+- Feature gate repository CRUD (create, read, list, delete)
+- Feature definition queries (listing all, by key)
+- Service layer: `hasFeature()`, `listFeatures()`, `requireFeature` middleware
+- Plan feature gate composition with RBAC authorization (orthogonal axis validation)
+- Upgrade path (plan changes reflected live in API)
+- In-memory repository fallback (degraded mode without database)
+
+### Test Coverage
+- **Total passing:** 191 tests (up from 176)
+- **New this session:** 15 (feature entitlements)
+- **All workspaces:** API, Portal (no breaking changes)
+
+### Validation Matrix
+- Feature gate middleware alone cannot block requests (RBAC must pass first)
+- RBAC middleware alone cannot gate features (feature check must pass second)
+- Composition order: RBAC (in-memory) → feature gate (DB query)
+- Plan upgrades immediately unlock features in API
+- Portal reflects within 60s (revalidate TTL)
+
+### Test Patterns
+- Use `InMemoryPlanFeatureGateRepository` for fast unit tests (no DB dependency)
+- Seed repository directly: `await featureGateRepo.upsertMany([...])`
+- Validate orthogonal axis: both RBAC AND plan gate must pass
+- No mocks for features — repository abstraction handles all cases
+
+### Status
+191 total tests passing. Feature entitlements fully validated. No regressions.
