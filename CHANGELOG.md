@@ -1,3 +1,9 @@
+## [0.23.1](https://github.com/dkirby-ms/fastsaas/compare/v0.23.0...v0.23.1) (2026-06-07)
+
+### Bug Fixes
+
+* JSON.stringify features array before JSONB insert in publisher plans ([125c0c7](https://github.com/dkirby-ms/fastsaas/commit/125c0c72e53bff30e64e2f36182e94792a15494d))
+
 ## [0.23.0](https://github.com/dkirby-ms/fastsaas/compare/v0.22.3...v0.23.0) (2026-06-07)
 
 ### Features
