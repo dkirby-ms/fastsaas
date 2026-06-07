@@ -1,3 +1,9 @@
+## [0.22.3](https://github.com/dkirby-ms/fastsaas/compare/v0.22.2...v0.22.3) (2026-06-07)
+
+### Bug Fixes
+
+* use prefix matching for Partner Center schema versions ([c79fa6e](https://github.com/dkirby-ms/fastsaas/commit/c79fa6e431c954d7d1d55b63d0973b57a4269187))
+
 ## [0.22.2](https://github.com/dkirby-ms/fastsaas/compare/v0.22.1...v0.22.2) (2026-06-07)
 
 ### Bug Fixes
