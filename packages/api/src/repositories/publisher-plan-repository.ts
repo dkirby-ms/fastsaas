@@ -201,7 +201,7 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
             name: input.name,
             description: input.description,
             status: input.status,
-            features: input.features,
+            features: JSON.stringify(input.features),
             marketplace_plan_id: marketplacePlanId,
             seat_limit: seatLimit
           })
@@ -210,7 +210,7 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
               name: input.name,
               description: input.description,
               status: input.status,
-              features: input.features,
+              features: JSON.stringify(input.features),
               marketplace_plan_id: marketplacePlanId,
               seat_limit: seatLimit,
               updated_at: new Date()
