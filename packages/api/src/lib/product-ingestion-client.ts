@@ -249,7 +249,12 @@ export class ProductIngestionClient implements ProductIngestionClientLike {
       query: { externalId }
     });
 
-    return response as ProductResource;
+    const values = Array.isArray(response.value) ? response.value : [response];
+    const product = values[0] as ProductResource | undefined;
+    if (!product) {
+      throw new ProductIngestionError(`No product found with externalId: ${externalId}`, 'get-product-by-external-id', 404);
+    }
+    return product;
   }
 
   async getResourceTree<TResource extends ProductIngestionResource = ProductIngestionResource>(
