@@ -8,6 +8,7 @@ import type { PlanFeatureGateService } from '../services/plan-feature-gate-servi
 function makeMockService(hasFeatureResult: boolean): PlanFeatureGateService {
   return {
     hasFeature: vi.fn().mockResolvedValue(hasFeatureResult),
+    listFeaturesForTenant: vi.fn().mockResolvedValue([]),
     listFeatures: vi.fn().mockResolvedValue([]),
     setFeatureGates: vi.fn().mockResolvedValue(undefined),
     removeFeatureGate: vi.fn().mockResolvedValue(undefined)
@@ -88,6 +89,7 @@ describe('requireFeature middleware', () => {
       hasFeature: vi.fn().mockImplementation((_tenantId: string, featureKey: string) =>
         Promise.resolve(featureKey === 'allowed-feature')
       ),
+      listFeaturesForTenant: vi.fn().mockResolvedValue([]),
       listFeatures: vi.fn().mockResolvedValue([]),
       setFeatureGates: vi.fn().mockResolvedValue(undefined),
       removeFeatureGate: vi.fn().mockResolvedValue(undefined)

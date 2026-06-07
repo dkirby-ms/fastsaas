@@ -1,4 +1,4 @@
-import type { ApiResponse, FeatureEnabledResponse } from '@fastsaas/shared';
+import type { ApiResponse, FeatureEnabledResponse, PlanFeatureGatesResponse } from '@fastsaas/shared';
 import { Router, type Response } from 'express';
 
 import type { ApiConfig } from '../../config';
@@ -30,6 +30,37 @@ export function createFeaturesRouter(
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })
   );
+
+  /**
+   * @swagger
+   * /v1/features:
+   *   get:
+   *     summary: List all enabled feature keys for the current tenant's active subscription plan
+   *     description: Returns the set of feature keys enabled for the authenticated tenant's active subscription plan. Returns an empty array if the tenant has no active subscription.
+   *     tags:
+   *       - Features
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: List of enabled feature keys
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope
+   */
+  router.get('/', async (req: ApiRequest, res: Response<ApiResponse<PlanFeatureGatesResponse>>, next) => {
+    try {
+      if (!req.context) {
+        throw AppError.unauthorized();
+      }
+
+      const features = await planFeatureGateService.listFeaturesForTenant(req.context.tenantId);
+      res.status(200).json({ status: 'success', data: { features }, meta: buildResponseMeta(req, config.apiVersion) });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   /**
    * @swagger
