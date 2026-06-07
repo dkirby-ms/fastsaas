@@ -1,3 +1,10 @@
+## [0.22.2](https://github.com/dkirby-ms/fastsaas/compare/v0.22.1...v0.22.2) (2026-06-07)
+
+### Bug Fixes
+
+* extract product from collection response in getProductByExternalId ([b300e9e](https://github.com/dkirby-ms/fastsaas/commit/b300e9e62ba78371eca31bf5f4564f2f9e3b879f))
+* log Partner Center product response for import debugging ([86e95b0](https://github.com/dkirby-ms/fastsaas/commit/86e95b034345482249d9abbd9974c04e0c4e9da8))
+
 ## [0.22.1](https://github.com/dkirby-ms/fastsaas/compare/v0.22.0...v0.22.1) (2026-06-07)
 
 ### Bug Fixes
