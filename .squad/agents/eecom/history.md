@@ -39,3 +39,33 @@
 
 ### Status
 All backend infrastructure live and tested. Feature gates queryable, routes responding 200. Ready for portal integration.
+
+## 2026-06-07 — Dark Mode Premium Gate (#155)
+
+### Issue Completed
+**#155: dark-mode gated to premium-1 plan** — Created seed migration `20260607T180000_seed_premium1_dark_mode` that:
+- Inserts a `publisher_plans` row for `premium-1` with `publisher_tenant_id = ENTRA_TENANT_ID ?? 'publisher'`
+- Inserts a `plan_feature_gates` row for `(publisher_tenant_id, 'premium-1', 'dark-mode', enabled=true)`
+- Uses `ON CONFLICT DO NOTHING` for idempotency
+- Uses `SET LOCAL app.bypass_rls = 'true'` to bypass FORCE RLS within the migration's implicit transaction (no nested `db.transaction()` — Kysely passes a Transaction to `up()`, not a Kysely instance)
+
+### Learnings
+
+1. **Kysely migration `up()` receives a Transaction, not a Kysely instance** — Calling `db.transaction().execute(...)` inside a migration throws "calling the transaction method for a Transaction is not supported". Use `sql` template or repository methods directly on `db`.
+
+2. **FORCE RLS in migrations** — `publisher_plans` and `plan_feature_gates` have `FORCE ROW LEVEL SECURITY`. Migration user is `NOSUPERUSER`, subject to RLS. To bypass for seed inserts: `await sql\`SET LOCAL app.bypass_rls = 'true'\`.execute(db)` — this works because the app's RLS policy checks `app.bypass_rls` setting, and `SET LOCAL` scopes it to the current transaction.
+
+3. **`publisher_tenant_id` in seed migrations** — Use `process.env.ENTRA_TENANT_ID ?? 'publisher'` as the single-publisher sentinel. This is safe and idiomatic for single-publisher deployments.
+
+4. **`findEnabledByPlanAndKey` bypasses RLS** — This method (used by `hasFeature`) works for any `publisher_tenant_id` value since it uses `bypassRls: true`. The seed migration just needs to ensure the row exists for the correct `plan_id` and `feature_key`.
+
+5. **Mock API (`packages/portal/lib/mock-api.ts`)** — Has no handler for `GET /v1/features`; returns an empty array (graceful degradation in portal). No change needed for feature gating.
+
+6. **Key file paths:**
+   - Migration: `packages/api/src/db/migrations/20260607T180000_seed_premium1_dark_mode.ts`
+   - Migrator registry: `packages/api/src/db/migrator.ts`
+   - Tests: `packages/api/src/__tests__/feature-entitlements.test.ts` (Section 5)
+   - Portal layout (feature fetch): `packages/portal/app/(portal)/layout.tsx`
+
+### Status
+Draft PR #157 open. typecheck ✓, 195 tests passed, build ✓.
