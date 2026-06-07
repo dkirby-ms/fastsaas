@@ -9,6 +9,7 @@ export interface SetFeatureGateInput {
 
 export interface PlanFeatureGateService {
   hasFeature(tenantId: string, featureKey: string): Promise<boolean>;
+  listFeaturesForTenant(tenantId: string): Promise<string[]>;
   listFeatures(planId: string, tenantId: string): Promise<string[]>;
   setFeatureGates(tenantId: string, planId: string, gates: SetFeatureGateInput[]): Promise<void>;
   removeFeatureGate(tenantId: string, planId: string, featureKey: string): Promise<void>;
@@ -29,6 +30,16 @@ export class DefaultPlanFeatureGateService implements PlanFeatureGateService {
 
     const gate = await this.featureGateRepository.findEnabledByPlanAndKey(active.planId, featureKey);
     return gate !== null;
+  }
+
+  async listFeaturesForTenant(tenantId: string): Promise<string[]> {
+    const subscriptions = await this.subscriptionRepository.listByTenant(tenantId);
+    const active = subscriptions.find((sub) => sub.status === 'Active');
+    if (!active) {
+      return [];
+    }
+
+    return this.listFeatures(active.planId, tenantId);
   }
 
   async listFeatures(planId: string, tenantId: string): Promise<string[]> {

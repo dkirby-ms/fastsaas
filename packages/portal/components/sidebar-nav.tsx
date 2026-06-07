@@ -8,7 +8,9 @@ import { hasPublisherAccess } from '@/lib/roles';
 
 const customerNavigation = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/analytics', label: 'Analytics' },
   { href: '/plan', label: 'Plan' },
+  { href: '/webhooks', label: 'Webhooks' },
   { href: '/settings', label: 'Settings' },
 ];
 
