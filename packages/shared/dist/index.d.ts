@@ -40,7 +40,7 @@ export interface PlanOption {
     id: string;
     name: string;
     description: string;
-    priceMonthly: string;
+    pricingSummary: string | null;
     recommended?: boolean;
     features: PlanFeature[];
 }
@@ -238,7 +238,7 @@ export interface PublisherDashboardPlanSummary {
 export interface PublisherDashboardData {
     subscriptionCount: number;
     activeTenants: number;
-    monthlyRecurringRevenue: string;
+    monthlyRecurringRevenue: string | null;
     churnRiskCount: number;
     plans: PublisherDashboardPlanSummary[];
 }
@@ -246,7 +246,7 @@ export interface PublisherPlan {
     id: string;
     name: string;
     description: string;
-    priceMonthly: string;
+    pricingSummary?: Record<string, unknown> | null;
     status: PublisherPlanStatus;
     activeSubscriptions: number;
     features: string[];
@@ -255,6 +255,28 @@ export interface PublisherPlan {
 }
 export interface PublisherPlansResponse {
     plans: PublisherPlan[];
+    warning?: string;
+}
+export interface PlanFeatureGate {
+    publisherTenantId: string;
+    planId: string;
+    featureKey: string;
+    enabled: boolean;
+    metadata?: Record<string, unknown> | null;
+    createdAt: string;
+}
+export interface PlanFeatureGatesResponse {
+    features: string[];
+}
+export interface FeatureEnabledResponse {
+    enabled: boolean;
+}
+export interface SetFeatureGatesRequest {
+    gates: Array<{
+        featureKey: string;
+        enabled: boolean;
+        metadata?: Record<string, unknown>;
+    }>;
 }
 export interface MarketplacePlanSummary {
     id: string;
@@ -272,7 +294,7 @@ export interface PublisherTenantSummary {
     planId: string;
     planName: string;
     status: PublisherTenantStatus;
-    monthlyRecurringRevenue: string;
+    monthlyRecurringRevenue: string | null;
     seats: number;
     subscriptionId?: string;
     lastUpdated: string;
@@ -299,7 +321,6 @@ export interface PublisherTenantsResponse {
 export interface PublisherPlanUpdateInput {
     name: string;
     description: string;
-    priceMonthly: string;
     status: PublisherPlanStatus;
     marketplacePlanId?: string | null;
     seatLimit?: number | null;

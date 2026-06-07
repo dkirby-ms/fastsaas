@@ -28,6 +28,7 @@ function createPublisherAdminPaths(prefix: string) {
     tenant,
     tenantAction: (tenantId: string, action: 'activate' | 'suspend' | 'cancel') =>
       `${tenant(tenantId)}/${encodePathSegment(action)}`,
+    importProduct: `${prefix}/products/import`,
   } as const;
 }
 
