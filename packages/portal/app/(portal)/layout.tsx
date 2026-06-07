@@ -17,28 +17,10 @@ function normalizeBaseUrl(baseUrl: string) {
 }
 
 /**
- * Default mock features returned in mock mode.
- * Represents a typical "Growth" plan customer for demo purposes.
- */
-const MOCK_CUSTOMER_FEATURES = [
-  'basic-analytics',
-  'email-support',
-  'advanced-analytics',
-  'priority-support',
-  'dark-mode',
-  'export-csv',
-  'custom-webhooks',
-];
-
-/**
  * Fetches the enabled feature keys for the signed-in customer.
  * Returns an empty array silently on any error so that gating degrades gracefully.
  */
 async function getCustomerFeatures(session: Session): Promise<string[]> {
-  if (shouldUseMockApi()) {
-    return MOCK_CUSTOMER_FEATURES;
-  }
-
   if (!session.accessToken || !process.env.API_BASE_URL) {
     return [];
   }

@@ -369,33 +369,11 @@ export async function cancelPublisherTenantAction(subscriptionId: string): Promi
   return tenantLifecycleAction(subscriptionId, 'cancel');
 }
 
-// ---- Feature gate mock data -----------------------------------------------
-
-function mockFeatureGates(planId: string): PlanFeatureGate[] {
-  if (planId === 'starter') {
-    return [
-      { publisherTenantId: '', planId, featureKey: 'basic-analytics', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
-      { publisherTenantId: '', planId, featureKey: 'email-support', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
-    ];
-  }
-  if (planId === 'growth') {
-    return [
-      { publisherTenantId: '', planId, featureKey: 'advanced-analytics', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
-      { publisherTenantId: '', planId, featureKey: 'priority-support', enabled: true, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
-      { publisherTenantId: '', planId, featureKey: 'multi-environment', enabled: false, metadata: null, createdAt: '2026-05-01T00:00:00.000Z' },
-    ];
-  }
-  return [];
-}
-
 // ---- Feature gate actions -------------------------------------------------
 
 export async function getFeatureGatesAction(planId: string): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
   return runAction(async () => {
     const config = getServerConfig();
-
-    if (config.isMockMode) return { features: mockFeatureGates(planId) };
-
     const token = await requirePublisherAccessToken();
 
     return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token);
@@ -405,20 +383,6 @@ export async function getFeatureGatesAction(planId: string): Promise<ActionResul
 export async function setFeatureGatesAction(planId: string, gates: SetFeatureGatesRequest['gates']): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
   return runAction(async () => {
     const config = getServerConfig();
-
-    if (config.isMockMode) {
-      return {
-        features: gates.map((g) => ({
-          publisherTenantId: '',
-          planId,
-          featureKey: g.featureKey,
-          enabled: g.enabled,
-          metadata: (g.metadata as Record<string, unknown> | undefined) ?? null,
-          createdAt: new Date().toISOString(),
-        })),
-      };
-    }
-
     const token = await requirePublisherAccessToken();
 
     return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token, {
