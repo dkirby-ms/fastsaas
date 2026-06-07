@@ -195,6 +195,14 @@ export interface AuditLogsTable {
   metadata: JsonColumn;
 }
 
+export interface FeatureDefinitionsTable {
+  feature_key: string;
+  label: string;
+  description: string | null;
+  category: string | null;
+  created_at: GeneratedTimestamp;
+}
+
 export interface PlanFeatureGatesTable {
   publisher_tenant_id: string;
   plan_id: string;
@@ -205,6 +213,7 @@ export interface PlanFeatureGatesTable {
 }
 
 export interface Database {
+  feature_definitions: FeatureDefinitionsTable;
   usage_events: UsageEventsTable;
   usage_event_dead_letters: UsageEventDeadLettersTable;
   subscriptions: SubscriptionsTable;
