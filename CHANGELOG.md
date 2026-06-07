@@ -1,3 +1,9 @@
+## [0.23.3](https://github.com/dkirby-ms/fastsaas/compare/v0.23.2...v0.23.3) (2026-06-07)
+
+### Bug Fixes
+
+* **portal:** hide publisher link from users without publisher role ([#154](https://github.com/dkirby-ms/fastsaas/issues/154)) ([#156](https://github.com/dkirby-ms/fastsaas/issues/156)) ([c03f027](https://github.com/dkirby-ms/fastsaas/commit/c03f0275a9b103e5f9b5f85e3586f582ab3bd5b8)), closes [#131](https://github.com/dkirby-ms/fastsaas/issues/131)
+
 ## [0.23.2](https://github.com/dkirby-ms/fastsaas/compare/v0.23.1...v0.23.2) (2026-06-07)
 
 ### Bug Fixes
