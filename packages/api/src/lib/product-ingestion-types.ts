@@ -7,7 +7,7 @@ export const PRODUCT_INGESTION_SCHEMAS = {
   configureStatus: 'https://schema.mp.microsoft.com/schema/configure-status/2022-03-01-preview2',
   resourceTree: 'https://schema.mp.microsoft.com/schema/resource-tree/2022-03-01-preview2',
   product: 'https://schema.mp.microsoft.com/schema/product/2022-03-01-preview3',
-  plan: 'https://schema.mp.microsoft.com/schema/plan/2022-03-01-preview2',
+  plan: 'https://schema.mp.microsoft.com/schema/plan/2022-03-01-preview3',
   submission: 'https://schema.mp.microsoft.com/schema/submission/2022-03-01-preview2',
   listing: 'https://schema.mp.microsoft.com/schema/listing/2022-03-01-preview5',
   listingAsset: 'https://schema.mp.microsoft.com/schema/listing-asset/2022-03-01-preview5',

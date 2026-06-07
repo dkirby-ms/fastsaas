@@ -132,15 +132,15 @@ function resourceReferenceMatches(reference: ProductIngestionResourceReference |
 }
 
 function isPlanResource(resource: ProductIngestionResource): resource is PlanResource {
-  return resource.$schema === PRODUCT_INGESTION_SCHEMAS.plan && 'product' in resource;
+  return resource.$schema.startsWith('https://schema.mp.microsoft.com/schema/plan/') && 'product' in resource;
 }
 
 function isSubmissionResource(resource: ProductIngestionResource): resource is SubmissionResource {
-  return resource.$schema === PRODUCT_INGESTION_SCHEMAS.submission && 'product' in resource;
+  return resource.$schema.startsWith('https://schema.mp.microsoft.com/schema/submission/') && 'product' in resource;
 }
 
 function isPriceAndAvailabilityPlanResource(resource: ProductIngestionResource): resource is PriceAndAvailabilityPlanResource {
-  return resource.$schema === PRODUCT_INGESTION_SCHEMAS.priceAndAvailabilityPlan && 'plan' in resource;
+  return resource.$schema.startsWith('https://schema.mp.microsoft.com/schema/price-and-availability-plan/') && 'plan' in resource;
 }
 
 function getResourceType(resource: ProductIngestionResource): string {
