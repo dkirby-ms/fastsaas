@@ -14,6 +14,7 @@ import * as publisherPlansMarketplaceLinkMigration from './migrations/20260606T1
 import * as planFeatureGatesMigration from './migrations/20260606T210000_plan_feature_gates';
 import * as removePriceMonthlyMigration from './migrations/20260606T212300_remove_price_monthly';
 import * as featureDefinitionsMigration from './migrations/20260607T154900_feature_definitions';
+import * as seedPremium1DarkModeMigration from './migrations/20260607T180000_seed_premium1_dark_mode';
 
 const MIGRATIONS: Record<string, Migration> = {
   '20260531T213532_audit_logs': auditLogsMigration,
@@ -27,7 +28,8 @@ const MIGRATIONS: Record<string, Migration> = {
   '20260606T150000_publisher_plans_marketplace_link': publisherPlansMarketplaceLinkMigration,
   '20260606T210000_plan_feature_gates': planFeatureGatesMigration,
   '20260606T212300_remove_price_monthly': removePriceMonthlyMigration,
-  '20260607T154900_feature_definitions': featureDefinitionsMigration
+  '20260607T154900_feature_definitions': featureDefinitionsMigration,
+  '20260607T180000_seed_premium1_dark_mode': seedPremium1DarkModeMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {
