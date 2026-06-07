@@ -336,8 +336,16 @@ export class ProductCatalogService {
 
     try {
       const product = await client.getProductByExternalId(externalId);
+      this.options.logger.info(
+        { externalId, productResponse: JSON.stringify(product) },
+        'Partner Center getProductByExternalId response'
+      );
       const durableProductId = product.id?.trim();
       if (!durableProductId) {
+        this.options.logger.error(
+          { externalId, productKeys: Object.keys(product || {}), productResponse: JSON.stringify(product) },
+          'Partner Center returned product with no durable ID'
+        );
         throw AppError.serviceUnavailable('Partner Center product sync is temporarily unavailable');
       }
 
