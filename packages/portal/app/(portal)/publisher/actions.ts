@@ -306,40 +306,6 @@ export async function getPublisherTenantAction(tenantId: string): Promise<Action
   });
 }
 
-export async function createPublisherTenantAction(payload: PublisherTenantUpsertInput): Promise<ActionResult<PublisherTenantDetail>> {
-  return runAction(async () => {
-    const config = getServerConfig();
-
-    if (config.isMockMode) {
-      const id = `tenant-${payload.displayName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
-
-      return {
-        id,
-        displayName: payload.displayName,
-        primaryDomain: payload.primaryDomain,
-        planId: payload.planId,
-        planName: payload.planId,
-        status: payload.status,
-        monthlyRecurringRevenue: '$0',
-        seats: payload.seats,
-        subscriptionId: `sub-${id}`,
-        lastUpdated: new Date().toISOString(),
-        purchaserTenantId: '',
-        beneficiaryTenantId: '',
-        usage: { activeUsers: 0, apiRequestsThisMonth: 0, storageGb: 0 },
-        audit: [{ id: `audit-${id}-1`, label: 'Tenant created', timestamp: new Date().toISOString() }],
-      };
-    }
-
-    const token = await requirePublisherAccessToken();
-
-    return livePublisherRequest<PublisherTenantDetail>(config.publisherApiBaseUrl, publisherAdminPaths.tenants, token, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  });
-}
-
 export async function updatePublisherTenantAction(tenantId: string, payload: PublisherTenantUpsertInput): Promise<ActionResult<PublisherTenantDetail>> {
   return runAction(async () => {
     const config = getServerConfig();
