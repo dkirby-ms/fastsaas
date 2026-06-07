@@ -24,6 +24,11 @@ import {
   type MarketplaceJobRepository
 } from './repositories/marketplace-job-repository';
 import {
+  InMemoryPlanFeatureGateRepository,
+  KyselyPlanFeatureGateRepository,
+  type PlanFeatureGateRepository
+} from './repositories/plan-feature-gate-repository';
+import {
   InMemoryPublisherPlanRepository,
   KyselyPublisherPlanRepository,
   type PublisherPlanRepository
@@ -46,6 +51,7 @@ import {
 import { ConfigureJobPoller } from './jobs/configure-job-poller';
 import { AuditService } from './services/audit-service';
 import { AssetVisibilityService } from './services/asset-visibility-service';
+import { DefaultPlanFeatureGateService } from './services/plan-feature-gate-service';
 import { JobPollingService } from './services/job-polling-service';
 import { MarketplaceOAuthService } from './services/marketplace-oauth-service';
 import { ProductCatalogService } from './services/product-catalog-service';
@@ -72,6 +78,10 @@ function createTenantMemberRepository(database?: Kysely<Database>): TenantMember
 
 function createMarketplaceJobRepository(database?: Kysely<Database>): MarketplaceJobRepository {
   return database ? new KyselyMarketplaceJobRepository(database) : new InMemoryMarketplaceJobRepository();
+}
+
+function createPlanFeatureGateRepository(database?: Kysely<Database>): PlanFeatureGateRepository {
+  return database ? new KyselyPlanFeatureGateRepository(database) : new InMemoryPlanFeatureGateRepository();
 }
 
 function createProductCatalogRepository(database?: Kysely<Database>): ProductCatalogRepository {
@@ -118,6 +128,7 @@ async function bootstrap(): Promise<void> {
   const tenantMemberRepository = createTenantMemberRepository(database);
   const marketplaceJobRepository = createMarketplaceJobRepository(database);
   const productCatalogRepository = createProductCatalogRepository(database);
+  const planFeatureGateRepository = createPlanFeatureGateRepository(database);
   const marketplaceFulfillmentOAuthService = new MarketplaceOAuthService({
     logger: logger.child({ component: 'marketplace-fulfillment-oauth' }),
     marketplace: {
@@ -172,6 +183,7 @@ async function bootstrap(): Promise<void> {
     tokenProvider: marketplaceOAuthService,
     logger: logger.child({ component: 'asset-visibility' })
   });
+  const planFeatureGateService = new DefaultPlanFeatureGateService(planFeatureGateRepository, subscriptionRepository);
   const app = createApp(config, {
     ...meteringRuntime,
     subscriptionRepository,
@@ -183,6 +195,7 @@ async function bootstrap(): Promise<void> {
     productCatalogService,
     submissionMonitoringService,
     assetVisibilityService,
+    planFeatureGateService,
     tenantMemberService
   });
 
