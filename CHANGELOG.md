@@ -1,3 +1,9 @@
+## [0.24.0](https://github.com/dkirby-ms/fastsaas/compare/v0.23.3...v0.24.0) (2026-06-07)
+
+### Features
+
+* **#155:** seed dark-mode feature gate for premium-1 plan ([#157](https://github.com/dkirby-ms/fastsaas/issues/157)) ([d00db44](https://github.com/dkirby-ms/fastsaas/commit/d00db4419fe0ebc296397d6276788ba10b49946e)), closes [#155](https://github.com/dkirby-ms/fastsaas/issues/155) [#155](https://github.com/dkirby-ms/fastsaas/issues/155)
+
 ## [0.23.3](https://github.com/dkirby-ms/fastsaas/compare/v0.23.2...v0.23.3) (2026-06-07)
 
 ### Bug Fixes
