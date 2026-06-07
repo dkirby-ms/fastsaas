@@ -458,6 +458,11 @@ export class ProductCatalogService {
     }
 
     if (this.isProductIngestionError(error)) {
+      this.options.logger.error(
+        { externalId, statusCode: error.statusCode, action: error.action, message: (error as { message?: string }).message },
+        'Partner Center API error during product import'
+      );
+
       if (error.statusCode === 404) {
         return AppError.notFound('Partner Center product was not found', { externalId });
       }
@@ -468,6 +473,11 @@ export class ProductCatalogService {
 
       return AppError.badRequest('Partner Center product import failed', { externalId });
     }
+
+    this.options.logger.error(
+      { externalId, errorType: typeof error, errorName: (error as { name?: string }).name, errorMessage: (error as { message?: string }).message, stack: (error as { stack?: string }).stack },
+      'Unexpected error during Partner Center product import'
+    );
 
     return AppError.serviceUnavailable('Partner Center product sync is temporarily unavailable');
   }
