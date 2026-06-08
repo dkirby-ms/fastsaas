@@ -68,8 +68,8 @@ function parsePlanBody(body: unknown): CreatePublisherPlanInput {
     throw AppError.badRequest('description is required');
   }
 
-  if (status !== 'active' && status !== 'draft') {
-    throw AppError.badRequest('status must be active or draft');
+  if (status !== 'active' && status !== 'archived') {
+    throw AppError.badRequest('status must be active or archived');
   }
 
   if (features !== undefined && (!Array.isArray(features) || features.some((entry) => typeof entry !== 'string'))) {
@@ -188,6 +188,24 @@ function getPlanId(req: ApiRequest): string {
   }
 
   return planId;
+}
+
+function parseIncludeArchivedQuery(req: ApiRequest): boolean {
+  const { includeArchived } = req.query;
+
+  if (includeArchived === undefined) {
+    return false;
+  }
+
+  if (includeArchived === 'true') {
+    return true;
+  }
+
+  if (includeArchived === 'false') {
+    return false;
+  }
+
+  throw AppError.badRequest('includeArchived must be true or false when provided');
 }
 
 function getTenantId(req: ApiRequest): string {
@@ -477,11 +495,18 @@ export function createPublisherRouter(
    * /v1/publisher/plans:
    *   get:
    *     summary: List publisher plans
-   *     description: Returns the publisher plan catalog, including built-in defaults and saved plan overrides.
+   *     description: Returns active publisher plans by default. Set includeArchived=true to also include archived plans.
    *     tags:
    *       - Publisher
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: includeArchived
+   *         required: false
+   *         schema:
+   *           type: boolean
+   *         description: Include archived plans in the response.
    *     responses:
    *       200:
    *         description: Publisher plan catalog
@@ -496,7 +521,9 @@ export function createPublisherRouter(
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlansResponse>>, next) => {
       try {
         const actor = buildActorContext(req);
-        const plans = await publisherService.listPlans(actor.tenantId);
+        const plans = await publisherService.listPlans(actor.tenantId, {
+          includeArchived: parseIncludeArchivedQuery(req)
+        });
         res.status(200).json({ status: 'success', data: plans, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);
@@ -530,7 +557,7 @@ export function createPublisherRouter(
    *                 type: string
    *               status:
    *                 type: string
-   *                 enum: [active, draft]
+   *                 enum: [active, archived]
    *               features:
    *                 type: array
    *                 items:
@@ -594,7 +621,7 @@ export function createPublisherRouter(
    *                 type: string
    *               status:
    *                 type: string
-   *                 enum: [active, draft]
+   *                 enum: [active, archived]
    *               features:
    *                 type: array
    *                 items:
@@ -619,6 +646,86 @@ export function createPublisherRouter(
         const actor = buildActorContext(req);
         const plans = await publisherService.updatePlan(actor, getPlanId(req), parsePlanBody(req.body));
         res.status(200).json({ status: 'success', data: plans, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/plans/{planId}/archive:
+   *   patch:
+   *     summary: Archive a publisher plan
+   *     description: Marks a publisher plan as archived so it is hidden from default plan listings.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: planId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Publisher plan archived
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Plan not found
+   */
+  router.patch(
+    '/plans/:planId/archive',
+    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+    async (req: ApiRequest, res: Response<ApiResponse<PublisherPlan>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const plan = await publisherService.archivePlan(actor, getPlanId(req));
+        res.status(200).json({ status: 'success', data: plan, meta: buildResponseMeta(req, config.apiVersion) });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /v1/publisher/plans/{planId}/unarchive:
+   *   patch:
+   *     summary: Unarchive a publisher plan
+   *     description: Restores a publisher plan to active status so it appears in default plan listings.
+   *     tags:
+   *       - Publisher
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: planId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Publisher plan unarchived
+   *       401:
+   *         description: Missing or invalid bearer token
+   *       403:
+   *         description: Token missing required scope or publisher management permission
+   *       404:
+   *         description: Plan not found
+   */
+  router.patch(
+    '/plans/:planId/unarchive',
+    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+    async (req: ApiRequest, res: Response<ApiResponse<PublisherPlan>>, next) => {
+      try {
+        const actor = buildActorContext(req);
+        const plan = await publisherService.unarchivePlan(actor, getPlanId(req));
+        res.status(200).json({ status: 'success', data: plan, meta: buildResponseMeta(req, config.apiVersion) });
       } catch (error) {
         next(error);
       }

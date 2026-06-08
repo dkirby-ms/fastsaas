@@ -194,4 +194,67 @@ describe('publisher administration routes', () => {
     expect(detailResponse.body.data.audit.length).toBeGreaterThanOrEqual(4);
     expect(detailResponse.body.data.subscriptionId).toBe(tenantId);
   });
+
+  it('archives and unarchives publisher plans and hides archived plans by default', async () => {
+    const adminToken = await harness.createToken({
+      tenantId: 'publisher-archive-admin',
+      roles: ['Admin'],
+      scopes: [harness.config.auth.requiredScope]
+    });
+
+    const createResponse = await request(harness.app)
+      .post('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ id: 'growth', name: 'Growth', description: 'Archive test plan', status: 'active' });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.data.status).toBe('active');
+
+    const archiveResponse = await request(harness.app)
+      .patch('/v1/publisher/plans/growth/archive')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(archiveResponse.status).toBe(200);
+    expect(archiveResponse.body.data).toMatchObject({
+      id: 'growth',
+      status: 'archived'
+    });
+
+    const activeOnlyResponse = await request(harness.app)
+      .get('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(activeOnlyResponse.status).toBe(200);
+    expect(activeOnlyResponse.body.data.plans.some((plan: { id: string }) => plan.id === 'growth')).toBe(false);
+
+    const includeArchivedResponse = await request(harness.app)
+      .get('/v1/publisher/plans?includeArchived=true')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(includeArchivedResponse.status).toBe(200);
+    expect(includeArchivedResponse.body.data.plans.find((plan: { id: string }) => plan.id === 'growth')).toMatchObject({
+      id: 'growth',
+      status: 'archived'
+    });
+
+    const unarchiveResponse = await request(harness.app)
+      .patch('/v1/publisher/plans/growth/unarchive')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(unarchiveResponse.status).toBe(200);
+    expect(unarchiveResponse.body.data).toMatchObject({
+      id: 'growth',
+      status: 'active'
+    });
+
+    const restoredResponse = await request(harness.app)
+      .get('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(restoredResponse.status).toBe(200);
+    expect(restoredResponse.body.data.plans.find((plan: { id: string }) => plan.id === 'growth')).toMatchObject({
+      id: 'growth',
+      status: 'active'
+    });
+  });
 });
