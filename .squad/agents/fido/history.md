@@ -49,3 +49,7 @@ Assigned to FIDO:
 
 ### Status
 4 demo features live with full conditional rendering, real API integration, no mocks.
+
+## Learnings
+
+- **2026-06-08T19:04:49.337+00:00 — Issue #167:** The portal subscription gate must stay server-side in `app/(portal)/layout.tsx` because client components cannot safely read the server-only `API_BASE_URL`; wrapping `PortalShell` with `CustomerSubscriptionGate` caused real subscribers to fall back to the mock API and get redirected to `/no-subscription`.
