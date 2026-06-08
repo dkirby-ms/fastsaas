@@ -1,3 +1,9 @@
+## [0.26.0](https://github.com/dkirby-ms/fastsaas/compare/v0.25.0...v0.26.0) (2026-06-08)
+
+### Features
+
+* simplify publisher dashboard KPIs ([#165](https://github.com/dkirby-ms/fastsaas/issues/165)) ([eafa853](https://github.com/dkirby-ms/fastsaas/commit/eafa853e630081408d0895a2aadeb6aeca5d01b0))
+
 ## [0.25.0](https://github.com/dkirby-ms/fastsaas/compare/v0.24.1...v0.25.0) (2026-06-08)
 
 ### Features
