@@ -124,10 +124,9 @@ const mockPlanStatusOverrides = new Map<string, PublisherPlan['status']>();
 
 function mockDashboard(): PublisherDashboardData {
   return {
-    subscriptionCount: 3,
     activeTenants: 1,
-    monthlyRecurringRevenue: null,
-    churnRiskCount: 1,
+    churnedTenants: 0,
+    totalSeats: 24,
     plans: [
       { planId: 'growth', planName: 'Growth', tenantCount: 2 },
       { planId: 'starter', planName: 'Starter', tenantCount: 1 },

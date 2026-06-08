@@ -401,10 +401,11 @@ function listMarketplacePlans(state: MockPortalState): MarketplacePlanSummary[] 
 
 function buildPublisherDashboard(state: MockPortalState): PublisherDashboardData {
   return {
-    subscriptionCount: state.publisher.tenants.length,
     activeTenants: state.publisher.tenants.filter((tenant) => tenant.status === 'active').length,
-    monthlyRecurringRevenue: null,
-    churnRiskCount: state.publisher.tenants.filter((tenant) => tenant.status === 'past_due' || tenant.status === 'suspended').length,
+    churnedTenants: state.publisher.tenants.filter((tenant) => tenant.status === 'canceled').length,
+    totalSeats: state.publisher.tenants
+      .filter((tenant) => tenant.status === 'active')
+      .reduce((total, tenant) => total + tenant.seats, 0),
     plans: state.publisher.plans.map((plan) => ({ planId: plan.id, planName: plan.name, tenantCount: plan.activeSubscriptions })),
   };
 }
