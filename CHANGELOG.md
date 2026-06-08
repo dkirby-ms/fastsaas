@@ -1,3 +1,9 @@
+## [0.24.1](https://github.com/dkirby-ms/fastsaas/compare/v0.24.0...v0.24.1) (2026-06-08)
+
+### Bug Fixes
+
+* **api:** include marketplacePlanId in plan projection ([#159](https://github.com/dkirby-ms/fastsaas/issues/159)) ([#161](https://github.com/dkirby-ms/fastsaas/issues/161)) ([becd071](https://github.com/dkirby-ms/fastsaas/commit/becd071bd38baf174d383d4dae60f284bed49634))
+
 ## [0.24.0](https://github.com/dkirby-ms/fastsaas/compare/v0.23.3...v0.24.0) (2026-06-07)
 
 ### Features
