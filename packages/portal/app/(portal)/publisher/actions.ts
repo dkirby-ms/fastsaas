@@ -120,6 +120,8 @@ async function runAction<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
 
 // ---- Static mock data ----------------------------------------------------
 
+const mockPlanStatusOverrides = new Map<string, PublisherPlan['status']>();
+
 function mockDashboard(): PublisherDashboardData {
   return {
     subscriptionCount: 3,
@@ -134,11 +136,16 @@ function mockDashboard(): PublisherDashboardData {
 }
 
 function mockPlans(): PublisherPlan[] {
-  return [
+  const plans: PublisherPlan[] = [
     { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
     { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
+
+  return plans.map((plan) => ({
+    ...plan,
+    status: mockPlanStatusOverrides.get(plan.id) ?? plan.status,
+  }));
 }
 
 function mockTenants(): PublisherTenantDetail[] {
@@ -232,7 +239,7 @@ export async function createPublisherPlanAction(payload: CreatePublisherPlanInpu
         name: payload.name,
         description: payload.description,
         pricingSummary: null,
-        status: payload.status ?? 'draft',
+        status: payload.status ?? 'active',
         activeSubscriptions: 0,
         features: payload.features ?? [],
         marketplacePlanId: payload.marketplacePlanId ?? null,
@@ -270,6 +277,36 @@ export async function updatePublisherPlanAction(planId: string, payload: Publish
       body: JSON.stringify(payload),
     });
   });
+}
+
+async function updatePlanArchivedState(planId: string, status: PublisherPlan['status']): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) {
+      const plan = mockPlans().find((item) => item.id === planId);
+      if (!plan) throw new ApiError(`Plan ${planId} not found`, 404, 'NOT_FOUND', 'The requested plan was not found.');
+      mockPlanStatusOverrides.set(planId, status);
+      return;
+    }
+
+    const token = await requirePublisherAccessToken();
+
+    await livePublisherRequest<unknown>(
+      config.publisherApiBaseUrl,
+      status === 'archived' ? publisherAdminPaths.planArchive(planId) : publisherAdminPaths.planUnarchive(planId),
+      token,
+      { method: 'PATCH' },
+    );
+  });
+}
+
+export async function archivePlan(planId: string): Promise<ActionResult<void>> {
+  return updatePlanArchivedState(planId, 'archived');
+}
+
+export async function unarchivePlan(planId: string): Promise<ActionResult<void>> {
+  return updatePlanArchivedState(planId, 'active');
 }
 
 export async function getPublisherTenantsAction(): Promise<ActionResult<PublisherTenantsResponse>> {
