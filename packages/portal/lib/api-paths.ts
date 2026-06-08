@@ -22,6 +22,8 @@ function createPublisherAdminPaths(prefix: string) {
     plans: `${prefix}/plans`,
     marketplacePlans: `${prefix}/marketplace-plans`,
     plan,
+    planArchive: (planId: string) => `${plan(planId)}/archive`,
+    planUnarchive: (planId: string) => `${plan(planId)}/unarchive`,
     planFeatures: (planId: string) => `${plan(planId)}/features`,
     planFeature: (planId: string, featureKey: string) => `${plan(planId)}/features/${encodePathSegment(featureKey)}`,
     tenants: `${prefix}/tenants`,

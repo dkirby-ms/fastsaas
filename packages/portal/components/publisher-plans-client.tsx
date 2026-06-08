@@ -14,12 +14,14 @@ import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import {
+  archivePlan,
   createPublisherPlanAction,
   getFeatureGatesAction,
   getMarketplacePlansAction,
   getPublisherPlansAction,
   removeFeatureGateAction,
   setFeatureGatesAction,
+  unarchivePlan,
   updatePublisherPlanAction,
   type ActionResult,
 } from '@/app/(portal)/publisher/actions';
@@ -47,15 +49,19 @@ type EditorState =
 const emptyPlanForm: PlanFormState = {
   name: '',
   description: '',
-  status: 'draft',
+  status: 'active',
   marketplacePlanId: '',
   seatLimit: '',
 };
 
 const statusTone: Record<PublisherPlanStatus, string> = {
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-  draft: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  archived: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
 };
+
+function formatPlanStatus(status: PublisherPlanStatus) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 function toPlanFormState(plan?: PublisherPlan): PlanFormState {
   if (!plan) {
@@ -285,6 +291,7 @@ export function PublisherPlansClient() {
   const [formState, setFormState] = useState<PlanFormState>(emptyPlanForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const marketplacePlanOptions = useMemo(
     () =>
       Array.from(
@@ -343,7 +350,24 @@ export function PublisherPlansClient() {
     },
   });
 
+  const archivePlanMutation = useMutation({
+    mutationFn: (planId: string) => archivePlan(planId).then(unwrapResult),
+    onSuccess: async () => {
+      await invalidatePublisherData();
+      setSuccessMessage('Plan archived.');
+    },
+  });
+
+  const unarchivePlanMutation = useMutation({
+    mutationFn: (planId: string) => unarchivePlan(planId).then(unwrapResult),
+    onSuccess: async () => {
+      await invalidatePublisherData();
+      setSuccessMessage('Plan restored.');
+    },
+  });
+
   const isSaving = createPlanMutation.isPending || updatePlanMutation.isPending;
+  const isChangingPlanStatus = archivePlanMutation.isPending || unarchivePlanMutation.isPending;
 
   if (plansQuery.isLoading) return <LoadingPanel label="Loading publisher plan catalog" />;
   if (plansQuery.isError) {
@@ -353,6 +377,14 @@ export function PublisherPlansClient() {
     return <ErrorAlert message={getErrorMessage(plansQuery.error, 'We could not load publisher plans.')} />;
   }
   if (!plansQuery.data) return <LoadingPanel label="Loading publisher plan catalog" />;
+
+  const activePlans = plansQuery.data.plans.filter((plan) => plan.status === 'active');
+  const archivedPlans = plansQuery.data.plans.filter((plan) => plan.status === 'archived');
+  const pendingPlanActionId = archivePlanMutation.isPending
+    ? archivePlanMutation.variables
+    : unarchivePlanMutation.isPending
+      ? unarchivePlanMutation.variables
+      : null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -375,6 +407,84 @@ export function PublisherPlansClient() {
     }
   };
 
+  const renderPlanCard = (plan: PublisherPlan) => {
+    const isArchived = plan.status === 'archived';
+    const isPendingAction = pendingPlanActionId === plan.id;
+
+    return (
+      <article
+        key={plan.id}
+        className={clsx(
+          'rounded-3xl border border-slate-200 bg-white p-6 shadow-panel dark:border-slate-700 dark:bg-slate-900',
+          isArchived && 'border-slate-300 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/70',
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">{plan.id}</p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">{plan.name}</h2>
+          </div>
+          <span className={clsx('rounded-full px-3 py-1 text-sm font-semibold', statusTone[plan.status])}>{formatPlanStatus(plan.status)}</span>
+        </div>
+
+        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{plan.description}</p>
+        {isArchived ? (
+          <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            Archived plans stay out of the active catalog until restored.
+          </p>
+        ) : null}
+
+        <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Pricing</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.pricingSummary ? 'Synced from Partner Center' : 'No pricing available'}</dd>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Seat limit</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.seatLimit ? `${plan.seatLimit} seats` : 'Unlimited'}</dd>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Marketplace link</dt>
+            <dd className="mt-2 text-sm font-semibold text-slate-950 dark:text-slate-50">{plan.marketplacePlanId ? `Linked · ${plan.marketplacePlanId}` : 'Not linked'}</dd>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
+            <dt className="text-sm text-slate-500 dark:text-slate-400">Active subscriptions</dt>
+            <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.activeSubscriptions}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => openEditForm(plan)}
+            disabled={isChangingPlanStatus}
+            className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:text-brand-300"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            disabled={isChangingPlanStatus}
+            onClick={() => (isArchived ? unarchivePlanMutation.mutate(plan.id) : archivePlanMutation.mutate(plan.id))}
+            className={clsx(
+              'rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
+              isArchived
+                ? 'bg-brand-600 text-white hover:bg-brand-700'
+                : 'border border-slate-300 text-slate-700 hover:border-slate-400 dark:border-slate-600 dark:text-slate-200',
+            )}
+          >
+            {isPendingAction ? (isArchived ? 'Restoring…' : 'Archiving…') : isArchived ? 'Restore' : 'Archive'}
+          </button>
+        </div>
+        {!isArchived && !plan.marketplacePlanId ? (
+          <div className="mt-4">
+            <PartnerCenterWarning />
+          </div>
+        ) : null}
+      </article>
+    );
+  };
+
   return (
     <section className="space-y-6">
       <header className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-panel dark:border-slate-700 dark:bg-slate-900">
@@ -382,7 +492,7 @@ export function PublisherPlansClient() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Publisher plans</p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">Manage your subscription catalog</h1>
-            <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Keep pricing, seat limits, and marketplace linking aligned with the publisher experience.</p>
+            <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Keep pricing, seat limits, marketplace linking, and archive state aligned with the publisher experience.</p>
           </div>
           {editorState.mode === 'list' ? (
             <button type="button" onClick={openCreateForm} className="rounded-full bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
@@ -394,52 +504,60 @@ export function PublisherPlansClient() {
 
       {createPlanMutation.isError ? <ErrorAlert message={getErrorMessage(createPlanMutation.error, 'We could not create the plan.')} /> : null}
       {updatePlanMutation.isError ? <ErrorAlert message={getErrorMessage(updatePlanMutation.error, 'We could not save the plan updates.')} /> : null}
+      {archivePlanMutation.isError ? <ErrorAlert message={getErrorMessage(archivePlanMutation.error, 'We could not archive the plan.')} /> : null}
+      {unarchivePlanMutation.isError ? <ErrorAlert message={getErrorMessage(unarchivePlanMutation.error, 'We could not restore the plan.')} /> : null}
       {formError ? <ErrorAlert message={formError} /> : null}
       {successMessage ? <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{successMessage}</div> : null}
 
       {editorState.mode === 'list' ? (
-        <div className="grid gap-6 xl:grid-cols-3">
-          {plansQuery.data.plans.map((plan) => (
-            <article key={plan.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">{plan.id}</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">{plan.name}</h2>
-                </div>
-                <span className={clsx('rounded-full px-3 py-1 text-sm font-semibold capitalize', statusTone[plan.status])}>{plan.status}</span>
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Active plans</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Plans currently available in the active catalog.</p>
               </div>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                {activePlans.length}
+              </span>
+            </div>
 
-              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{plan.description}</p>
+            {activePlans.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                No active plans yet.
+              </div>
+            ) : (
+              <div className="grid gap-6 xl:grid-cols-3">
+                {activePlans.map((plan) => renderPlanCard(plan))}
+              </div>
+            )}
+          </section>
 
-              <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <dt className="text-sm text-slate-500 dark:text-slate-400">Pricing</dt>
-                  <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.pricingSummary ? 'Synced from Partner Center' : 'No pricing available'}</dd>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <dt className="text-sm text-slate-500 dark:text-slate-400">Seat limit</dt>
-                  <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.seatLimit ? `${plan.seatLimit} seats` : 'Unlimited'}</dd>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <dt className="text-sm text-slate-500 dark:text-slate-400">Marketplace link</dt>
-                  <dd className="mt-2 text-sm font-semibold text-slate-950 dark:text-slate-50">{plan.marketplacePlanId ? `Linked · ${plan.marketplacePlanId}` : 'Not linked'}</dd>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                  <dt className="text-sm text-slate-500 dark:text-slate-400">Active subscriptions</dt>
-                  <dd className="mt-2 font-semibold text-slate-950 dark:text-slate-50">{plan.activeSubscriptions}</dd>
-                </div>
-              </dl>
-
-              <button type="button" onClick={() => openEditForm(plan)} className="mt-6 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:text-brand-300">
-                Edit
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-950 dark:text-slate-50">Archived plans</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Keep older plans out of the active catalog without deleting them.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowArchived((current) => !current)}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-600 dark:text-slate-200 dark:hover:text-brand-300"
+              >
+                {showArchived ? `Hide archived (${archivedPlans.length})` : `Show archived (${archivedPlans.length})`}
               </button>
-              {plan.status === 'active' && !plan.marketplacePlanId ? (
-                <div className="mt-4">
-                  <PartnerCenterWarning />
-                </div>
-              ) : null}
-            </article>
-          ))}
+            </div>
+
+            {archivedPlans.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">No archived plans.</p>
+            ) : showArchived ? (
+              <div className="mt-6 grid gap-6 xl:grid-cols-3">
+                {archivedPlans.map((plan) => renderPlanCard(plan))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Archived plans are hidden until you expand this section.</p>
+            )}
+          </section>
         </div>
       ) : (
         <form className="rounded-3xl border border-slate-200 bg-white p-6 shadow-panel dark:border-slate-700 dark:bg-slate-900" onSubmit={handleSubmit}>
@@ -447,7 +565,7 @@ export function PublisherPlansClient() {
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">{editorState.mode === 'create' ? 'Create plan' : selectedPlan?.id ?? 'Edit plan'}</p>
               <h2 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{editorState.mode === 'create' ? 'Add a new subscription plan' : `Edit ${selectedPlan?.name ?? 'plan'}`}</h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{editorState.mode === 'create' ? 'Set pricing, availability, seat limits, and marketplace linkage for the new catalog entry.' : `${selectedPlan?.activeSubscriptions ?? 0} active subscriptions currently use this plan.`}</p>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{editorState.mode === 'create' ? 'Set pricing, seat limits, and marketplace linkage for the new catalog entry. New plans start active.' : `${selectedPlan?.activeSubscriptions ?? 0} active subscriptions currently use this plan.`}</p>
             </div>
           </div>
 
@@ -457,10 +575,19 @@ export function PublisherPlansClient() {
             </div>
           ) : null}
 
+          {editorState.mode === 'edit' ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              <span>Status</span>
+              <span className={clsx('rounded-full px-3 py-1 font-semibold', statusTone[selectedPlan?.status ?? 'active'])}>
+                {formatPlanStatus(selectedPlan?.status ?? 'active')}
+              </span>
+              <span>Use Archive or Restore from the plans list to change availability.</span>
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-name">Name</label><input id="plan-name" value={formState.name} onChange={(event) => setFormState((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" required /></div>
             <div className="lg:col-span-2"><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-description">Description</label><textarea id="plan-description" value={formState.description} onChange={(event) => setFormState((current) => ({ ...current, description: event.target.value }))} className="min-h-32 w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" required /></div>
-            <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-status">Status</label><select id="plan-status" value={formState.status} onChange={(event) => setFormState((current) => ({ ...current, status: event.target.value as PublisherPlanStatus }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600"><option value="active">Active</option><option value="draft">Draft</option></select></div>
             <div><label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-seat-limit">Seat limit</label><input id="plan-seat-limit" type="number" min={1} step={1} value={formState.seatLimit} onChange={(event) => setFormState((current) => ({ ...current, seatLimit: event.target.value }))} className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-slate-600" placeholder="Unlimited" /></div>
             <div className="lg:col-span-2">
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200" htmlFor="plan-marketplace-id">Marketplace Plan ID</label>

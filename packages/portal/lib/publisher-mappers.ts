@@ -54,7 +54,7 @@ function getPlanTemplate(planId: string): Omit<PublisherPlan, 'activeSubscriptio
       name: titleize(planId),
       description: 'Marketplace plan imported from the fulfillment API subscription record.',
       pricingSummary: null,
-      status: 'draft',
+      status: 'active',
       features: ['Imported from live subscription data'],
     }
   );

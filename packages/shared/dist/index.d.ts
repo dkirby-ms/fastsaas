@@ -229,7 +229,7 @@ export type ThemeContextValue = {
     setTheme: (theme: Theme) => void;
     toggleTheme: () => void;
 };
-export type PublisherPlanStatus = 'active' | 'draft';
+export type PublisherPlanStatus = 'active' | 'archived';
 export interface PublisherDashboardPlanSummary {
     planId: string;
     planName: string;

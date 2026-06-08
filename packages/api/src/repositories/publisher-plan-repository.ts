@@ -31,6 +31,7 @@ export interface SavePublisherPlanInput {
 export interface PublisherPlanRepository {
   listByTenant(publisherTenantId: string): Promise<StoredPublisherPlan[]>;
   findByMarketplacePlanId(marketplacePlanId: string): Promise<StoredPublisherPlan | null>;
+  setPlanStatus(publisherTenantId: string, planId: string, status: PublisherPlanStatus): Promise<StoredPublisherPlan | null>;
   savePlan(input: SavePublisherPlanInput): Promise<StoredPublisherPlan>;
 }
 
@@ -81,6 +82,26 @@ export class InMemoryPublisherPlanRepository implements PublisherPlanRepository 
     }
 
     return null;
+  }
+
+  async setPlanStatus(
+    publisherTenantId: string,
+    planId: string,
+    status: PublisherPlanStatus
+  ): Promise<StoredPublisherPlan | null> {
+    const existing = this.plansByTenant.get(publisherTenantId)?.get(planId);
+    if (!existing) {
+      return null;
+    }
+
+    const updated: StoredPublisherPlan = {
+      ...clone(existing),
+      status,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.plansByTenant.get(publisherTenantId)!.set(planId, updated);
+    return clone(updated);
   }
 
   async savePlan(input: SavePublisherPlanInput): Promise<StoredPublisherPlan> {
@@ -183,6 +204,31 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
         return row ? mapPlan(row) : null;
       },
       { bypassRls: true, scope: 'system' }
+    );
+  }
+
+  async setPlanStatus(
+    publisherTenantId: string,
+    planId: string,
+    status: PublisherPlanStatus
+  ): Promise<StoredPublisherPlan | null> {
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const row = await trx
+          .updateTable('publisher_plans')
+          .set({
+            status,
+            updated_at: new Date()
+          })
+          .where('publisher_tenant_id', '=', publisherTenantId)
+          .where('id', '=', planId)
+          .returningAll()
+          .executeTakeFirst();
+
+        return row ? mapPlan(row) : null;
+      },
+      { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
     );
   }
 

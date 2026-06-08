@@ -38,6 +38,10 @@ export interface CreatePublisherPlanInput extends PublisherPlanUpdateInput {
   features?: string[];
 }
 
+interface ListPublisherPlansOptions {
+  includeArchived?: boolean;
+}
+
 
 function slugify(value: string): string {
   return value
@@ -77,7 +81,7 @@ function normalizeFeatures(features: readonly string[] | undefined, fallback: re
 }
 
 function normalizePlanStatus(status: string): PublisherPlanStatus {
-  return status === 'draft' ? 'draft' : 'active';
+  return status === 'archived' ? 'archived' : 'active';
 }
 
 function mapPublisherStatus(status: SubscriptionStatus, metadata: Record<string, unknown>): PublisherTenantStatus {
@@ -155,7 +159,7 @@ function resolvePlanDefinition(
       name: titleize(planId),
       description: 'Marketplace plan imported from live subscription data.',
       pricingSummary: null,
-      status: 'draft',
+      status: 'active',
       features: ['Imported from live subscription data'],
       marketplacePlanId: null,
       seatLimit: null
@@ -239,19 +243,23 @@ export class PublisherService {
     };
   }
 
-  async listPlans(publisherTenantId: string): Promise<PublisherPlansResponse> {
+  async listPlans(
+    publisherTenantId: string,
+    options: ListPublisherPlansOptions = {}
+  ): Promise<PublisherPlansResponse> {
     const [subscriptions, definitions] = await this.loadPublisherState(publisherTenantId);
     const counts = subscriptions.reduce<Record<string, number>>((result, subscription) => {
       result[subscription.planId] = (result[subscription.planId] ?? 0) + 1;
       return result;
     }, {});
     const planIds = [...new Set([...definitions.keys(), ...Object.keys(counts)])].sort((left, right) => left.localeCompare(right));
+    const plans = planIds.map((planId) => ({
+      ...resolvePlanDefinition(planId, definitions),
+      activeSubscriptions: counts[planId] ?? 0
+    }));
 
     return {
-      plans: planIds.map((planId) => ({
-        ...resolvePlanDefinition(planId, definitions),
-        activeSubscriptions: counts[planId] ?? 0
-      }))
+      plans: options.includeArchived ? plans : plans.filter((plan) => plan.status === 'active')
     };
   }
 
@@ -261,7 +269,7 @@ export class PublisherService {
       throw AppError.badRequest('Plan id could not be derived from the provided input');
     }
 
-    const existingPlans = await this.listPlans(actor.tenantId);
+    const existingPlans = await this.listPlans(actor.tenantId, { includeArchived: true });
     if (existingPlans.plans.some((plan) => plan.id === planId)) {
       throw AppError.conflict('A publisher plan with this id already exists', { planId });
     }
@@ -288,9 +296,9 @@ export class PublisherService {
 
     this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan updated');
 
-    const result = await this.listPlans(actor.tenantId);
+    const result = await this.listPlans(actor.tenantId, { includeArchived: true });
 
-    const transitioningToActive = existingPlan.status === 'draft' && savedPlan.status === 'active';
+    const transitioningToActive = existingPlan.status === 'archived' && savedPlan.status === 'active';
     if (transitioningToActive && !savedPlan.marketplacePlanId) {
       return {
         ...result,
@@ -300,6 +308,14 @@ export class PublisherService {
     }
 
     return result;
+  }
+
+  async archivePlan(actor: PublisherActorContext, planId: string): Promise<PublisherPlan> {
+    return this.setPlanStatus(actor, planId, 'archived');
+  }
+
+  async unarchivePlan(actor: PublisherActorContext, planId: string): Promise<PublisherPlan> {
+    return this.setPlanStatus(actor, planId, 'active');
   }
 
   async listSubscriptions(publisherTenantId: string): Promise<Subscription[]> {
@@ -440,13 +456,42 @@ export class PublisherService {
   }
 
   private async getPlan(publisherTenantId: string, planId: string): Promise<PublisherPlan> {
-    const plans = await this.listPlans(publisherTenantId);
+    const plans = await this.listPlans(publisherTenantId, { includeArchived: true });
     const plan = plans.plans.find((entry) => entry.id === planId);
     if (!plan) {
       throw AppError.notFound('The selected plan could not be found', { planId });
     }
 
     return plan;
+  }
+
+  private async setPlanStatus(
+    actor: PublisherActorContext,
+    planId: string,
+    status: PublisherPlanStatus
+  ): Promise<PublisherPlan> {
+    const existingPlan = await this.getPlan(actor.tenantId, planId);
+
+    if (existingPlan.status === status) {
+      return existingPlan;
+    }
+
+    const storedPlan = await this.publisherPlanRepository.setPlanStatus(actor.tenantId, planId, status);
+
+    if (!storedPlan) {
+      await this.publisherPlanRepository.savePlan({
+        publisherTenantId: actor.tenantId,
+        id: planId,
+        name: existingPlan.name,
+        description: existingPlan.description,
+        status,
+        features: existingPlan.features
+      });
+    }
+
+    this.logger.info({ planId, status, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan status updated');
+
+    return this.getPlan(actor.tenantId, planId);
   }
 
   private async findTenantRecord(
