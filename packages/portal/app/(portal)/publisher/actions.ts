@@ -213,7 +213,7 @@ export async function getPublisherPlansAction(): Promise<ActionResult<PublisherP
 
     const token = await requirePublisherAccessToken();
 
-    return livePublisherRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, publisherAdminPaths.plans, token);
+    return livePublisherRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, `${publisherAdminPaths.plans}?includeArchived=true`, token);
   });
 }
 
