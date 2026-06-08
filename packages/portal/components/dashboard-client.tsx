@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useSession } from 'next-auth/react';
 import type { DashboardData, PortalAction } from '@fastsaas/shared';
+import { getDashboard, runAction, type ActionResult } from '@/app/(portal)/customer/actions';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import { LockedFeature } from '@/components/locked-feature';
-import { portalApi } from '@/lib/api-client';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 import { hasPublisherAccess } from '@/lib/roles';
 
@@ -49,12 +50,17 @@ function downloadMockCsv(subscription: NonNullable<DashboardData['subscription']
   URL.revokeObjectURL(url);
 }
 
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
+
 export function DashboardClient() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const dashboardQuery = useQuery({ queryKey: ['portal-dashboard'], queryFn: portalApi.getDashboard });
+  const dashboardQuery = useQuery({ queryKey: ['portal-dashboard'], queryFn: () => getDashboard().then(unwrapResult) });
   const actionMutation = useMutation({
-    mutationFn: portalApi.runAction,
+    mutationFn: (actionId: string) => runAction(actionId).then(unwrapResult),
     onSuccess: (data) => {
       queryClient.setQueryData(['portal-dashboard'], data);
       queryClient.invalidateQueries({ queryKey: ['portal-plans'] });

@@ -3,19 +3,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useSession } from 'next-auth/react';
+import { getPlans, updatePlan, type ActionResult } from '@/app/(portal)/customer/actions';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { portalApi } from '@/lib/api-client';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 import { hasPublisherAccess } from '@/lib/roles';
+
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
 
 export function PlanClient() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const plansQuery = useQuery({ queryKey: ['portal-plans'], queryFn: portalApi.getPlans });
+  const plansQuery = useQuery({ queryKey: ['portal-plans'], queryFn: () => getPlans().then(unwrapResult) });
   const updatePlanMutation = useMutation({
-    mutationFn: portalApi.updatePlan,
+    mutationFn: (planId: string) => updatePlan(planId).then(unwrapResult),
     onSuccess: (data) => {
       queryClient.setQueryData(['portal-plans'], data);
       queryClient.invalidateQueries({ queryKey: ['portal-dashboard'] });
