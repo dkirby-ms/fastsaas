@@ -112,7 +112,11 @@ describe('publisher administration routes', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(dashboardResponse.status).toBe(200);
-    expect(dashboardResponse.body.data.subscriptionCount).toBe(2);
+    expect(dashboardResponse.body.data).toMatchObject({
+      activeTenants: 0,
+      churnedTenants: 0,
+      totalSeats: 0
+    });
     expect(dashboardResponse.body.data.plans.some((plan: { planName: string }) => plan.planName === 'Growth Plus')).toBe(true);
   });
 
@@ -185,6 +189,17 @@ describe('publisher administration routes', () => {
 
     expect(cancelResponse.status).toBe(200);
     expect(cancelResponse.body.data.status).toBe('canceled');
+
+    const dashboardAfterCancelResponse = await request(harness.app)
+      .get('/v1/publisher/dashboard')
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    expect(dashboardAfterCancelResponse.status).toBe(200);
+    expect(dashboardAfterCancelResponse.body.data).toMatchObject({
+      activeTenants: 0,
+      churnedTenants: 1,
+      totalSeats: 0
+    });
 
     const detailResponse = await request(harness.app)
       .get(`/v1/publisher/tenants/${tenantId}`)

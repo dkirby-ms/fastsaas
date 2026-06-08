@@ -236,10 +236,9 @@ export interface PublisherDashboardPlanSummary {
     tenantCount: number;
 }
 export interface PublisherDashboardData {
-    subscriptionCount: number;
     activeTenants: number;
-    monthlyRecurringRevenue: string | null;
-    churnRiskCount: number;
+    churnedTenants: number;
+    totalSeats: number;
     plans: PublisherDashboardPlanSummary[];
 }
 export interface PublisherPlan {
