@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useHasFeature } from '@/components/features-provider';
-import { CustomerSubscriptionGate } from '@/components/customer-subscription-gate';
 import { SidebarNav } from '@/components/sidebar-nav';
 import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -60,7 +59,7 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
           </header>
 
           <main className="flex-1" role="main">
-            <CustomerSubscriptionGate>{children}</CustomerSubscriptionGate>
+            {children}
           </main>
         </div>
       </div>
