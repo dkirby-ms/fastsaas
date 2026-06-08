@@ -1,3 +1,9 @@
+## [0.26.2](https://github.com/dkirby-ms/fastsaas/compare/v0.26.1...v0.26.2) (2026-06-08)
+
+### Bug Fixes
+
+* use server actions for customer portal API calls ([#169](https://github.com/dkirby-ms/fastsaas/issues/169)) ([c080ff5](https://github.com/dkirby-ms/fastsaas/commit/c080ff5a05b776aded6721a5698a283b511c3969)), closes [#167](https://github.com/dkirby-ms/fastsaas/issues/167)
+
 ## [0.26.1](https://github.com/dkirby-ms/fastsaas/compare/v0.26.0...v0.26.1) (2026-06-08)
 
 ### Bug Fixes
