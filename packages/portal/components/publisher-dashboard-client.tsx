@@ -29,10 +29,9 @@ export function PublisherDashboardClient() {
 
   const dashboard = dashboardQuery.data;
   const stats = [
-    { label: 'Subscriptions', value: dashboard.subscriptionCount.toString() },
     { label: 'Active tenants', value: dashboard.activeTenants.toString() },
-    { label: 'MRR', value: dashboard.monthlyRecurringRevenue },
-    { label: 'At risk', value: dashboard.churnRiskCount.toString() },
+    { label: 'Churned tenants', value: dashboard.churnedTenants.toString() },
+    { label: 'Total seats', value: dashboard.totalSeats.toString() },
   ];
 
   return (
@@ -40,10 +39,10 @@ export function PublisherDashboardClient() {
       <header className="rounded-3xl bg-slate-950 dark:bg-slate-900 px-6 py-8 text-white shadow-panel">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-100">Publisher overview</p>
         <h1 className="mt-3 text-3xl font-semibold">Marketplace operations at a glance</h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-300 dark:text-slate-400">Track subscription health, revenue, and tenant activity from the same tenant-scoped auth session used by the API.</p>
+        <p className="mt-3 max-w-3xl text-sm text-slate-300 dark:text-slate-400">Track active tenants, churn, and seat footprint from the same tenant-scoped auth session used by the API.</p>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => <article key={stat.label} className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-panel"><p className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</p><p className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">{stat.value}</p></article>)}
       </div>
 

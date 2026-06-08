@@ -337,7 +337,7 @@ export function createPublisherRouter(
    * /v1/publisher/dashboard:
    *   get:
    *     summary: Get publisher dashboard metrics
-   *     description: Returns aggregate subscription, revenue, churn risk, and plan mix metrics for the authenticated publisher tenant.
+   *     description: Returns aggregate tenant, seat, and plan mix metrics for the authenticated publisher tenant.
    *     tags:
    *       - Publisher
    *     security:

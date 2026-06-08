@@ -130,10 +130,11 @@ export function buildPublisherDashboard(subscriptions: Subscription[]): Publishe
   }
 
   return {
-    subscriptionCount: subscriptions.length,
     activeTenants: tenants.filter((tenant) => tenant.status === 'active').length,
-    monthlyRecurringRevenue: null,
-    churnRiskCount: tenants.filter((tenant) => tenant.status === 'past_due' || tenant.status === 'suspended').length,
+    churnedTenants: tenants.filter((tenant) => tenant.status === 'canceled').length,
+    totalSeats: subscriptions
+      .filter((subscription) => subscription.status === 'Active')
+      .reduce((total, subscription) => total + subscription.seats, 0),
     plans: [...planCounts.entries()].map(([planId, tenantCount]) => ({
       planId,
       planName: getPlanTemplate(planId).name,
