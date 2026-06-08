@@ -25,6 +25,8 @@ test('publisher admin paths encode plan and tenant IDs for live APIs', () => {
 
   assert.equal(publisherAdminPaths.marketplacePlans, '/v1/publisher/marketplace-plans');
   assert.equal(publisherAdminPaths.plan(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue');
+  assert.equal(publisherAdminPaths.planArchive(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue/archive');
+  assert.equal(publisherAdminPaths.planUnarchive(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue/unarchive');
   assert.equal(publisherAdminPaths.tenant(tenantId), '/v1/publisher/tenants/tenant%2Fabc%3Fstate%3Dsuspended');
   assert.equal(
     publisherAdminPaths.tenantAction(tenantId, 'activate'),

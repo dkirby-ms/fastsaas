@@ -62,7 +62,7 @@ function defaultPublisherPlans(): PublisherPlan[] {
   return [
     { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
     { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'draft', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 }
 
@@ -697,7 +697,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       name,
       description,
       pricingSummary: null,
-      status: payload.status ?? 'draft',
+      status: payload.status ?? 'active',
       activeSubscriptions: 0,
       features: payload.features ?? [],
       marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId),
