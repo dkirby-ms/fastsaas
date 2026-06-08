@@ -136,7 +136,9 @@ function mergePlanDefinitions(plans: readonly StoredPublisherPlan[]): Map<string
       description: plan.description,
       pricingSummary: plan.pricingSummary,
       status: plan.status,
-      features: [...plan.features]
+      features: [...plan.features],
+      marketplacePlanId: plan.marketplacePlanId,
+      seatLimit: plan.seatLimit
     });
   }
 
@@ -154,7 +156,9 @@ function resolvePlanDefinition(
       description: 'Marketplace plan imported from live subscription data.',
       pricingSummary: null,
       status: 'draft',
-      features: ['Imported from live subscription data']
+      features: ['Imported from live subscription data'],
+      marketplacePlanId: null,
+      seatLimit: null
     }
   );
 }

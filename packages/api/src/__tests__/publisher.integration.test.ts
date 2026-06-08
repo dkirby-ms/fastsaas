@@ -84,11 +84,28 @@ describe('publisher administration routes', () => {
       .send({
         name: 'Growth Plus',
         description: 'Updated publisher-managed growth plan.',
-        status: 'active'
+        status: 'active',
+        marketplacePlanId: 'growth-plus',
+        seatLimit: 50
       });
 
     expect(updatePlanResponse.status).toBe(200);
-    expect(updatePlanResponse.body.data.plans.find((plan: { id: string }) => plan.id === 'growth')?.name).toBe('Growth Plus');
+    expect(updatePlanResponse.body.data.plans.find((plan: { id: string }) => plan.id === 'growth')).toMatchObject({
+      name: 'Growth Plus',
+      marketplacePlanId: 'growth-plus',
+      seatLimit: 50
+    });
+
+    const plansResponse = await request(harness.app)
+      .get('/v1/publisher/plans')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(plansResponse.status).toBe(200);
+    expect(plansResponse.body.data.plans.find((plan: { id: string }) => plan.id === 'growth')).toMatchObject({
+      name: 'Growth Plus',
+      marketplacePlanId: 'growth-plus',
+      seatLimit: 50
+    });
 
     const dashboardResponse = await request(harness.app)
       .get('/v1/publisher/dashboard')
