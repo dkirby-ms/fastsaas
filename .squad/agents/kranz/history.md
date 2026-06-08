@@ -42,3 +42,33 @@ See `.squad/agents/kranz/history-archive.md` for detailed 2026-05-29 and 2026-05
 
 ### Status
 All documentation updated, architecture design finalized, Issue #131 scoped with recommendation ready for team review.
+
+## 2026-06-07 — PR #157 Review (Issue #155: Dark Mode Premium Gate)
+
+### Reviewed
+PR `squad/155-dark-mode-premium-gate` — seeds `dark-mode` feature gate for `premium-1` plan via Kysely migration.
+
+**Migration (`20260607T180000_seed_premium1_dark_mode.ts`):**
+- Inserts `publisher_plans` row first (FK parent), then `plan_feature_gates` row — correct FK dependency order
+- Both inserts idempotent via `ON CONFLICT DO NOTHING` (no conflict target needed; composite PK catches all violations)
+- `ENTRA_TENANT_ID?.trim() ?? 'publisher'` is the correct single-publisher tenant ID pattern
+- `SET LOCAL app.bypass_rls = 'true'` correctly scoped to Kysely transaction — both tables have `FORCE ROW LEVEL SECURITY`, bypass required for seed inserts
+- `down()` mirrors `up()` with same RLS bypass, deletes in reverse FK order
+- Registered as last entry in migrator's `MIGRATIONS` map
+
+**Tests (Section 5, `feature-entitlements.test.ts`):**
+- 4 tests: premium-1 has dark-mode, plan-starter/plan-basic/plan-free don't, both `listFeaturesForTenant` and `hasFeature` paths exercised
+- Fresh deps + randomized IDs per test — no cross-contamination
+
+**Validation:**
+- `typecheck` ✅ clean
+- `test` ✅ 195 passed, 0 failed
+- `build` ✅ clean
+
+### Verdict
+**APPROVED.** Left approval comment on PR (GitHub blocked formal approval — same-actor restriction). Mergeable as-is.
+
+## Learnings
+- Seed migrations into RLS-protected tables require `SET LOCAL app.bypass_rls = 'true'` — this sets the pattern for all future seed migrations into `publisher_plans` or `plan_feature_gates`.
+- `ON CONFLICT DO NOTHING` without explicit conflict target is safe for composite PKs in PostgreSQL.
+- Seed migration must insert FK parent (`publisher_plans`) before child (`plan_feature_gates`).
