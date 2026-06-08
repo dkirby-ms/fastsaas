@@ -1,3 +1,9 @@
+## [0.26.3](https://github.com/dkirby-ms/fastsaas/compare/v0.26.2...v0.26.3) (2026-06-08)
+
+### Bug Fixes
+
+* **api:** add portal settings and plans routes ([#170](https://github.com/dkirby-ms/fastsaas/issues/170)) ([#171](https://github.com/dkirby-ms/fastsaas/issues/171)) ([275d4c0](https://github.com/dkirby-ms/fastsaas/commit/275d4c00662fcec2317d38f9fb532d1cc24b91e6))
+
 ## [0.26.2](https://github.com/dkirby-ms/fastsaas/compare/v0.26.1...v0.26.2) (2026-06-08)
 
 ### Bug Fixes
