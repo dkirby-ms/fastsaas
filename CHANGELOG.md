@@ -1,3 +1,9 @@
+## [0.26.1](https://github.com/dkirby-ms/fastsaas/compare/v0.26.0...v0.26.1) (2026-06-08)
+
+### Bug Fixes
+
+* **portal:** remove redundant client-side subscription gate ([#168](https://github.com/dkirby-ms/fastsaas/issues/168)) ([763fe93](https://github.com/dkirby-ms/fastsaas/commit/763fe931a5b7a3b5ea10e4e78f427f390ad0c14d)), closes [#167](https://github.com/dkirby-ms/fastsaas/issues/167) [#167](https://github.com/dkirby-ms/fastsaas/issues/167)
+
 ## [0.26.0](https://github.com/dkirby-ms/fastsaas/compare/v0.25.0...v0.26.0) (2026-06-08)
 
 ### Features
