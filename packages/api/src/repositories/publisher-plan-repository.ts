@@ -30,6 +30,7 @@ export interface SavePublisherPlanInput {
 
 export interface PublisherPlanRepository {
   listByTenant(publisherTenantId: string): Promise<StoredPublisherPlan[]>;
+  listAll(): Promise<StoredPublisherPlan[]>;
   findByMarketplacePlanId(marketplacePlanId: string): Promise<StoredPublisherPlan | null>;
   setPlanStatus(publisherTenantId: string, planId: string, status: PublisherPlanStatus): Promise<StoredPublisherPlan | null>;
   savePlan(input: SavePublisherPlanInput): Promise<StoredPublisherPlan>;
@@ -69,6 +70,13 @@ export class InMemoryPublisherPlanRepository implements PublisherPlanRepository 
 
   async listByTenant(publisherTenantId: string): Promise<StoredPublisherPlan[]> {
     return [...(this.plansByTenant.get(publisherTenantId)?.values() ?? [])]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((plan) => clone(plan));
+  }
+
+  async listAll(): Promise<StoredPublisherPlan[]> {
+    return [...this.plansByTenant.values()]
+      .flatMap((tenantPlans) => [...tenantPlans.values()])
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((plan) => clone(plan));
   }
@@ -188,6 +196,49 @@ export class KyselyPublisherPlanRepository implements PublisherPlanRepository {
         }));
       },
       { tenantId: publisherTenantId, bypassRls: false, scope: 'tenant' }
+    );
+  }
+
+  async listAll(): Promise<StoredPublisherPlan[]> {
+    return withDatabaseRlsContext(
+      this.db,
+      async (trx) => {
+        const rows = await trx
+          .selectFrom('publisher_plans')
+          .leftJoin('marketplace_plans', (join) =>
+            join
+              .onRef('publisher_plans.marketplace_plan_id', '=', 'marketplace_plans.external_plan_id')
+              .onRef('publisher_plans.publisher_tenant_id', '=', 'marketplace_plans.publisher_tenant_id')
+          )
+          .select([
+            'publisher_plans.id',
+            'publisher_plans.name',
+            'publisher_plans.description',
+            'publisher_plans.status',
+            'publisher_plans.features',
+            'publisher_plans.marketplace_plan_id',
+            'publisher_plans.seat_limit',
+            'publisher_plans.created_at',
+            'publisher_plans.updated_at',
+            'marketplace_plans.pricing_summary'
+          ])
+          .orderBy('publisher_plans.name', 'asc')
+          .execute();
+
+        return rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          pricingSummary: row.pricing_summary,
+          status: row.status,
+          features: asFeatures(row.features),
+          marketplacePlanId: row.marketplace_plan_id,
+          seatLimit: row.seat_limit,
+          createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+          updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString()
+        }));
+      },
+      { bypassRls: true, scope: 'system' }
     );
   }
 

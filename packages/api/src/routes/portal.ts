@@ -1,11 +1,12 @@
-import type { DashboardData, PortalAction, Subscription } from '@fastsaas/shared';
+import type { DashboardData, PlanOption, PlansResponse, PortalAction, SettingsData, Subscription } from '@fastsaas/shared';
 import { Router, type Response } from 'express';
 
 import type { ApiConfig } from '../config';
+import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
 import { authenticateRequest, requireScopes } from '../middleware/auth';
 import { injectTenantContext } from '../middleware/tenant-context';
-import type { PublisherPlanRepository } from '../repositories/publisher-plan-repository';
+import type { PublisherPlanRepository, StoredPublisherPlan } from '../repositories/publisher-plan-repository';
 import type { SubscriptionService } from '../services/subscription-service';
 import type { TenantMemberService } from '../services/tenant-member-service';
 
@@ -72,6 +73,159 @@ function buildPortalUser(req: ApiRequest, subscription: Subscription | null): Da
     name: readString(req.auth?.name) ?? fallbackName,
     email,
     company: subscription ? readString(subscription.metadata.company) ?? '' : ''
+  };
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function buildSettings(req: ApiRequest, subscription: Subscription | null, override: Partial<SettingsData> = {}): SettingsData {
+  const user = buildPortalUser(req, subscription);
+  const metadataName =
+    readString(subscription?.metadata.displayName) ??
+    readString(subscription?.metadata.name) ??
+    readString(subscription?.metadata.company);
+
+  return {
+    displayName: readString(override.displayName) ?? readString(req.auth?.name) ?? metadataName ?? user.name,
+    email: readString(override.email) ?? user.email,
+    company: readString(override.company) ?? readString(subscription?.metadata.company) ?? user.company,
+    timezone: readString(override.timezone) ?? 'America/Chicago',
+    notificationsEnabled: readBoolean(override.notificationsEnabled) ?? true
+  };
+}
+
+function parseSettingsBody(body: unknown): SettingsData {
+  if (!isRecord(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  if (typeof body.displayName !== 'string') {
+    throw AppError.badRequest('displayName is required');
+  }
+
+  if (typeof body.email !== 'string') {
+    throw AppError.badRequest('email is required');
+  }
+
+  if (typeof body.company !== 'string') {
+    throw AppError.badRequest('company is required');
+  }
+
+  if (typeof body.timezone !== 'string') {
+    throw AppError.badRequest('timezone is required');
+  }
+
+  if (typeof body.notificationsEnabled !== 'boolean') {
+    throw AppError.badRequest('notificationsEnabled must be a boolean');
+  }
+
+  return {
+    displayName: body.displayName,
+    email: body.email,
+    company: body.company,
+    timezone: body.timezone,
+    notificationsEnabled: body.notificationsEnabled
+  };
+}
+
+function parsePlanChangeBody(body: unknown): { planId: string } {
+  if (!isRecord(body)) {
+    throw AppError.badRequest('Request body must be a JSON object');
+  }
+
+  if (typeof body.planId !== 'string' || body.planId.trim().length === 0) {
+    throw AppError.badRequest('planId is required');
+  }
+
+  return { planId: body.planId.trim() };
+}
+
+function readPricingSummary(value: unknown): string | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const directSummary =
+    readString(value.summary) ??
+    readString(value.displayPrice) ??
+    readString(value.display) ??
+    readString(value.pricingSummary);
+  if (directSummary) {
+    return directSummary;
+  }
+
+  const nestedPricing = isRecord(value.pricing) ? value.pricing : isRecord(value.price) ? value.price : null;
+  if (!nestedPricing) {
+    return null;
+  }
+
+  return (
+    readString(nestedPricing.summary) ??
+    readString(nestedPricing.displayPrice) ??
+    readString(nestedPricing.display) ??
+    null
+  );
+}
+
+function getSeatSortValue(plan: StoredPublisherPlan): number {
+  return plan.seatLimit ?? Number.MAX_SAFE_INTEGER;
+}
+
+function getRecommendedPlanId(plans: readonly StoredPublisherPlan[]): string | null {
+  if (plans.length === 0) {
+    return null;
+  }
+
+  const ranked = [...plans].sort((left, right) => {
+    const seatDifference = getSeatSortValue(left) - getSeatSortValue(right);
+    if (seatDifference !== 0) {
+      return seatDifference;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+
+  return ranked[Math.floor(ranked.length / 2)]?.id ?? null;
+}
+
+function buildPlanOptions(plans: readonly StoredPublisherPlan[]): PlanOption[] {
+  const activePlans = plans.filter((plan) => plan.status === 'active');
+  const recommendedPlanId = getRecommendedPlanId(activePlans);
+
+  return [...activePlans]
+    .sort((left, right) => {
+      const seatDifference = getSeatSortValue(left) - getSeatSortValue(right);
+      if (seatDifference !== 0) {
+        return seatDifference;
+      }
+
+      return left.name.localeCompare(right.name);
+    })
+    .map((plan) => ({
+      id: plan.marketplacePlanId ?? plan.id,
+      name: plan.name,
+      description: plan.description,
+      pricingSummary: readPricingSummary(plan.pricingSummary),
+      ...(plan.id === recommendedPlanId ? { recommended: true } : {}),
+      features: plan.features.map((feature) => ({ label: feature, included: true }))
+    }));
+}
+
+async function buildPlansResponse(
+  publisherPlanRepository: PublisherPlanRepository,
+  currentPlanId: string | null
+): Promise<PlansResponse> {
+  const plans = await publisherPlanRepository.listAll();
+
+  return {
+    currentPlanId,
+    availablePlans: buildPlanOptions(plans)
   };
 }
 
@@ -147,6 +301,50 @@ export function createPortalRouter(
           activeMembers
         })
       );
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/settings', async (req: ApiRequest, res: Response<SettingsData>, next) => {
+    try {
+      const subscriptions = await subscriptionService.listSubscriptions(req.context!.tenantId);
+      const subscription = getCurrentSubscription(subscriptions);
+
+      res.status(200).json(buildSettings(req, subscription));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put('/settings', async (req: ApiRequest, res: Response<SettingsData>, next) => {
+    try {
+      const payload = parseSettingsBody(req.body);
+      const subscriptions = await subscriptionService.listSubscriptions(req.context!.tenantId);
+      const subscription = getCurrentSubscription(subscriptions);
+
+      res.status(200).json(buildSettings(req, subscription, payload));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/plans', async (req: ApiRequest, res: Response<PlansResponse>, next) => {
+    try {
+      const subscriptions = await subscriptionService.listSubscriptions(req.context!.tenantId);
+      const subscription = getCurrentSubscription(subscriptions);
+
+      res.status(200).json(await buildPlansResponse(publisherPlanRepository, subscription?.planId ?? null));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post('/plans', async (req: ApiRequest, res: Response<PlansResponse>, next) => {
+    try {
+      const { planId } = parsePlanChangeBody(req.body);
+
+      res.status(200).json(await buildPlansResponse(publisherPlanRepository, planId));
     } catch (error) {
       next(error);
     }
