@@ -6,6 +6,7 @@
 
 export type ServerConfig = {
   isMockMode: boolean;
+  apiBaseUrl: string;
   publisherApiBaseUrl: string;
 };
 
@@ -32,10 +33,14 @@ export function getServerConfig(): ServerConfig {
       );
     }
 
-    return { isMockMode: false, publisherApiBaseUrl: publisherApiBaseUrl || apiBaseUrl };
+    return {
+      isMockMode: false,
+      apiBaseUrl,
+      publisherApiBaseUrl: publisherApiBaseUrl || apiBaseUrl,
+    };
   }
 
-  return { isMockMode: true, publisherApiBaseUrl: '' };
+  return { isMockMode: true, apiBaseUrl: '', publisherApiBaseUrl: '' };
 }
 
 /**

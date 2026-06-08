@@ -5,10 +5,11 @@ import clsx from 'clsx';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { SettingsData } from '@fastsaas/shared';
+import { getSettings, updateSettings, type ActionResult } from '@/app/(portal)/customer/actions';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { portalApi } from '@/lib/api-client';
+import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 import { hasPublisherAccess } from '@/lib/roles';
 
@@ -16,10 +17,15 @@ const emptySettings: SettingsData = { displayName: '', email: '', company: '', t
 const profileFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:bg-slate-800/70 dark:disabled:text-slate-400';
 const preferenceFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100';
 
+function unwrapResult<T>(result: ActionResult<T>): T {
+  if (!result.ok) throw new ApiError(result.message, result.status, result.code);
+  return result.data;
+}
+
 export function SettingsClient() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const settingsQuery = useQuery({ queryKey: ['portal-settings'], queryFn: portalApi.getSettings });
+  const settingsQuery = useQuery({ queryKey: ['portal-settings'], queryFn: () => getSettings().then(unwrapResult) });
   const [formState, setFormState] = useState<SettingsData>(emptySettings);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -28,7 +34,7 @@ export function SettingsClient() {
   }, [settingsQuery.data]);
 
   const updateSettingsMutation = useMutation({
-    mutationFn: portalApi.updateSettings,
+    mutationFn: (payload: SettingsData) => updateSettings(payload).then(unwrapResult),
     onSuccess: (data) => {
       queryClient.setQueryData(['portal-settings'], data);
       setSuccessMessage('Your settings were saved.');
