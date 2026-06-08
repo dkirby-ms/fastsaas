@@ -1,3 +1,9 @@
+## [0.25.0](https://github.com/dkirby-ms/fastsaas/compare/v0.24.1...v0.25.0) (2026-06-08)
+
+### Features
+
+* **api:** archive publisher plans ([#158](https://github.com/dkirby-ms/fastsaas/issues/158)) ([#164](https://github.com/dkirby-ms/fastsaas/issues/164)) ([e5b3187](https://github.com/dkirby-ms/fastsaas/commit/e5b31878a3d342f9423cd9084ca1739f5a2c5f92))
+
 ## [0.24.1](https://github.com/dkirby-ms/fastsaas/compare/v0.24.0...v0.24.1) (2026-06-08)
 
 ### Bug Fixes
