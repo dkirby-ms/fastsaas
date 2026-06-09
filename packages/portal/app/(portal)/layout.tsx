@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { FeaturesProvider } from '@/components/features-provider';
 import { PortalShell } from '@/components/portal-shell';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 import { decodeMockSubscriptionGateCookie, mockSubscriptionGateCookieName } from '@/lib/subscription-gate-cookie';
 
 function shouldUseMockApi() {
@@ -82,7 +82,7 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
   }
 
   const hasSubscription = await hasCustomerSubscription(session).catch(() => false);
-  if (!hasPublisherAccess(session.roles) && !hasSubscription) {
+  if (!hasOperatorAccess(session.roles) && !hasSubscription) {
     redirect('/no-subscription');
   }
 

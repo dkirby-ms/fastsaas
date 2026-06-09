@@ -268,7 +268,7 @@ function getTenantAction(req: ApiRequest): 'activate' | 'suspend' | 'cancel' {
     return action;
   }
 
-  throw AppError.badRequest('Publisher tenant action is not supported');
+  throw AppError.badRequest('Operator tenant action is not supported');
 }
 
 function getFeatureKey(req: ApiRequest): string {
@@ -315,7 +315,7 @@ function parseFeatureGatesBody(body: unknown): SetFeatureGateInput[] {
   });
 }
 
-export function createPublisherRouter(
+export function createOperatorRouter(
   config: ApiConfig,
   publisherService: PublisherService,
   jobPollingService: JobPollingService,
@@ -329,30 +329,30 @@ export function createPublisherRouter(
   router.use(
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
-    injectTenantContext(config, tenantMemberService, { authorizationModel: 'publisher' })
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'operator' })
   );
 
   /**
    * @swagger
-   * /v1/publisher/dashboard:
+   * /v1/operator/dashboard:
    *   get:
-   *     summary: Get publisher dashboard metrics
-   *     description: Returns aggregate tenant, seat, and plan mix metrics for the authenticated publisher tenant.
+   *     summary: Get operator dashboard metrics
+   *     description: Returns aggregate tenant, seat, and plan mix metrics for the authenticated operator tenant.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     responses:
    *       200:
-   *         description: Publisher dashboard metrics
+   *         description: Operator dashboard metrics
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    */
   router.get(
     '/dashboard',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    authorizeRoute({ resource: 'operator', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherDashboardData>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -366,12 +366,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/jobs:
+   * /v1/operator/jobs:
    *   get:
    *     summary: List Product Ingestion jobs
-   *     description: Returns recent Product Ingestion configure jobs for the authenticated publisher tenant.
+   *     description: Returns recent Product Ingestion configure jobs for the authenticated operator tenant.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -388,15 +388,15 @@ export function createPublisherRouter(
    *           maximum: 100
    *     responses:
    *       200:
-   *         description: Publisher Product Ingestion jobs
+   *         description: Operator Product Ingestion jobs
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    */
   router.get(
     '/jobs',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    authorizeRoute({ resource: 'operator', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobListResponse>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -410,12 +410,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/jobs/{jobId}:
+   * /v1/operator/jobs/{jobId}:
    *   get:
    *     summary: Get Product Ingestion job detail
    *     description: Returns Product Ingestion job detail, including resource-level validation errors.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -430,13 +430,13 @@ export function createPublisherRouter(
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    *       404:
    *         description: Job not found
    */
   router.get(
     '/jobs/:jobId',
-    authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getJobId }),
+    authorizeRoute({ resource: 'operator', action: 'view', resourceId: getJobId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -450,12 +450,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/jobs/{jobId}/cancel:
+   * /v1/operator/jobs/{jobId}/cancel:
    *   post:
    *     summary: Cancel a Product Ingestion job
    *     description: Attempts to cancel a running Product Ingestion configure job.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -470,7 +470,7 @@ export function createPublisherRouter(
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Job not found
    *       409:
@@ -478,7 +478,7 @@ export function createPublisherRouter(
    */
   router.post(
     '/jobs/:jobId/cancel',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getJobId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getJobId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherMarketplaceJobDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -492,12 +492,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/plans:
+   * /v1/operator/plans:
    *   get:
-   *     summary: List publisher plans
-   *     description: Returns active publisher plans by default. Set includeArchived=true to also include archived plans.
+   *     summary: List operator plans
+   *     description: Returns active operator plans by default. Set includeArchived=true to also include archived plans.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -509,15 +509,15 @@ export function createPublisherRouter(
    *         description: Include archived plans in the response.
    *     responses:
    *       200:
-   *         description: Publisher plan catalog
+   *         description: Operator plan catalog
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    */
   router.get(
     '/plans',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    authorizeRoute({ resource: 'operator', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlansResponse>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -533,12 +533,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/plans:
+   * /v1/operator/plans:
    *   post:
-   *     summary: Create a publisher plan
-   *     description: Creates a publisher plan definition for the authenticated publisher tenant.
+   *     summary: Create an operator plan
+   *     description: Creates an operator plan definition for the authenticated operator tenant.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     requestBody:
@@ -564,19 +564,19 @@ export function createPublisherRouter(
    *                   type: string
    *     responses:
    *       201:
-   *         description: Publisher plan created
+   *         description: Operator plan created
    *       400:
    *         description: Request body is invalid
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       409:
    *         description: A plan with the derived identifier already exists
    */
   router.post(
     '/plans',
-    authorizeRoute({ resource: 'publisher', action: 'manage' }),
+    authorizeRoute({ resource: 'operator', action: 'manage' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlan>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -590,12 +590,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/plans/{planId}:
+   * /v1/operator/plans/{planId}:
    *   put:
-   *     summary: Update a publisher plan
-   *     description: Updates a publisher plan definition and returns the refreshed plan catalog.
+   *     summary: Update an operator plan
+   *     description: Updates an operator plan definition and returns the refreshed plan catalog.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -604,7 +604,7 @@ export function createPublisherRouter(
    *         required: true
    *         schema:
    *           type: string
-   *         description: Publisher plan identifier.
+   *         description: Operator plan identifier.
    *     requestBody:
    *       required: true
    *       content:
@@ -628,19 +628,19 @@ export function createPublisherRouter(
    *                   type: string
    *     responses:
    *       200:
-   *         description: Publisher plan catalog updated
+   *         description: Operator plan catalog updated
    *       400:
    *         description: Request body is invalid
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Plan not found
    */
   router.put(
     '/plans/:planId',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getPlanId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlansResponse>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -654,12 +654,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/plans/{planId}/archive:
+   * /v1/operator/plans/{planId}/archive:
    *   patch:
-   *     summary: Archive a publisher plan
-   *     description: Marks a publisher plan as archived so it is hidden from default plan listings.
+   *     summary: Archive an operator plan
+   *     description: Marks an operator plan as archived so it is hidden from default plan listings.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -670,17 +670,17 @@ export function createPublisherRouter(
    *           type: string
    *     responses:
    *       200:
-   *         description: Publisher plan archived
+   *         description: Operator plan archived
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Plan not found
    */
   router.patch(
     '/plans/:planId/archive',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getPlanId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlan>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -694,12 +694,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/plans/{planId}/unarchive:
+   * /v1/operator/plans/{planId}/unarchive:
    *   patch:
-   *     summary: Unarchive a publisher plan
-   *     description: Restores a publisher plan to active status so it appears in default plan listings.
+   *     summary: Unarchive an operator plan
+   *     description: Restores an operator plan to active status so it appears in default plan listings.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -710,17 +710,17 @@ export function createPublisherRouter(
    *           type: string
    *     responses:
    *       200:
-   *         description: Publisher plan unarchived
+   *         description: Operator plan unarchived
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Plan not found
    */
   router.patch(
     '/plans/:planId/unarchive',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getPlanId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherPlan>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -735,12 +735,12 @@ export function createPublisherRouter(
   if (planFeatureGateService) {
     /**
      * @swagger
-     * /v1/publisher/plans/{planId}/features:
+     * /v1/operator/plans/{planId}/features:
      *   get:
      *     summary: List enabled features for a plan
-     *     description: Returns the list of enabled feature keys for the specified publisher plan.
+     *     description: Returns the list of enabled feature keys for the specified operator plan.
      *     tags:
-     *       - Publisher
+     *       - Operator
      *     security:
      *       - bearerAuth: []
      *     parameters:
@@ -755,11 +755,11 @@ export function createPublisherRouter(
      *       401:
      *         description: Missing or invalid bearer token
      *       403:
-     *         description: Token missing required scope or publisher view permission
+     *         description: Token missing required scope or operator view permission
      */
     router.get(
       '/plans/:planId/features',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getPlanId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getPlanId }),
       async (req: ApiRequest, res: Response<ApiResponse<PlanFeatureGatesResponse>>, next) => {
         try {
           const actor = buildActorContext(req);
@@ -773,12 +773,12 @@ export function createPublisherRouter(
 
     /**
      * @swagger
-     * /v1/publisher/plans/{planId}/features:
+     * /v1/operator/plans/{planId}/features:
      *   put:
      *     summary: Bulk set feature gates for a plan
-     *     description: Upserts feature gate entries for the specified publisher plan.
+     *     description: Upserts feature gate entries for the specified operator plan.
      *     tags:
-     *       - Publisher
+     *       - Operator
      *     security:
      *       - bearerAuth: []
      *     parameters:
@@ -815,11 +815,11 @@ export function createPublisherRouter(
      *       401:
      *         description: Missing or invalid bearer token
      *       403:
-     *         description: Token missing required scope or publisher management permission
+     *         description: Token missing required scope or operator management permission
      */
     router.put(
       '/plans/:planId/features',
-      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+      authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getPlanId }),
       async (req: ApiRequest, res: Response<ApiResponse<never>>, next) => {
         try {
           const actor = buildActorContext(req);
@@ -834,12 +834,12 @@ export function createPublisherRouter(
 
     /**
      * @swagger
-     * /v1/publisher/plans/{planId}/features/{featureKey}:
+     * /v1/operator/plans/{planId}/features/{featureKey}:
      *   delete:
      *     summary: Remove a feature gate from a plan
-     *     description: Deletes a single feature gate entry for the specified publisher plan.
+     *     description: Deletes a single feature gate entry for the specified operator plan.
      *     tags:
-     *       - Publisher
+     *       - Operator
      *     security:
      *       - bearerAuth: []
      *     parameters:
@@ -859,11 +859,11 @@ export function createPublisherRouter(
      *       401:
      *         description: Missing or invalid bearer token
      *       403:
-     *         description: Token missing required scope or publisher management permission
+     *         description: Token missing required scope or operator management permission
      */
     router.delete(
       '/plans/:planId/features/:featureKey',
-      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getPlanId }),
+      authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getPlanId }),
       async (req: ApiRequest, res: Response<ApiResponse<never>>, next) => {
         try {
           const actor = buildActorContext(req);
@@ -879,25 +879,25 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/subscriptions:
+   * /v1/operator/subscriptions:
    *   get:
-   *     summary: List publisher-visible subscriptions
-   *     description: Returns subscriptions visible to the publisher tenant for operational reporting.
+   *     summary: List operator-visible subscriptions
+   *     description: Returns subscriptions visible to the operator tenant for operational reporting.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     responses:
    *       200:
-   *         description: Publisher subscription list
+   *         description: Operator subscription list
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    */
   router.get(
     '/subscriptions',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    authorizeRoute({ resource: 'operator', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<Subscription[]>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -911,25 +911,25 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/tenants:
+   * /v1/operator/tenants:
    *   get:
-   *     summary: List managed publisher tenants
-   *     description: Returns summarized tenant records derived from the publisher-managed subscription catalog.
+   *     summary: List managed operator tenants
+   *     description: Returns summarized tenant records derived from the operator-managed subscription catalog.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     responses:
    *       200:
-   *         description: Publisher tenant summaries
+   *         description: Operator tenant summaries
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    */
   router.get(
     '/tenants',
-    authorizeRoute({ resource: 'publisher', action: 'view' }),
+    authorizeRoute({ resource: 'operator', action: 'view' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherTenantsResponse>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -943,12 +943,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/tenants:
+   * /v1/operator/tenants:
    *   post:
    *     summary: Create a managed tenant subscription
-   *     description: Creates a managed tenant record backed by a publisher-owned subscription.
+   *     description: Creates a managed tenant record backed by an operator-owned subscription.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     requestBody:
@@ -973,19 +973,19 @@ export function createPublisherRouter(
    *                 enum: [active, trialing, past_due, suspended, canceled]
    *     responses:
    *       201:
-   *         description: Publisher tenant created
+   *         description: Operator tenant created
    *       400:
    *         description: Request body is invalid
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Referenced plan not found
    */
   router.post(
     '/tenants',
-    authorizeRoute({ resource: 'publisher', action: 'manage' }),
+    authorizeRoute({ resource: 'operator', action: 'manage' }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherTenantDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -999,12 +999,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/tenants/{tenantId}:
+   * /v1/operator/tenants/{tenantId}:
    *   get:
-   *     summary: Get publisher tenant detail
+   *     summary: Get operator tenant detail
    *     description: Returns a detailed managed tenant view including usage and audit history.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -1016,17 +1016,17 @@ export function createPublisherRouter(
    *         description: Managed tenant identifier or associated subscription id.
    *     responses:
    *       200:
-   *         description: Publisher tenant detail
+   *         description: Operator tenant detail
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher view permission
+   *         description: Token missing required scope or operator view permission
    *       404:
    *         description: Tenant not found
    */
   router.get(
     '/tenants/:tenantId',
-    authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getTenantId }),
+    authorizeRoute({ resource: 'operator', action: 'view', resourceId: getTenantId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherTenantDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -1040,12 +1040,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/tenants/{tenantId}:
+   * /v1/operator/tenants/{tenantId}:
    *   put:
-   *     summary: Update publisher tenant settings
+   *     summary: Update operator tenant settings
    *     description: Updates the managed tenant's plan, commercial, and status metadata.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -1077,19 +1077,19 @@ export function createPublisherRouter(
    *                 enum: [active, trialing, past_due, suspended, canceled]
    *     responses:
    *       200:
-   *         description: Publisher tenant updated
+   *         description: Operator tenant updated
    *       400:
    *         description: Request body is invalid
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Tenant or plan not found
    */
   router.put(
     '/tenants/:tenantId',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getTenantId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getTenantId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherTenantDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -1103,12 +1103,12 @@ export function createPublisherRouter(
 
   /**
    * @swagger
-   * /v1/publisher/tenants/{tenantId}/{action}:
+   * /v1/operator/tenants/{tenantId}/{action}:
    *   post:
-   *     summary: Transition publisher tenant lifecycle state
+   *     summary: Transition operator tenant lifecycle state
    *     description: Applies activate, suspend, or cancel lifecycle actions to a managed tenant subscription.
    *     tags:
-   *       - Publisher
+   *       - Operator
    *     security:
    *       - bearerAuth: []
    *     parameters:
@@ -1127,13 +1127,13 @@ export function createPublisherRouter(
    *         description: Lifecycle action to apply to the managed tenant.
    *     responses:
    *       200:
-   *         description: Publisher tenant transitioned
+   *         description: Operator tenant transitioned
    *       400:
    *         description: Tenant action is not supported
    *       401:
    *         description: Missing or invalid bearer token
    *       403:
-   *         description: Token missing required scope or publisher management permission
+   *         description: Token missing required scope or operator management permission
    *       404:
    *         description: Tenant not found
    *       409:
@@ -1141,7 +1141,7 @@ export function createPublisherRouter(
    */
   router.post(
     '/tenants/:tenantId/:action',
-    authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getTenantId }),
+    authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getTenantId }),
     async (req: ApiRequest, res: Response<ApiResponse<PublisherTenantDetail>>, next) => {
       try {
         const actor = buildActorContext(req);
@@ -1392,50 +1392,50 @@ export function createPublisherRouter(
       }
     };
 
-    router.get('/marketplace-plans', authorizeRoute({ resource: 'publisher', action: 'view' }), listMarketplacePlans);
-    router.get('/products', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
-    router.get('/offers', authorizeRoute({ resource: 'publisher', action: 'view' }), listProducts);
+    router.get('/marketplace-plans', authorizeRoute({ resource: 'operator', action: 'view' }), listMarketplacePlans);
+    router.get('/products', authorizeRoute({ resource: 'operator', action: 'view' }), listProducts);
+    router.get('/offers', authorizeRoute({ resource: 'operator', action: 'view' }), listProducts);
 
-    router.post('/products/import', authorizeRoute({ resource: 'publisher', action: 'manage' }), importProduct);
-    router.post('/offers/import', authorizeRoute({ resource: 'publisher', action: 'manage' }), importProduct);
+    router.post('/products/import', authorizeRoute({ resource: 'operator', action: 'manage' }), importProduct);
+    router.post('/offers/import', authorizeRoute({ resource: 'operator', action: 'manage' }), importProduct);
 
-    router.get('/products/:productId', authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }), getProduct);
-    router.get('/offers/:offerId', authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }), getOffer);
+    router.get('/products/:productId', authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }), getProduct);
+    router.get('/offers/:offerId', authorizeRoute({ resource: 'operator', action: 'view', resourceId: getOfferId }), getOffer);
 
     router.get(
       '/products/:productId/resource-tree',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       getProductResourceTree
     );
     router.get(
       '/products/:productId/assets',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       getProductAssets
     );
     router.get(
       '/products/:productId/audiences',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       getProductAudiences
     );
     router.get(
       '/products/:productId/plans/:planId/pricing',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       getProductPlanPricing
     );
     router.get(
       '/offers/:offerId/resource-tree',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getOfferId }),
       getOfferResourceTree
     );
 
     /**
      * @swagger
-     * /v1/publisher/products/{productId}/submissions:
+     * /v1/operator/products/{productId}/submissions:
      *   get:
      *     summary: Get submission status by environment
      *     description: Returns draft, preview, and live submission state, validation issues, and submission history for a marketplace product.
      *     tags:
-     *       - Publisher
+     *       - Operator
      *     security:
      *       - bearerAuth: []
      *     parameters:
@@ -1450,23 +1450,23 @@ export function createPublisherRouter(
      *       401:
      *         description: Missing or invalid bearer token
      *       403:
-     *         description: Token missing required scope or publisher view permission
+     *         description: Token missing required scope or operator view permission
      *       404:
      *         description: Product not found
      */
     router.get(
       '/products/:productId/submissions',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       listProductSubmissions
     );
     /**
      * @swagger
-     * /v1/publisher/products/{productId}/diff:
+     * /v1/operator/products/{productId}/diff:
      *   get:
      *     summary: Compare draft and live product state
      *     description: Returns a resource-level diff between the draft and live Product Ingestion resource trees for a marketplace product.
      *     tags:
-     *       - Publisher
+     *       - Operator
      *     security:
      *       - bearerAuth: []
      *     parameters:
@@ -1481,41 +1481,41 @@ export function createPublisherRouter(
      *       401:
      *         description: Missing or invalid bearer token
      *       403:
-     *         description: Token missing required scope or publisher view permission
+     *         description: Token missing required scope or operator view permission
      *       404:
      *         description: Product not found
      */
     router.get(
       '/products/:productId/diff',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getProductId }),
       getProductDiff
     );
 
     router.post(
       '/products/:productId/sync',
-      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getProductId }),
+      authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getProductId }),
       syncProduct
     );
-    router.post('/offers/:offerId/sync', authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }), syncOffer);
+    router.post('/offers/:offerId/sync', authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getOfferId }), syncOffer);
 
     router.post(
       '/offers/:offerId/submissions',
-      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }),
+      authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getOfferId }),
       submitOfferSubmission
     );
     router.get(
       '/offers/:offerId/submissions',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getOfferId }),
       listOfferSubmissions
     );
     router.get(
       '/offers/:offerId/submissions/:jobId',
-      authorizeRoute({ resource: 'publisher', action: 'view', resourceId: getOfferId }),
+      authorizeRoute({ resource: 'operator', action: 'view', resourceId: getOfferId }),
       getOfferSubmission
     );
     router.post(
       '/offers/:offerId/submissions/:jobId/cancel',
-      authorizeRoute({ resource: 'publisher', action: 'manage', resourceId: getOfferId }),
+      authorizeRoute({ resource: 'operator', action: 'manage', resourceId: getOfferId }),
       cancelOfferSubmission
     );
   }

@@ -112,7 +112,7 @@ function buildFixtureApp(executedHandlers: string[]) {
 
   const baseMiddleware = [
     authenticateRequest(config),
-    injectTenantContext(config, tenantMemberService, { authorizationModel: 'publisher' }),
+    injectTenantContext(config, tenantMemberService, { authorizationModel: 'operator' }),
     requireScopes([config.auth.requiredScope])
   ] as const;
 

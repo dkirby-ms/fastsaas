@@ -1,5 +1,5 @@
 import { auth } from '@/auth';
-import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
+import { getDefaultPortalRoute, hasOperatorAccess } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export default async function AuthDebugPage() {
     return <p>No active session. Please sign in.</p>;
   }
 
-  const publisherAccess = hasPublisherAccess(session.roles);
+  const operatorAccess = hasOperatorAccess(session.roles);
   const defaultRoute = getDefaultPortalRoute(session.roles);
 
   return (
@@ -37,8 +37,8 @@ export default async function AuthDebugPage() {
       </section>
 
       <section>
-        <h2>Publisher Access</h2>
-        <pre>{String(publisherAccess)}</pre>
+        <h2>Operator Access</h2>
+        <pre>{String(operatorAccess)}</pre>
       </section>
 
       <section>

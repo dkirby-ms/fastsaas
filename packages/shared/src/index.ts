@@ -252,7 +252,7 @@ export interface MarketplaceWebhookPayload {
   details?: Record<string, unknown>;
 }
 
-export type PortalRole = 'customer' | 'publisher';
+export type PortalRole = 'customer' | 'operator';
 
 export interface AuthContextData {
   tenantId: string;

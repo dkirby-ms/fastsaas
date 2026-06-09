@@ -4,7 +4,7 @@ import type { DashboardData, PlansResponse, SettingsData } from '@fastsaas/share
 import { auth } from '@/auth';
 import { customerApiPaths } from '@/lib/api-paths';
 import { ApiError } from '@/lib/errors';
-import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
+import { getDefaultPortalRoute, hasOperatorAccess } from '@/lib/roles';
 import { getServerConfig } from '@/lib/server-config';
 
 export type ActionSuccess<T> = { ok: true; data: T };
@@ -95,12 +95,12 @@ async function getCustomerSession() {
     );
   }
 
-  if (hasPublisherAccess(session?.roles)) {
+  if (hasOperatorAccess(session?.roles)) {
     throw new ApiError(
-      'Customer portal access is unavailable for publisher users',
+      'Customer portal access is unavailable for operator users',
       403,
       'AUTH_FORBIDDEN',
-      `Open ${getDefaultPortalRoute(session?.roles)} to manage publisher workflows.`,
+      `Open ${getDefaultPortalRoute(session?.roles)} to manage operator workflows.`,
     );
   }
 

@@ -272,7 +272,7 @@ export class PublisherService {
 
     const existingPlans = await this.listPlans(actor.tenantId, { includeArchived: true });
     if (existingPlans.plans.some((plan) => plan.id === planId)) {
-      throw AppError.conflict('A publisher plan with this id already exists', { planId });
+      throw AppError.conflict('An operator plan with this id already exists', { planId });
     }
 
     await this.publisherPlanRepository.savePlan({
@@ -282,7 +282,7 @@ export class PublisherService {
     });
 
     const createdPlan = await this.getPlan(actor.tenantId, planId);
-    this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan created');
+    this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Operator plan created');
     return createdPlan;
   }
 
@@ -295,7 +295,7 @@ export class PublisherService {
       ...this.normalizePlanInput({ ...input, features: existingPlan.features })
     });
 
-    this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan updated');
+    this.logger.info({ planId, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Operator plan updated');
 
     const result = await this.listPlans(actor.tenantId, { includeArchived: true });
 
@@ -359,7 +359,7 @@ export class PublisherService {
 
     this.logger.info(
       { subscriptionId: created.id, managedTenantId, actorTenantId: actor.tenantId, requestId: actor.requestId },
-      'Publisher tenant created'
+      'Operator tenant created'
     );
 
     return this.getTenant(actor.tenantId, created.id);
@@ -402,7 +402,7 @@ export class PublisherService {
 
     this.logger.info(
       { subscriptionId: subscription.id, actorTenantId: actor.tenantId, requestId: actor.requestId },
-      'Publisher tenant updated'
+      'Operator tenant updated'
     );
 
     return this.getTenant(actor.tenantId, subscription.id);
@@ -439,7 +439,7 @@ export class PublisherService {
 
     this.logger.info(
       { subscriptionId: subscription.id, action, actorTenantId: actor.tenantId, requestId: actor.requestId },
-      'Publisher tenant transitioned'
+      'Operator tenant transitioned'
     );
 
     return this.getTenant(actor.tenantId, subscription.id);
@@ -490,7 +490,7 @@ export class PublisherService {
       });
     }
 
-    this.logger.info({ planId, status, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Publisher plan status updated');
+    this.logger.info({ planId, status, actorTenantId: actor.tenantId, requestId: actor.requestId }, 'Operator plan status updated');
 
     return this.getPlan(actor.tenantId, planId);
   }
@@ -530,7 +530,7 @@ export class PublisherService {
       name,
       description,
       status: normalizePlanStatus(input.status),
-      features: normalizeFeatures(input.features, ['Publisher managed plan']),
+      features: normalizeFeatures(input.features, ['Operator managed plan']),
       ...(input.marketplacePlanId !== undefined ? { marketplacePlanId: input.marketplacePlanId } : {}),
       ...(input.seatLimit !== undefined ? { seatLimit: input.seatLimit } : {})
     };

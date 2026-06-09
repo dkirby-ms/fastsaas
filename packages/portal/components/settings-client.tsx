@@ -11,7 +11,7 @@ import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 
 const emptySettings: SettingsData = { displayName: '', email: '', company: '', timezone: 'America/Chicago', notificationsEnabled: true };
 const profileFieldClassName = 'w-full rounded-2xl border border-slate-300 dark:border-slate-600 px-4 py-3 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:bg-slate-800/70 dark:disabled:text-slate-400';
@@ -44,8 +44,8 @@ export function SettingsClient() {
   if (settingsQuery.isLoading) return <LoadingPanel label="Loading your account settings" />;
   if (settingsQuery.isError) {
     if (isApiErrorStatus(settingsQuery.error, 403)) {
-      if (hasPublisherAccess(session?.roles)) {
-        return <ForbiddenState message={getErrorMessage(settingsQuery.error, 'This account cannot open customer settings.')} href="/publisher" cta="Open publisher portal" />;
+      if (hasOperatorAccess(session?.roles)) {
+        return <ForbiddenState message={getErrorMessage(settingsQuery.error, 'This account cannot open customer settings.')} href="/operator" cta="Open operator portal" />;
       }
       return <ForbiddenState title="No active subscription" message="You don't have an active subscription for this portal." href="/no-subscription" cta="Go to subscription page" />;
     }

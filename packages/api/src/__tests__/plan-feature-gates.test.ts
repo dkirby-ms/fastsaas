@@ -205,7 +205,7 @@ describe('PlanFeatureGateService — edge cases', () => {
 // API routes (publisher-facing)
 // ---------------------------------------------------------------------------
 
-describe('GET /v1/publisher/plans/:planId/features', () => {
+describe('GET /v1/operator/plans/:planId/features', () => {
   it.todo(
     'returns 200 with the list of enabled feature keys for a plan — ' +
       'setup: mock service.listFeatures to return ["export", "sso"]; ' +
@@ -221,7 +221,7 @@ describe('GET /v1/publisher/plans/:planId/features', () => {
   );
 });
 
-describe('PUT /v1/publisher/plans/:planId/features', () => {
+describe('PUT /v1/operator/plans/:planId/features', () => {
   it.todo(
     'returns 200 after bulk-setting feature gates — ' +
       'setup: send a valid gates array in the request body; ' +
@@ -237,7 +237,7 @@ describe('PUT /v1/publisher/plans/:planId/features', () => {
   );
 });
 
-describe('DELETE /v1/publisher/plans/:planId/features/:featureKey', () => {
+describe('DELETE /v1/operator/plans/:planId/features/:featureKey', () => {
   it.todo(
     'returns 204 after successfully removing a feature gate'
   );

@@ -32,7 +32,7 @@ const publisherPlanCatalog: Record<string, Omit<PublisherPlan, 'activeSubscripti
   scale: {
     id: 'scale',
     name: 'Scale',
-    description: 'Enterprise controls and publisher-ready governance.',
+    description: 'Enterprise controls and operator-ready governance.',
     pricingSummary: null,
     status: 'active',
     features: ['Unlimited seats', 'Dedicated support', 'Custom exports'],

@@ -1,15 +1,15 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
+import { getDefaultPortalRoute, hasOperatorAccess } from '@/lib/roles';
 
-export async function requirePublisherAccess() {
+export async function requireOperatorAccess() {
   const session = await auth();
 
   if (!session) {
     redirect('/sign-in');
   }
 
-  if (!hasPublisherAccess(session.roles)) {
+  if (!hasOperatorAccess(session.roles)) {
     redirect(getDefaultPortalRoute(session.roles));
   }
 
@@ -23,7 +23,7 @@ export async function requireCustomerAccess() {
     redirect('/sign-in');
   }
 
-  // Dual-role users (publisher role + customer subscription) are allowed in
+  // Dual-role users (operator role + customer subscription) are allowed in
   // customer pages. The subscription gate in the portal layout handles
   // redirecting users who have no active subscription.
 

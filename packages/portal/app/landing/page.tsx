@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { LandingClient } from '@/components/landing-client';
 import { buildLandingPath, getSingleSearchParam, sanitizeCallbackUrl } from '@/lib/auth-redirect';
-import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
+import { getDefaultPortalRoute, hasOperatorAccess } from '@/lib/roles';
 
 type LandingPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -24,7 +24,7 @@ export default async function LandingPage({ searchParams }: LandingPageProps) {
     redirect(`/sign-in?${query.toString()}`);
   }
 
-  if (session && hasPublisherAccess(session.roles)) {
+  if (session && hasOperatorAccess(session.roles)) {
     redirect(getDefaultPortalRoute(session.roles));
   }
 

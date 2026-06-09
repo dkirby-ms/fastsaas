@@ -16,9 +16,9 @@ import type {
 } from '@fastsaas/shared';
 import { auth } from '@/auth';
 import { ApiError } from '@/lib/errors';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 import { getServerConfig } from '@/lib/server-config';
-import { publisherAdminPaths } from '@/lib/api-paths';
+import { operatorAdminPaths } from '@/lib/api-paths';
 
 // ---- Result types --------------------------------------------------------
 
@@ -28,15 +28,15 @@ export type ActionResult<T> = ActionSuccess<T> | ActionFailure;
 
 // ---- Auth helper ---------------------------------------------------------
 
-async function requirePublisherAccessToken(): Promise<string> {
+async function requireOperatorAccessToken(): Promise<string> {
   const session = await auth();
 
   if (!session?.accessToken) {
-    throw new ApiError('Sign in to access publisher workflows.', 401, 'AUTH_REQUIRED');
+    throw new ApiError('Sign in to access operator workflows.', 401, 'AUTH_REQUIRED');
   }
 
-  if (!hasPublisherAccess(session.roles)) {
-    throw new ApiError('Publisher role is required.', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the publisher portal.');
+  if (!hasOperatorAccess(session.roles)) {
+    throw new ApiError('Operator role is required.', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the operator portal.');
   }
 
   return session.accessToken;
@@ -48,7 +48,7 @@ function normalizeBaseUrl(url: string) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-async function livePublisherRequest<T>(publisherBaseUrl: string, path: string, accessToken: string, init?: Omit<RequestInit, 'headers'>): Promise<T> {
+async function liveOperatorRequest<T>(operatorBaseUrl: string, path: string, accessToken: string, init?: Omit<RequestInit, 'headers'>): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${accessToken}`,
@@ -57,7 +57,7 @@ async function livePublisherRequest<T>(publisherBaseUrl: string, path: string, a
   let response: Response;
 
   try {
-    response = await fetch(`${normalizeBaseUrl(publisherBaseUrl)}${path}`, {
+    response = await fetch(`${normalizeBaseUrl(operatorBaseUrl)}${path}`, {
       ...init,
       headers,
       cache: 'no-store',
@@ -138,7 +138,7 @@ function mockPlans(): PublisherPlan[] {
   const plans: PublisherPlan[] = [
     { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
     { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and operator-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 
   return plans.map((plan) => ({
@@ -192,27 +192,27 @@ function mockMarketplacePlans(): MarketplacePlanSummary[] {
 
 // ---- Exported server actions ---------------------------------------------
 
-export async function getPublisherDashboardAction(): Promise<ActionResult<PublisherDashboardData>> {
+export async function getOperatorDashboardAction(): Promise<ActionResult<PublisherDashboardData>> {
   return runAction(async () => {
     const config = getServerConfig();
 
     if (config.isMockMode) return mockDashboard();
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherDashboardData>(config.publisherApiBaseUrl, publisherAdminPaths.dashboard, token);
+    return liveOperatorRequest<PublisherDashboardData>(config.publisherApiBaseUrl, operatorAdminPaths.dashboard, token);
   });
 }
 
-export async function getPublisherPlansAction(): Promise<ActionResult<PublisherPlansResponse>> {
+export async function getOperatorPlansAction(): Promise<ActionResult<PublisherPlansResponse>> {
   return runAction(async () => {
     const config = getServerConfig();
 
     if (config.isMockMode) return { plans: mockPlans() };
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, `${publisherAdminPaths.plans}?includeArchived=true`, token);
+    return liveOperatorRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, `${operatorAdminPaths.plans}?includeArchived=true`, token);
   });
 }
 
@@ -222,13 +222,13 @@ export async function getMarketplacePlansAction(): Promise<ActionResult<Marketpl
 
     if (config.isMockMode) return mockMarketplacePlans();
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<MarketplacePlanSummary[]>(config.publisherApiBaseUrl, publisherAdminPaths.marketplacePlans, token);
+    return liveOperatorRequest<MarketplacePlanSummary[]>(config.publisherApiBaseUrl, operatorAdminPaths.marketplacePlans, token);
   });
 }
 
-export async function createPublisherPlanAction(payload: CreatePublisherPlanInput): Promise<ActionResult<PublisherPlansResponse>> {
+export async function createOperatorPlanAction(payload: CreatePublisherPlanInput): Promise<ActionResult<PublisherPlansResponse>> {
   return runAction(async () => {
     const config = getServerConfig();
 
@@ -248,16 +248,16 @@ export async function createPublisherPlanAction(payload: CreatePublisherPlanInpu
       return { plans: [...mockPlans(), newPlan] };
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, publisherAdminPaths.plans, token, {
+    return liveOperatorRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, operatorAdminPaths.plans, token, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   });
 }
 
-export async function updatePublisherPlanAction(planId: string, payload: PublisherPlanUpdateInput): Promise<ActionResult<PublisherPlansResponse>> {
+export async function updateOperatorPlanAction(planId: string, payload: PublisherPlanUpdateInput): Promise<ActionResult<PublisherPlansResponse>> {
   return runAction(async () => {
     const config = getServerConfig();
 
@@ -269,9 +269,9 @@ export async function updatePublisherPlanAction(planId: string, payload: Publish
       return { plans };
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, publisherAdminPaths.plan(planId), token, {
+    return liveOperatorRequest<PublisherPlansResponse>(config.publisherApiBaseUrl, operatorAdminPaths.plan(planId), token, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -289,11 +289,11 @@ async function updatePlanArchivedState(planId: string, status: PublisherPlan['st
       return;
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    await livePublisherRequest<unknown>(
+    await liveOperatorRequest<unknown>(
       config.publisherApiBaseUrl,
-      status === 'archived' ? publisherAdminPaths.planArchive(planId) : publisherAdminPaths.planUnarchive(planId),
+      status === 'archived' ? operatorAdminPaths.planArchive(planId) : operatorAdminPaths.planUnarchive(planId),
       token,
       { method: 'PATCH' },
     );
@@ -308,7 +308,7 @@ export async function unarchivePlan(planId: string): Promise<ActionResult<void>>
   return updatePlanArchivedState(planId, 'active');
 }
 
-export async function getPublisherTenantsAction(): Promise<ActionResult<PublisherTenantsResponse>> {
+export async function getOperatorTenantsAction(): Promise<ActionResult<PublisherTenantsResponse>> {
   return runAction(async () => {
     const config = getServerConfig();
 
@@ -318,13 +318,13 @@ export async function getPublisherTenantsAction(): Promise<ActionResult<Publishe
       return { tenants };
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherTenantsResponse>(config.publisherApiBaseUrl, publisherAdminPaths.tenants, token);
+    return liveOperatorRequest<PublisherTenantsResponse>(config.publisherApiBaseUrl, operatorAdminPaths.tenants, token);
   });
 }
 
-export async function getPublisherTenantAction(tenantId: string): Promise<ActionResult<PublisherTenantDetail>> {
+export async function getOperatorTenantAction(tenantId: string): Promise<ActionResult<PublisherTenantDetail>> {
   return runAction(async () => {
     const config = getServerConfig();
 
@@ -336,13 +336,13 @@ export async function getPublisherTenantAction(tenantId: string): Promise<Action
       return tenant;
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherTenantDetail>(config.publisherApiBaseUrl, publisherAdminPaths.tenant(tenantId), token);
+    return liveOperatorRequest<PublisherTenantDetail>(config.publisherApiBaseUrl, operatorAdminPaths.tenant(tenantId), token);
   });
 }
 
-export async function updatePublisherTenantAction(tenantId: string, payload: PublisherTenantUpsertInput): Promise<ActionResult<PublisherTenantDetail>> {
+export async function updateOperatorTenantAction(tenantId: string, payload: PublisherTenantUpsertInput): Promise<ActionResult<PublisherTenantDetail>> {
   return runAction(async () => {
     const config = getServerConfig();
 
@@ -354,9 +354,9 @@ export async function updatePublisherTenantAction(tenantId: string, payload: Pub
       return { ...existing, ...payload, lastUpdated: new Date().toISOString() };
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherTenantDetail>(config.publisherApiBaseUrl, publisherAdminPaths.tenant(tenantId), token, {
+    return liveOperatorRequest<PublisherTenantDetail>(config.publisherApiBaseUrl, operatorAdminPaths.tenant(tenantId), token, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -382,26 +382,26 @@ async function tenantLifecycleAction(subscriptionId: string, action: 'activate' 
       };
     }
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<PublisherTenantDetail>(
+    return liveOperatorRequest<PublisherTenantDetail>(
       config.publisherApiBaseUrl,
-      publisherAdminPaths.tenantAction(subscriptionId, action),
+      operatorAdminPaths.tenantAction(subscriptionId, action),
       token,
       { method: 'POST' },
     );
   });
 }
 
-export async function activatePublisherTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
+export async function activateOperatorTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
   return tenantLifecycleAction(subscriptionId, 'activate');
 }
 
-export async function suspendPublisherTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
+export async function suspendOperatorTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
   return tenantLifecycleAction(subscriptionId, 'suspend');
 }
 
-export async function cancelPublisherTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
+export async function cancelOperatorTenantAction(subscriptionId: string): Promise<ActionResult<PublisherTenantDetail>> {
   return tenantLifecycleAction(subscriptionId, 'cancel');
 }
 
@@ -410,18 +410,18 @@ export async function cancelPublisherTenantAction(subscriptionId: string): Promi
 export async function getFeatureGatesAction(planId: string): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
   return runAction(async () => {
     const config = getServerConfig();
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token);
+    return liveOperatorRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, operatorAdminPaths.planFeatures(planId), token);
   });
 }
 
 export async function setFeatureGatesAction(planId: string, gates: SetFeatureGatesRequest['gates']): Promise<ActionResult<{ features: PlanFeatureGate[] }>> {
   return runAction(async () => {
     const config = getServerConfig();
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    return livePublisherRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, publisherAdminPaths.planFeatures(planId), token, {
+    return liveOperatorRequest<{ features: PlanFeatureGate[] }>(config.publisherApiBaseUrl, operatorAdminPaths.planFeatures(planId), token, {
       method: 'PUT',
       body: JSON.stringify({ gates } satisfies SetFeatureGatesRequest),
     });
@@ -434,9 +434,9 @@ export async function importProductAction(externalId: string): Promise<ActionRes
 
     if (config.isMockMode) return;
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    await livePublisherRequest<unknown>(config.publisherApiBaseUrl, publisherAdminPaths.importProduct, token, {
+    await liveOperatorRequest<unknown>(config.publisherApiBaseUrl, operatorAdminPaths.importProduct, token, {
       method: 'POST',
       body: JSON.stringify({ externalId }),
     });
@@ -449,9 +449,9 @@ export async function removeFeatureGateAction(planId: string, featureKey: string
 
     if (config.isMockMode) return;
 
-    const token = await requirePublisherAccessToken();
+    const token = await requireOperatorAccessToken();
 
-    await livePublisherRequest<void>(config.publisherApiBaseUrl, publisherAdminPaths.planFeature(planId, featureKey), token, {
+    await liveOperatorRequest<void>(config.publisherApiBaseUrl, operatorAdminPaths.planFeature(planId, featureKey), token, {
       method: 'DELETE',
     });
   });

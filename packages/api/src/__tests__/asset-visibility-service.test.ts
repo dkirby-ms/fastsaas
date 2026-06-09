@@ -223,7 +223,7 @@ afterAll(async () => {
 
 describe('asset visibility publisher routes', () => {
   it('returns 401 for unauthenticated requests', async () => {
-    const response = await request(harness.app).get('/v1/publisher/products/missing/assets');
+    const response = await request(harness.app).get('/v1/operator/products/missing/assets');
     expect(response.status).toBe(401);
   });
 
@@ -235,7 +235,7 @@ describe('asset visibility publisher routes', () => {
     });
 
     const response = await request(harness.app)
-      .get('/v1/publisher/products/missing/assets')
+      .get('/v1/operator/products/missing/assets')
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(404);
@@ -342,7 +342,7 @@ describe('asset visibility publisher routes', () => {
     });
 
     const assetsResponse = await request(harness.app)
-      .get(`/v1/publisher/products/${detail.product.id}/assets`)
+      .get(`/v1/operator/products/${detail.product.id}/assets`)
       .set('Authorization', `Bearer ${token}`);
     expect(assetsResponse.status).toBe(200);
     expect(assetsResponse.body.data).toEqual({
@@ -365,7 +365,7 @@ describe('asset visibility publisher routes', () => {
     });
 
     const audiencesResponse = await request(harness.app)
-      .get(`/v1/publisher/products/${detail.product.id}/audiences`)
+      .get(`/v1/operator/products/${detail.product.id}/audiences`)
       .set('Authorization', `Bearer ${token}`);
     expect(audiencesResponse.status).toBe(200);
     expect(audiencesResponse.body.data).toEqual({
@@ -388,7 +388,7 @@ describe('asset visibility publisher routes', () => {
     });
 
     const pricingResponse = await request(harness.app)
-      .get(`/v1/publisher/products/${detail.product.id}/plans/${detail.plans[0].id}/pricing`)
+      .get(`/v1/operator/products/${detail.product.id}/plans/${detail.plans[0].id}/pricing`)
       .set('Authorization', `Bearer ${token}`);
     expect(pricingResponse.status).toBe(200);
     expect(pricingResponse.body.data).toEqual({

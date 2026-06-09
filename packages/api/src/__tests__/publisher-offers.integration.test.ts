@@ -50,14 +50,14 @@ describe('publisher offer routes', () => {
       ]
     });
 
-    const listResponse = await request(harness.app).get('/v1/publisher/offers').set('Authorization', `Bearer ${adminToken}`);
+    const listResponse = await request(harness.app).get('/v1/operator/offers').set('Authorization', `Bearer ${adminToken}`);
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.data).toHaveLength(1);
     expect(listResponse.body.data[0].externalOfferId).toBe('offer-1');
 
     const detailResponse = await request(harness.app)
-      .get(`/v1/publisher/offers/${detail.product.id}`)
+      .get(`/v1/operator/offers/${detail.product.id}`)
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(detailResponse.status).toBe(200);
@@ -65,7 +65,7 @@ describe('publisher offer routes', () => {
     expect(detailResponse.body.data.externalOfferId).toBe('offer-1');
 
     const resourceTreeResponse = await request(harness.app)
-      .get(`/v1/publisher/offers/${detail.product.id}/resource-tree`)
+      .get(`/v1/operator/offers/${detail.product.id}/resource-tree`)
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(resourceTreeResponse.status).toBe(200);
@@ -121,7 +121,7 @@ describe('publisher offer routes', () => {
     });
 
     const response = await request(harness.app)
-      .get('/v1/publisher/marketplace-plans')
+      .get('/v1/operator/marketplace-plans')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(response.status).toBe(200);
@@ -200,7 +200,7 @@ describe('publisher offer routes', () => {
     });
 
     const submitResponse = await request(harness.app)
-      .post('/v1/publisher/offers/offer-1/submissions')
+      .post('/v1/operator/offers/offer-1/submissions')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         resources: [
@@ -220,7 +220,7 @@ describe('publisher offer routes', () => {
     expect(submitResponse.body.data.status).toBe('running');
 
     const listResponse = await request(harness.app)
-      .get('/v1/publisher/offers/offer-1/submissions?page=1&pageSize=10')
+      .get('/v1/operator/offers/offer-1/submissions?page=1&pageSize=10')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(listResponse.status).toBe(200);
@@ -229,7 +229,7 @@ describe('publisher offer routes', () => {
     expect(listResponse.body.data.jobs.map((job: { productId?: string }) => job.productId)).toEqual(['offer-1', 'offer-1']);
 
     const detailResponse = await request(harness.app)
-      .get('/v1/publisher/offers/offer-1/submissions/job-100')
+      .get('/v1/operator/offers/offer-1/submissions/job-100')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(detailResponse.status).toBe(200);
@@ -237,13 +237,13 @@ describe('publisher offer routes', () => {
     expect(detailResponse.body.data.productId).toBe('offer-1');
 
     const hiddenDetailResponse = await request(harness.app)
-      .get('/v1/publisher/offers/offer-1/submissions/job-200')
+      .get('/v1/operator/offers/offer-1/submissions/job-200')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(hiddenDetailResponse.status).toBe(404);
 
     const cancelResponse = await request(harness.app)
-      .post('/v1/publisher/offers/offer-1/submissions/job-100/cancel')
+      .post('/v1/operator/offers/offer-1/submissions/job-100/cancel')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(cancelResponse.status).toBe(200);

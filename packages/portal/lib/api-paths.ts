@@ -13,7 +13,7 @@ function createCustomerApiPaths(prefix: string) {
   } as const;
 }
 
-function createPublisherAdminPaths(prefix: string) {
+function createOperatorAdminPaths(prefix: string) {
   const plan = (planId: string) => `${prefix}/plans/${encodePathSegment(planId)}`;
   const tenant = (tenantId: string) => `${prefix}/tenants/${encodePathSegment(tenantId)}`;
 
@@ -35,5 +35,5 @@ function createPublisherAdminPaths(prefix: string) {
 }
 
 export const customerApiPaths = createCustomerApiPaths('/v1');
-export const publisherAdminMockPaths = createPublisherAdminPaths('/publisher');
-export const publisherAdminPaths = createPublisherAdminPaths('/v1/publisher');
+export const operatorAdminMockPaths = createOperatorAdminPaths('/operator');
+export const operatorAdminPaths = createOperatorAdminPaths('/v1/operator');

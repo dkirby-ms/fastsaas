@@ -18,7 +18,7 @@ import type {
 import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
 import type { PlanPricing } from '@fastsaas/shared';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 import { writeMockSubscriptionGateCookie } from '@/lib/subscription-gate-cookie';
 
 interface PublisherMockState {
@@ -31,7 +31,7 @@ interface MockPortalState {
   plans: PlansResponse;
   settings: SettingsData;
   subscriptions: Subscription[];
-  publisher: PublisherMockState;
+  operator: PublisherMockState;
 }
 
 const storageKey = 'fastsaas.portal.mock-state';
@@ -58,15 +58,15 @@ const defaultActions = (state: NonNullable<DashboardData['subscription']>['state
   ];
 };
 
-function defaultPublisherPlans(): PublisherPlan[] {
+function defaultOperatorPlans(): PublisherPlan[] {
   return [
     { id: 'starter', name: 'Starter', description: 'Self-serve onboarding for early marketplace customers.', pricingSummary: null, status: 'active', activeSubscriptions: 1, features: ['10 seats included', 'Email support', 'Single environment'], marketplacePlanId: 'starter', seatLimit: 10 },
     { id: 'growth', name: 'Growth', description: 'Balanced controls for growing portfolio tenants.', pricingSummary: null, status: 'active', activeSubscriptions: 2, features: ['25 seats included', 'Priority support', 'Usage analytics'], marketplacePlanId: 'growth', seatLimit: 25 },
-    { id: 'scale', name: 'Scale', description: 'Enterprise controls and publisher-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
+    { id: 'scale', name: 'Scale', description: 'Enterprise controls and operator-ready governance.', pricingSummary: null, status: 'archived', activeSubscriptions: 0, features: ['Unlimited seats', 'Dedicated support', 'Custom exports'], marketplacePlanId: null, seatLimit: null },
   ];
 }
 
-function defaultPublisherTenants(): PublisherTenantDetail[] {
+function defaultOperatorTenants(): PublisherTenantDetail[] {
   return [
     {
       id: 'tenant-contoso', displayName: 'Contoso Ltd', primaryDomain: 'contoso.example', planId: 'growth', planName: 'Growth', status: 'active', monthlyRecurringRevenue: null, seats: 24, subscriptionId: 'sub-contoso', lastUpdated: '2026-05-28T15:00:00.000Z', purchaserTenantId: 'purchaser-contoso', beneficiaryTenantId: 'beneficiary-contoso',
@@ -104,7 +104,7 @@ const defaultState = (): MockPortalState => ({
   plans: defaultCustomerPlans(),
   settings: defaultCustomerSettings(),
   subscriptions: [],
-  publisher: { plans: defaultPublisherPlans(), tenants: defaultPublisherTenants() },
+  operator: { plans: defaultOperatorPlans(), tenants: defaultOperatorTenants() },
 });
 
 const isBrowser = () => typeof window !== 'undefined';
@@ -293,17 +293,17 @@ function buildCustomerPlans(state: MockPortalState): PlansResponse {
   };
 }
 
-function withPublisherCounts(state: MockPortalState): MockPortalState {
-  const counts = state.publisher.tenants.reduce<Record<string, number>>((memo, tenant) => {
+function withOperatorCounts(state: MockPortalState): MockPortalState {
+  const counts = state.operator.tenants.reduce<Record<string, number>>((memo, tenant) => {
     memo[tenant.planId] = (memo[tenant.planId] ?? 0) + 1;
     return memo;
   }, {});
 
   return {
     ...state,
-    publisher: {
-      ...state.publisher,
-      plans: state.publisher.plans.map((plan) => ({ ...plan, activeSubscriptions: counts[plan.id] ?? 0 })),
+    operator: {
+      ...state.operator,
+      plans: state.operator.plans.map((plan) => ({ ...plan, activeSubscriptions: counts[plan.id] ?? 0 })),
     },
   };
 }
@@ -317,14 +317,16 @@ function hydrateState(saved: string | null): MockPortalState {
     const parsed = JSON.parse(saved) as Partial<MockPortalState>;
     const base = defaultState();
 
-    return clearLegacyCustomerProfile(withPublisherCounts({
+    const legacyOperator = parsed.operator ?? (parsed as Partial<Record<'publisher', MockPortalState['operator']>>).publisher;
+
+    return clearLegacyCustomerProfile(withOperatorCounts({
       dashboard: parsed.dashboard ?? base.dashboard,
       plans: parsed.plans ?? base.plans,
       settings: parsed.settings ?? base.settings,
       subscriptions: parsed.subscriptions ?? base.subscriptions,
-      publisher: {
-        plans: parsed.publisher?.plans ?? base.publisher.plans,
-        tenants: parsed.publisher?.tenants ?? base.publisher.tenants,
+      operator: {
+        plans: legacyOperator?.plans ?? base.operator.plans,
+        tenants: legacyOperator?.tenants ?? base.operator.tenants,
       },
     }));
   } catch {
@@ -344,14 +346,14 @@ function readState(): MockPortalState {
 
 function writeState(state: MockPortalState) {
   if (isBrowser()) {
-    const nextState = withPublisherCounts(state);
+    const nextState = withOperatorCounts(state);
     window.localStorage.setItem(storageKey, JSON.stringify(nextState));
     writeMockSubscriptionGateCookie(getCurrentCustomerSubscription(nextState));
   }
 }
 
 function getPublisherPlan(state: MockPortalState, planId: string) {
-  return state.publisher.plans.find((plan) => plan.id === planId);
+  return state.operator.plans.find((plan) => plan.id === planId);
 }
 
 function normalizeMarketplacePlanId(value: string | null | undefined) {
@@ -375,7 +377,7 @@ function createPublisherPlanId(state: MockPortalState, requestedId: string | und
   let candidate = baseId;
   let suffix = 2;
 
-  while (state.publisher.plans.some((plan) => plan.id === candidate)) {
+  while (state.operator.plans.some((plan) => plan.id === candidate)) {
     candidate = `${baseId}-${suffix}`;
     suffix += 1;
   }
@@ -389,7 +391,7 @@ function toMarketplacePricingSummary(pricing: PlanPricing | undefined): Record<s
 
 function listMarketplacePlans(state: MockPortalState): MarketplacePlanSummary[] {
   const defaultProductId = 'default-product';
-  return state.publisher.plans.map((plan) => ({
+  return state.operator.plans.map((plan) => ({
     id: plan.id,
     externalPlanId: plan.id,
     durablePlanId: `durable-${plan.id}`,
@@ -401,12 +403,12 @@ function listMarketplacePlans(state: MockPortalState): MarketplacePlanSummary[] 
 
 function buildPublisherDashboard(state: MockPortalState): PublisherDashboardData {
   return {
-    activeTenants: state.publisher.tenants.filter((tenant) => tenant.status === 'active').length,
-    churnedTenants: state.publisher.tenants.filter((tenant) => tenant.status === 'canceled').length,
-    totalSeats: state.publisher.tenants
+    activeTenants: state.operator.tenants.filter((tenant) => tenant.status === 'active').length,
+    churnedTenants: state.operator.tenants.filter((tenant) => tenant.status === 'canceled').length,
+    totalSeats: state.operator.tenants
       .filter((tenant) => tenant.status === 'active')
       .reduce((total, tenant) => total + tenant.seats, 0),
-    plans: state.publisher.plans.map((plan) => ({ planId: plan.id, planName: plan.name, tenantCount: plan.activeSubscriptions })),
+    plans: state.operator.plans.map((plan) => ({ planId: plan.id, planName: plan.name, tenantCount: plan.activeSubscriptions })),
   };
 }
 
@@ -419,10 +421,10 @@ function appendAudit(detail: PublisherTenantDetail, label: string): PublisherTen
   };
 }
 
-async function assertPublisherAccess() {
+async function assertOperatorAccess() {
   const session = await getSession();
-  if (!hasPublisherAccess(session?.roles)) {
-    throw new ApiError('Publisher role is required', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the publisher portal.');
+  if (!hasOperatorAccess(session?.roles)) {
+    throw new ApiError('Operator role is required', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the operator portal.');
   }
 }
 
@@ -513,8 +515,8 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
   const state = syncCustomerProfile(readState(), session);
   writeState(state);
 
-  if (path.startsWith('/publisher')) {
-    await assertPublisherAccess();
+  if (path.startsWith('/operator')) {
+    await assertOperatorAccess();
   }
 
   if (path === '/portal/dashboard' && method === 'GET') {
@@ -674,19 +676,19 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     return next as T;
   }
 
-  if (path === '/publisher/dashboard' && method === 'GET') {
+  if (path === '/operator/dashboard' && method === 'GET') {
     return buildPublisherDashboard(state) as T;
   }
 
-  if (path === '/publisher/plans' && method === 'GET') {
-    return { plans: state.publisher.plans } as T;
+  if (path === '/operator/plans' && method === 'GET') {
+    return { plans: state.operator.plans } as T;
   }
 
-  if (path === '/publisher/marketplace-plans' && method === 'GET') {
+  if (path === '/operator/marketplace-plans' && method === 'GET') {
     return listMarketplacePlans(state) as T;
   }
 
-  if (path === '/publisher/plans' && method === 'POST') {
+  if (path === '/operator/plans' && method === 'POST') {
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as CreatePublisherPlanInput;
     const name = payload.name?.trim();
     const description = payload.description?.trim();
@@ -704,17 +706,17 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId),
       seatLimit: normalizeSeatLimit(payload.seatLimit),
     };
-    state.publisher.plans = [plan, ...state.publisher.plans];
+    state.operator.plans = [plan, ...state.operator.plans];
     writeState(state);
     return plan as T;
   }
 
-  if (path.startsWith('/publisher/plans/') && method === 'PUT') {
+  if (path.startsWith('/operator/plans/') && method === 'PUT') {
     const planId = decodePathSegment(path.split('/').pop());
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as Partial<PublisherPlanUpdateInput>;
-    const planIndex = state.publisher.plans.findIndex((plan) => plan.id === planId);
+    const planIndex = state.operator.plans.findIndex((plan) => plan.id === planId);
     if (planIndex === -1 || !planId) throw new ApiError('The selected plan could not be found.', 404, 'publisher_plan_not_found');
-    const current = state.publisher.plans[planIndex];
+    const current = state.operator.plans[planIndex];
     const nextPlan: PublisherPlan = {
       ...current,
       name: payload.name?.trim() || current.name,
@@ -723,17 +725,17 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       marketplacePlanId: normalizeMarketplacePlanId(payload.marketplacePlanId) ?? null,
       seatLimit: normalizeSeatLimit(payload.seatLimit),
     };
-    state.publisher.plans[planIndex] = nextPlan;
-    state.publisher.tenants = state.publisher.tenants.map((tenant) => tenant.planId === planId ? { ...tenant, planName: nextPlan.name, monthlyRecurringRevenue: null } : tenant);
+    state.operator.plans[planIndex] = nextPlan;
+    state.operator.tenants = state.operator.tenants.map((tenant) => tenant.planId === planId ? { ...tenant, planName: nextPlan.name, monthlyRecurringRevenue: null } : tenant);
     writeState(state);
-    return { plans: state.publisher.plans } as T;
+    return { plans: state.operator.plans } as T;
   }
 
-  if (path === '/publisher/tenants' && method === 'GET') {
-    return { tenants: state.publisher.tenants.map(({ usage, audit, purchaserTenantId, beneficiaryTenantId, ...tenant }) => tenant) } as T;
+  if (path === '/operator/tenants' && method === 'GET') {
+    return { tenants: state.operator.tenants.map(({ usage, audit, purchaserTenantId, beneficiaryTenantId, ...tenant }) => tenant) } as T;
   }
 
-  if (path === '/publisher/tenants' && method === 'POST') {
+  if (path === '/operator/tenants' && method === 'POST') {
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as PublisherTenantUpsertInput;
     const selectedPlan = getPublisherPlan(state, payload.planId);
     if (!selectedPlan) throw new ApiError('Select a valid plan before creating the tenant.', 400, 'publisher_plan_required');
@@ -753,36 +755,36 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       usage: { activeUsers: Math.max(1, Math.round(payload.seats * 0.6)), apiRequestsThisMonth: payload.seats * 5200, storageGb: Number((payload.seats * 0.3).toFixed(1)) },
       audit: [{ id: `audit-${now}`, label: 'Tenant created', timestamp: new Date(now).toISOString() }],
     };
-    state.publisher.tenants = [tenant, ...state.publisher.tenants];
+    state.operator.tenants = [tenant, ...state.operator.tenants];
     writeState(state);
     return tenant as T;
   }
 
-  if (path.startsWith('/publisher/tenants/') && method === 'GET') {
+  if (path.startsWith('/operator/tenants/') && method === 'GET') {
     const tenantId = decodePathSegment(path.split('/')[3]);
-    const tenant = state.publisher.tenants.find((item) => item.id === tenantId || item.subscriptionId === tenantId);
+    const tenant = state.operator.tenants.find((item) => item.id === tenantId || item.subscriptionId === tenantId);
     if (!tenant) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
     return tenant as T;
   }
 
-  if (path.startsWith('/publisher/tenants/') && method === 'PUT') {
+  if (path.startsWith('/operator/tenants/') && method === 'PUT') {
     const tenantId = decodePathSegment(path.split('/')[3]);
     const payload = JSON.parse((init?.body as string | undefined) ?? '{}') as PublisherTenantUpsertInput;
-    const tenantIndex = state.publisher.tenants.findIndex((item) => item.id === tenantId || item.subscriptionId === tenantId);
+    const tenantIndex = state.operator.tenants.findIndex((item) => item.id === tenantId || item.subscriptionId === tenantId);
     if (tenantIndex === -1) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
     const selectedPlan = getPublisherPlan(state, payload.planId);
     if (!selectedPlan) throw new ApiError('Select a valid plan before saving the tenant.', 400, 'publisher_plan_required');
-    const current = state.publisher.tenants[tenantIndex];
-    state.publisher.tenants[tenantIndex] = appendAudit({ ...current, displayName: payload.displayName, primaryDomain: payload.primaryDomain, planId: payload.planId, planName: selectedPlan.name, status: payload.status, monthlyRecurringRevenue: null, seats: payload.seats, usage: { ...current.usage, activeUsers: Math.max(1, Math.min(payload.seats, Math.round(payload.seats * 0.7))), storageGb: Number((payload.seats * 0.3).toFixed(1)) } }, 'Tenant updated');
+    const current = state.operator.tenants[tenantIndex];
+    state.operator.tenants[tenantIndex] = appendAudit({ ...current, displayName: payload.displayName, primaryDomain: payload.primaryDomain, planId: payload.planId, planName: selectedPlan.name, status: payload.status, monthlyRecurringRevenue: null, seats: payload.seats, usage: { ...current.usage, activeUsers: Math.max(1, Math.min(payload.seats, Math.round(payload.seats * 0.7))), storageGb: Number((payload.seats * 0.3).toFixed(1)) } }, 'Tenant updated');
     writeState(state);
-    return state.publisher.tenants[tenantIndex] as T;
+    return state.operator.tenants[tenantIndex] as T;
   }
 
-  if (path.startsWith('/publisher/tenants/') && method === 'POST') {
+  if (path.startsWith('/operator/tenants/') && method === 'POST') {
     const tenantKey = decodePathSegment(path.split('/')[3]);
-    const tenantIndex = state.publisher.tenants.findIndex((item) => item.id === tenantKey || item.subscriptionId === tenantKey);
+    const tenantIndex = state.operator.tenants.findIndex((item) => item.id === tenantKey || item.subscriptionId === tenantKey);
     if (tenantIndex === -1) throw new ApiError('The selected tenant could not be found.', 404, 'publisher_tenant_not_found');
-    const current = state.publisher.tenants[tenantIndex];
+    const current = state.operator.tenants[tenantIndex];
     let nextStatus: PublisherTenantStatus;
     let auditLabel: string;
     if (isTenantAction(path, 'activate')) {
@@ -795,11 +797,11 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       nextStatus = 'canceled';
       auditLabel = 'Subscription canceled';
     } else {
-      throw new ApiError('That publisher action is not supported yet.', 400, 'publisher_action_invalid');
+      throw new ApiError('That operator action is not supported yet.', 400, 'publisher_action_invalid');
     }
-    state.publisher.tenants[tenantIndex] = appendAudit({ ...current, status: nextStatus }, auditLabel);
+    state.operator.tenants[tenantIndex] = appendAudit({ ...current, status: nextStatus }, auditLabel);
     writeState(state);
-    return state.publisher.tenants[tenantIndex] as T;
+    return state.operator.tenants[tenantIndex] as T;
   }
 
   throw new ApiError('We could not complete that request in the portal mock API.', 500, 'unknown_mock_route');

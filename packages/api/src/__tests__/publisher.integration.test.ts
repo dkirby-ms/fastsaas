@@ -27,8 +27,8 @@ describe('publisher administration routes', () => {
     });
 
     const [ownerResponse, memberResponse] = await Promise.all([
-      request(harness.app).get('/v1/publisher/dashboard').set('Authorization', `Bearer ${ownerToken}`),
-      request(harness.app).get('/v1/publisher/dashboard').set('Authorization', `Bearer ${memberToken}`)
+      request(harness.app).get('/v1/operator/dashboard').set('Authorization', `Bearer ${ownerToken}`),
+      request(harness.app).get('/v1/operator/dashboard').set('Authorization', `Bearer ${memberToken}`)
     ]);
 
     expect(ownerResponse.status).toBe(200);
@@ -46,7 +46,7 @@ describe('publisher administration routes', () => {
     });
 
     const response = await request(harness.app)
-      .get('/v1/publisher/dashboard')
+      .get('/v1/operator/dashboard')
       .set('Authorization', `Bearer ${membershipOnlyToken}`);
 
     expect(response.status).toBe(403);
@@ -66,12 +66,12 @@ describe('publisher administration routes', () => {
 
     // Create the plan so the update succeeds (no longer seeded by defaults)
     await request(harness.app)
-      .post('/v1/publisher/plans')
+      .post('/v1/operator/plans')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ id: 'growth', name: 'Growth', description: 'Default growth plan', status: 'active' });
 
     const subscriptionsResponse = await request(harness.app)
-      .get('/v1/publisher/subscriptions')
+      .get('/v1/operator/subscriptions')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(subscriptionsResponse.status).toBe(200);
@@ -79,7 +79,7 @@ describe('publisher administration routes', () => {
     expect(subscriptionsResponse.body.data.every((subscription: { tenantId: string }) => subscription.tenantId === 'publisher-admin')).toBe(true);
 
     const updatePlanResponse = await request(harness.app)
-      .put('/v1/publisher/plans/growth')
+      .put('/v1/operator/plans/growth')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         name: 'Growth Plus',
@@ -97,7 +97,7 @@ describe('publisher administration routes', () => {
     });
 
     const plansResponse = await request(harness.app)
-      .get('/v1/publisher/plans')
+      .get('/v1/operator/plans')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(plansResponse.status).toBe(200);
@@ -108,7 +108,7 @@ describe('publisher administration routes', () => {
     });
 
     const dashboardResponse = await request(harness.app)
-      .get('/v1/publisher/dashboard')
+      .get('/v1/operator/dashboard')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(dashboardResponse.status).toBe(200);
@@ -129,16 +129,16 @@ describe('publisher administration routes', () => {
 
     // Create plans needed by this test (no longer seeded by defaults)
     await request(harness.app)
-      .post('/v1/publisher/plans')
+      .post('/v1/operator/plans')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ id: 'starter', name: 'Starter', description: 'Test plan', status: 'active' });
     await request(harness.app)
-      .post('/v1/publisher/plans')
+      .post('/v1/operator/plans')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ id: 'growth', name: 'Growth', description: 'Test plan', status: 'active' });
 
     const createResponse = await request(harness.app)
-      .post('/v1/publisher/tenants')
+      .post('/v1/operator/tenants')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({
         displayName: 'Contoso Ltd',
@@ -155,7 +155,7 @@ describe('publisher administration routes', () => {
 
     const tenantId = createResponse.body.data.id as string;
     const updateResponse = await request(harness.app)
-      .put(`/v1/publisher/tenants/${tenantId}`)
+      .put(`/v1/operator/tenants/${tenantId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({
         displayName: 'Contoso Europe',
@@ -170,28 +170,28 @@ describe('publisher administration routes', () => {
     expect(updateResponse.body.data.status).toBe('past_due');
 
     const suspendResponse = await request(harness.app)
-      .post(`/v1/publisher/tenants/${tenantId}/suspend`)
+      .post(`/v1/operator/tenants/${tenantId}/suspend`)
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(suspendResponse.status).toBe(200);
     expect(suspendResponse.body.data.status).toBe('suspended');
 
     const activateResponse = await request(harness.app)
-      .post(`/v1/publisher/tenants/${tenantId}/activate`)
+      .post(`/v1/operator/tenants/${tenantId}/activate`)
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(activateResponse.status).toBe(200);
     expect(activateResponse.body.data.status).toBe('active');
 
     const cancelResponse = await request(harness.app)
-      .post(`/v1/publisher/tenants/${tenantId}/cancel`)
+      .post(`/v1/operator/tenants/${tenantId}/cancel`)
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(cancelResponse.status).toBe(200);
     expect(cancelResponse.body.data.status).toBe('canceled');
 
     const dashboardAfterCancelResponse = await request(harness.app)
-      .get('/v1/publisher/dashboard')
+      .get('/v1/operator/dashboard')
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(dashboardAfterCancelResponse.status).toBe(200);
@@ -202,7 +202,7 @@ describe('publisher administration routes', () => {
     });
 
     const detailResponse = await request(harness.app)
-      .get(`/v1/publisher/tenants/${tenantId}`)
+      .get(`/v1/operator/tenants/${tenantId}`)
       .set('Authorization', `Bearer ${ownerToken}`);
 
     expect(detailResponse.status).toBe(200);
@@ -218,7 +218,7 @@ describe('publisher administration routes', () => {
     });
 
     const createResponse = await request(harness.app)
-      .post('/v1/publisher/plans')
+      .post('/v1/operator/plans')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ id: 'growth', name: 'Growth', description: 'Archive test plan', status: 'active' });
 
@@ -226,7 +226,7 @@ describe('publisher administration routes', () => {
     expect(createResponse.body.data.status).toBe('active');
 
     const archiveResponse = await request(harness.app)
-      .patch('/v1/publisher/plans/growth/archive')
+      .patch('/v1/operator/plans/growth/archive')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(archiveResponse.status).toBe(200);
@@ -236,14 +236,14 @@ describe('publisher administration routes', () => {
     });
 
     const activeOnlyResponse = await request(harness.app)
-      .get('/v1/publisher/plans')
+      .get('/v1/operator/plans')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(activeOnlyResponse.status).toBe(200);
     expect(activeOnlyResponse.body.data.plans.some((plan: { id: string }) => plan.id === 'growth')).toBe(false);
 
     const includeArchivedResponse = await request(harness.app)
-      .get('/v1/publisher/plans?includeArchived=true')
+      .get('/v1/operator/plans?includeArchived=true')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(includeArchivedResponse.status).toBe(200);
@@ -253,7 +253,7 @@ describe('publisher administration routes', () => {
     });
 
     const unarchiveResponse = await request(harness.app)
-      .patch('/v1/publisher/plans/growth/unarchive')
+      .patch('/v1/operator/plans/growth/unarchive')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(unarchiveResponse.status).toBe(200);
@@ -263,7 +263,7 @@ describe('publisher administration routes', () => {
     });
 
     const restoredResponse = await request(harness.app)
-      .get('/v1/publisher/plans')
+      .get('/v1/operator/plans')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(restoredResponse.status).toBe(200);
