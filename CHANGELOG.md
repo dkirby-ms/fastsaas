@@ -1,3 +1,9 @@
+## [0.27.1](https://github.com/dkirby-ms/fastsaas/compare/v0.27.0...v0.27.1) (2026-06-09)
+
+### Bug Fixes
+
+* redirect to sign-in when cached token refresh fails ([#177](https://github.com/dkirby-ms/fastsaas/issues/177)) ([#178](https://github.com/dkirby-ms/fastsaas/issues/178)) ([cbc3e2d](https://github.com/dkirby-ms/fastsaas/commit/cbc3e2d171d2656f36b95c41a431eb25ed2a84c5))
+
 ## [0.27.0](https://github.com/dkirby-ms/fastsaas/compare/v0.26.4...v0.27.0) (2026-06-09)
 
 ### Features
