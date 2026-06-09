@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
-import { getMarketplacePlansAction, importProductAction, type ActionResult } from '@/app/(portal)/publisher/actions';
+import { getMarketplacePlansAction, importProductAction, type ActionResult } from '@/app/(portal)/operator/actions';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
@@ -28,10 +28,10 @@ function getStatusClasses(status: string) {
   return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
 }
 
-export function PublisherMarketplacePlansClient() {
+export function OperatorMarketplacePlansClient() {
   const queryClient = useQueryClient();
   const marketplacePlansQuery = useQuery({
-    queryKey: ['publisher-marketplace-plans'],
+    queryKey: ['operator-marketplace-plans'],
     queryFn: () => getMarketplacePlansAction().then(unwrapResult),
   });
   const [copiedPlanId, setCopiedPlanId] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export function PublisherMarketplacePlansClient() {
       setImportError(result.message);
     } else {
       setImportId('');
-      await queryClient.invalidateQueries({ queryKey: ['publisher-marketplace-plans'] });
+      await queryClient.invalidateQueries({ queryKey: ['operator-marketplace-plans'] });
     }
   };
 
@@ -72,7 +72,7 @@ export function PublisherMarketplacePlansClient() {
   if (marketplacePlansQuery.isLoading) return <LoadingPanel label="Loading marketplace plans" />;
   if (marketplacePlansQuery.isError) {
     if (isApiErrorStatus(marketplacePlansQuery.error, 403)) {
-      return <ForbiddenState message={getErrorMessage(marketplacePlansQuery.error, 'This account does not have publisher access.')} href="/dashboard" cta="Open customer portal" />;
+      return <ForbiddenState message={getErrorMessage(marketplacePlansQuery.error, 'This account does not have operator access.')} href="/dashboard" cta="Open customer portal" />;
     }
 
     return <ErrorAlert message={getErrorMessage(marketplacePlansQuery.error, 'We could not load marketplace plans.')} />;
@@ -86,7 +86,7 @@ export function PublisherMarketplacePlansClient() {
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Marketplace plans</p>
         <h1 className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">Partner Center plan inventory</h1>
         <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
-          Review synced marketplace plans and copy the External Plan ID when linking publisher plans.
+          Review synced marketplace plans and copy the External Plan ID when linking operator plans.
         </p>
       </header>
 
@@ -140,7 +140,7 @@ export function PublisherMarketplacePlansClient() {
                   <tr key={`${plan.productId}:${plan.externalPlanId}`} className="align-top">
                     <td className="px-6 py-5">
                       <div className="font-mono text-sm font-semibold text-slate-950 dark:text-slate-50">{plan.externalPlanId}</div>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Partner Center plan ID to paste into Publisher Plans.</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Partner Center plan ID to paste into Operator Plans.</p>
                     </td>
                     <td className="px-6 py-5 text-sm text-slate-600 dark:text-slate-300">{plan.productId}</td>
                     <td className="px-6 py-5">

@@ -10,7 +10,7 @@ import { getSession } from 'next-auth/react';
 import { ApiError } from '@/lib/errors';
 import { mockRequest } from '@/lib/mock-api';
 import { customerApiPaths } from '@/lib/api-paths';
-import { getDefaultPortalRoute, hasPublisherAccess } from '@/lib/roles';
+import { getDefaultPortalRoute, hasOperatorAccess } from '@/lib/roles';
 
 export { ApiError } from '@/lib/errors';
 
@@ -47,20 +47,20 @@ async function getAccessToken(): Promise<string> {
   return session.accessToken;
 }
 
-async function assertAreaAccess(area: 'customer' | 'publisher') {
+async function assertAreaAccess(area: 'customer' | 'operator') {
   const session = await getPortalSession();
-  const isPublisher = hasPublisherAccess(session?.roles);
+  const isOperator = hasOperatorAccess(session?.roles);
 
-  if (area === 'publisher' && !isPublisher) {
-    throw new ApiError('Publisher role is required', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the publisher portal.');
+  if (area === 'operator' && !isOperator) {
+    throw new ApiError('Operator role is required', 403, 'AUTH_FORBIDDEN', 'Your account does not have access to the operator portal.');
   }
 
-  if (area === 'customer' && isPublisher) {
+  if (area === 'customer' && isOperator) {
     throw new ApiError(
-      'Customer portal access is unavailable for publisher users',
+      'Customer portal access is unavailable for operator users',
       403,
       'AUTH_FORBIDDEN',
-      `Open ${getDefaultPortalRoute(session?.roles)} to manage publisher workflows.`,
+      `Open ${getDefaultPortalRoute(session?.roles)} to manage operator workflows.`,
     );
   }
 }

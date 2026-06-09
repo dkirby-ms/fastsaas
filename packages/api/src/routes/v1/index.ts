@@ -16,7 +16,7 @@ import { createAuthRouter } from './auth';
 import { createFeaturesRouter } from './features';
 import { createMembersRouter } from './members';
 import { createMeteringRouter } from './metering';
-import { createPublisherRouter } from './publisher';
+import { createOperatorRouter } from './operator';
 import { createSubscriptionsRouter } from './subscriptions';
 
 export function createV1Router(
@@ -55,8 +55,8 @@ export function createV1Router(
 
   if (publisherService && jobPollingService) {
     router.use(
-      '/publisher',
-      createPublisherRouter(
+      '/operator',
+      createOperatorRouter(
         config,
         publisherService,
         jobPollingService,

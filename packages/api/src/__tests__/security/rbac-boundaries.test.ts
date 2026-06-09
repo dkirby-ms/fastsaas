@@ -38,10 +38,10 @@ const readBoundaryCases: BoundaryCase[] = [
   { role: 'Owner', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Member', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
   { role: 'Viewer', resource: 'metering-dashboard', action: 'read', method: 'get', path: '/v1/metering/dashboard', scopes: ['metering:read'], expectedStatus: 200 },
-  { role: 'Admin', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 200 },
-  { role: 'Owner', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 200 },
-  { role: 'Member', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 403 },
-  { role: 'Viewer', resource: 'publisher-dashboard', action: 'read', method: 'get', path: '/v1/publisher/dashboard', scopes: ['api:read'], expectedStatus: 403 }
+  { role: 'Admin', resource: 'operator-dashboard', action: 'read', method: 'get', path: '/v1/operator/dashboard', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Owner', resource: 'operator-dashboard', action: 'read', method: 'get', path: '/v1/operator/dashboard', scopes: ['api:read'], expectedStatus: 200 },
+  { role: 'Member', resource: 'operator-dashboard', action: 'read', method: 'get', path: '/v1/operator/dashboard', scopes: ['api:read'], expectedStatus: 403 },
+  { role: 'Viewer', resource: 'operator-dashboard', action: 'read', method: 'get', path: '/v1/operator/dashboard', scopes: ['api:read'], expectedStatus: 403 }
 ];
 
 const lifecycleBoundaryCases: LifecycleBoundaryCase[] = [
@@ -211,7 +211,7 @@ describe('RBAC boundary security catalog', () => {
     }
   );
 
-  it('blocks publisher app roles from satisfying customer RBAC without tenant membership', async () => {
+  it('blocks operator app roles from satisfying customer RBAC without tenant membership', async () => {
     await harness.createSubscriptionFixture({ tenantId: 'tenant-jwt-only-customer', marketplaceToken: 'jwt-only-customer' });
 
     const token = await harness.createToken({

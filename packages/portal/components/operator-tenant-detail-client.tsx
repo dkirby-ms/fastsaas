@@ -7,14 +7,14 @@ import { ErrorAlert } from '@/components/error-alert';
 import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import {
-  activatePublisherTenantAction,
-  cancelPublisherTenantAction,
-  getPublisherPlansAction,
-  getPublisherTenantAction,
-  suspendPublisherTenantAction,
-  updatePublisherTenantAction,
+  activateOperatorTenantAction,
+  cancelOperatorTenantAction,
+  getOperatorPlansAction,
+  getOperatorTenantAction,
+  suspendOperatorTenantAction,
+  updateOperatorTenantAction,
   type ActionResult,
-} from '@/app/(portal)/publisher/actions';
+} from '@/app/(portal)/operator/actions';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
@@ -26,10 +26,10 @@ function unwrapResult<T>(result: ActionResult<T>): T {
 const statusTone: Record<PublisherTenantStatus, string> = { active: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', trialing: 'bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300', past_due: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300', suspended: 'bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-300', canceled: 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300' };
 const emptyTenant: PublisherTenantUpsertInput = { displayName: '', primaryDomain: '', planId: 'starter', seats: 1, status: 'trialing' };
 
-export function PublisherTenantDetailClient({ tenantId }: Readonly<{ tenantId: string }>) {
+export function OperatorTenantDetailClient({ tenantId }: Readonly<{ tenantId: string }>) {
   const queryClient = useQueryClient();
-  const tenantQuery = useQuery({ queryKey: ['publisher-tenant', tenantId], queryFn: () => getPublisherTenantAction(tenantId).then(unwrapResult) });
-  const plansQuery = useQuery({ queryKey: ['publisher-plans'], queryFn: () => getPublisherPlansAction().then(unwrapResult) });
+  const tenantQuery = useQuery({ queryKey: ['operator-tenant', tenantId], queryFn: () => getOperatorTenantAction(tenantId).then(unwrapResult) });
+  const plansQuery = useQuery({ queryKey: ['operator-plans'], queryFn: () => getOperatorPlansAction().then(unwrapResult) });
   const [formState, setFormState] = useState<PublisherTenantUpsertInput>(emptyTenant);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -39,12 +39,12 @@ export function PublisherTenantDetailClient({ tenantId }: Readonly<{ tenantId: s
   }, [tenantQuery.data]);
 
   const updateMutation = useMutation({
-    mutationFn: (payload: PublisherTenantUpsertInput) => updatePublisherTenantAction(tenantId, payload).then(unwrapResult),
+    mutationFn: (payload: PublisherTenantUpsertInput) => updateOperatorTenantAction(tenantId, payload).then(unwrapResult),
     onSuccess: (data) => {
-      queryClient.setQueryData(['publisher-tenant', tenantId], data);
-      queryClient.invalidateQueries({ queryKey: ['publisher-tenants'] });
-      queryClient.invalidateQueries({ queryKey: ['publisher-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['publisher-plans'] });
+      queryClient.setQueryData(['operator-tenant', tenantId], data);
+      queryClient.invalidateQueries({ queryKey: ['operator-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['operator-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['operator-plans'] });
       setSuccessMessage('Tenant updates saved.');
     },
   });
@@ -52,14 +52,14 @@ export function PublisherTenantDetailClient({ tenantId }: Readonly<{ tenantId: s
   const actionMutation = useMutation({
     mutationFn: async (action: 'activate' | 'suspend' | 'cancel') => {
       const subscriptionId = tenantQuery.data?.subscriptionId ?? tenantId;
-      if (action === 'activate') return activatePublisherTenantAction(subscriptionId).then(unwrapResult);
-      if (action === 'suspend') return suspendPublisherTenantAction(subscriptionId).then(unwrapResult);
-      return cancelPublisherTenantAction(subscriptionId).then(unwrapResult);
+      if (action === 'activate') return activateOperatorTenantAction(subscriptionId).then(unwrapResult);
+      if (action === 'suspend') return suspendOperatorTenantAction(subscriptionId).then(unwrapResult);
+      return cancelOperatorTenantAction(subscriptionId).then(unwrapResult);
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['publisher-tenant', tenantId], data);
-      queryClient.invalidateQueries({ queryKey: ['publisher-tenants'] });
-      queryClient.invalidateQueries({ queryKey: ['publisher-dashboard'] });
+      queryClient.setQueryData(['operator-tenant', tenantId], data);
+      queryClient.invalidateQueries({ queryKey: ['operator-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['operator-dashboard'] });
       setSuccessMessage('Tenant status updated.');
     },
   });
@@ -68,7 +68,7 @@ export function PublisherTenantDetailClient({ tenantId }: Readonly<{ tenantId: s
   if (tenantQuery.isError || plansQuery.isError) {
     const error = tenantQuery.error ?? plansQuery.error;
     if (isApiErrorStatus(error, 403)) {
-      return <ForbiddenState message={getErrorMessage(error, 'This account does not have publisher access.')} href="/dashboard" cta="Open customer portal" />;
+      return <ForbiddenState message={getErrorMessage(error, 'This account does not have operator access.')} href="/dashboard" cta="Open customer portal" />;
     }
     return <ErrorAlert message={getErrorMessage(error, 'We could not load that tenant.')} />;
   }

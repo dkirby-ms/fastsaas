@@ -4,29 +4,28 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 
 const customerNavigation = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/analytics', label: 'Analytics' },
-  { href: '/plan', label: 'Plan' },
   { href: '/webhooks', label: 'Webhooks' },
   { href: '/settings', label: 'Settings' },
 ];
 
-const publisherNavigation = [
-  { href: '/publisher', label: 'Overview' },
-  { href: '/publisher/plans', label: 'Plans' },
-  { href: '/publisher/tenants', label: 'Tenants' },
+const operatorNavigation = [
+  { href: '/operator', label: 'Overview' },
+  { href: '/operator/plans', label: 'Plans' },
+  { href: '/operator/tenants', label: 'Tenants' },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const isPublisher = hasPublisherAccess(session?.roles);
-  const isPublisherArea = pathname.startsWith('/publisher');
-  const navigation = isPublisherArea ? publisherNavigation : customerNavigation;
-  const navLabel = isPublisherArea ? 'Publisher' : 'Customer';
+  const isOperator = hasOperatorAccess(session?.roles);
+  const isOperatorArea = pathname.startsWith('/operator');
+  const navigation = isOperatorArea ? operatorNavigation : customerNavigation;
+  const navLabel = isOperatorArea ? 'Operator' : 'Customer';
 
   return (
     <div className="space-y-4">
@@ -51,12 +50,12 @@ export function SidebarNav() {
         })}
       </nav>
 
-      {isPublisher && (
+      {isOperator && (
         <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
           <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
             Switch portal
           </p>
-          {isPublisherArea ? (
+          {isOperatorArea ? (
             <Link
               href="/dashboard"
               className="block rounded-2xl px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50"
@@ -65,10 +64,10 @@ export function SidebarNav() {
             </Link>
           ) : (
             <Link
-              href="/publisher"
+              href="/operator"
               className="block rounded-2xl px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50"
             >
-              Publisher Portal
+              Operator Portal
             </Link>
           )}
         </div>

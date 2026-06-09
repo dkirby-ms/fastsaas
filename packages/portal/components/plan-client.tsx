@@ -9,7 +9,7 @@ import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 
 function unwrapResult<T>(result: ActionResult<T>): T {
   if (!result.ok) throw new ApiError(result.message, result.status, result.code);
@@ -31,8 +31,8 @@ export function PlanClient() {
   if (plansQuery.isLoading) return <LoadingPanel label="Loading your plan options" />;
   if (plansQuery.isError) {
     if (isApiErrorStatus(plansQuery.error, 403)) {
-      if (hasPublisherAccess(session?.roles)) {
-        return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account cannot open customer plan management.')} href="/publisher" cta="Open publisher portal" />;
+      if (hasOperatorAccess(session?.roles)) {
+        return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account cannot open customer plan management.')} href="/operator" cta="Open operator portal" />;
       }
       return <ForbiddenState title="No active subscription" message="You don't have an active subscription for this portal." href="/no-subscription" cta="Go to subscription page" />;
     }

@@ -7,7 +7,7 @@ import type { ApiRequest } from '../http';
 import type { TenantMemberService } from '../services/tenant-member-service';
 import { getRoles, getScopes, getUserId } from './auth';
 
-export type AuthorizationModel = 'customer' | 'publisher';
+export type AuthorizationModel = 'customer' | 'operator';
 
 export interface InjectTenantContextOptions {
   authorizationModel?: AuthorizationModel;
@@ -50,13 +50,13 @@ export function injectTenantContext(
         ? await tenantMemberService.resolveMemberRole(tenantId, userId)
         : null;
       const roles =
-        authorizationModel === 'publisher'
+        authorizationModel === 'operator'
           ? jwtRoles
           : tenantMemberService
             ? member ? [member.role] : []
             : jwtRoles;
       const roleSource =
-        authorizationModel === 'publisher'
+        authorizationModel === 'operator'
           ? jwtRoles.length > 0 ? 'jwt' : 'none'
           : tenantMemberService
             ? member ? 'tenant_membership' : 'none'

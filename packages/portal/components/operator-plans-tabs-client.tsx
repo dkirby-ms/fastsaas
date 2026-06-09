@@ -2,23 +2,23 @@
 
 import clsx from 'clsx';
 import { useState } from 'react';
-import { PublisherMarketplacePlansClient } from '@/components/publisher-marketplace-plans-client';
-import { PublisherPlansClient } from '@/components/publisher-plans-client';
+import { OperatorMarketplacePlansClient } from '@/components/operator-marketplace-plans-client';
+import { OperatorPlansClient } from '@/components/operator-plans-client';
 
-type PlansTab = 'publisher-plans' | 'marketplace-plans';
+type PlansTab = 'operator-plans' | 'marketplace-plans';
 
 const tabs: Array<{ id: PlansTab; label: string }> = [
-  { id: 'publisher-plans', label: 'Publisher Plans' },
+  { id: 'operator-plans', label: 'Operator Plans' },
   { id: 'marketplace-plans', label: 'Marketplace Plans' },
 ];
 
-export function PublisherPlansTabsClient() {
-  const [activeTab, setActiveTab] = useState<PlansTab>('publisher-plans');
+export function OperatorPlansTabsClient() {
+  const [activeTab, setActiveTab] = useState<PlansTab>('operator-plans');
 
   return (
     <section className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white p-2 shadow-panel dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Publisher plans views">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Operator plans views">
           {tabs.map((tab) => {
             const isActive = tab.id === activeTab;
 
@@ -44,7 +44,7 @@ export function PublisherPlansTabsClient() {
       </div>
 
       <div role="tabpanel">
-        {activeTab === 'publisher-plans' ? <PublisherPlansClient /> : <PublisherMarketplacePlansClient />}
+        {activeTab === 'operator-plans' ? <OperatorPlansClient /> : <OperatorMarketplacePlansClient />}
       </div>
     </section>
   );

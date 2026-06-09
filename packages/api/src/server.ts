@@ -166,7 +166,7 @@ async function bootstrap(): Promise<void> {
   const publisherService = new PublisherService(
     subscriptionRepository,
     publisherPlanRepository,
-    logger.child({ component: 'publisher' })
+    logger.child({ component: 'operator' })
   );
   const productCatalogService = new ProductCatalogService({
     repository: productCatalogRepository,

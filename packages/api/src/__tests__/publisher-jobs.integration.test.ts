@@ -81,7 +81,7 @@ describe('publisher Product Ingestion job routes', () => {
     });
 
     const listResponse = await request(harness.app)
-      .get('/v1/publisher/jobs?page=1&pageSize=10')
+      .get('/v1/operator/jobs?page=1&pageSize=10')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(listResponse.status).toBe(200);
@@ -90,7 +90,7 @@ describe('publisher Product Ingestion job routes', () => {
     expect(listResponse.body.data.jobs[0].jobId).toBe('job-100');
 
     const detailResponse = await request(harness.app)
-      .get('/v1/publisher/jobs/job-100')
+      .get('/v1/operator/jobs/job-100')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(detailResponse.status).toBe(200);
@@ -104,7 +104,7 @@ describe('publisher Product Ingestion job routes', () => {
     ]);
 
     const cancelResponse = await request(harness.app)
-      .post('/v1/publisher/jobs/job-100/cancel')
+      .post('/v1/operator/jobs/job-100/cancel')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(cancelResponse.status).toBe(200);

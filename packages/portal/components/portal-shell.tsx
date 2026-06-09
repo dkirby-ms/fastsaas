@@ -6,7 +6,6 @@ import { useHasFeature } from '@/components/features-provider';
 import { SidebarNav } from '@/components/sidebar-nav';
 import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { hasPublisherAccess } from '@/lib/roles';
 import { usePortalShellStore } from '@/lib/store';
 
 export function PortalShell({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -16,10 +15,9 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
   const toggleSidebar = usePortalShellStore((state) => state.toggleSidebar);
   const hasDarkMode = useHasFeature('dark-mode');
   const userName = session?.user?.name ?? 'Customer';
-  const isPublisherArea = pathname.startsWith('/publisher');
-  const portalTitle = isPublisherArea ? 'Publisher Portal' : 'Customer Portal';
-  const portalSubtitle = isPublisherArea ? 'Marketplace operations' : 'Customer self-service';
-  const isPublisher = hasPublisherAccess(session?.roles);
+  const isOperatorArea = pathname.startsWith('/operator');
+  const portalTitle = isOperatorArea ? 'Operator Portal' : 'Customer Portal';
+  const portalSubtitle = isOperatorArea ? 'SaaS operations' : 'Customer self-service';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">

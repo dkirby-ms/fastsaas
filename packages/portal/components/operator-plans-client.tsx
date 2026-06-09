@@ -15,16 +15,16 @@ import { ForbiddenState } from '@/components/forbidden-state';
 import { LoadingPanel } from '@/components/loading-panel';
 import {
   archivePlan,
-  createPublisherPlanAction,
+  createOperatorPlanAction,
   getFeatureGatesAction,
   getMarketplacePlansAction,
-  getPublisherPlansAction,
+  getOperatorPlansAction,
   removeFeatureGateAction,
   setFeatureGatesAction,
   unarchivePlan,
-  updatePublisherPlanAction,
+  updateOperatorPlanAction,
   type ActionResult,
-} from '@/app/(portal)/publisher/actions';
+} from '@/app/(portal)/operator/actions';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
 
@@ -280,11 +280,11 @@ function FeatureGatesPanel({ planId }: { planId: string }) {
   );
 }
 
-export function PublisherPlansClient() {
+export function OperatorPlansClient() {
   const queryClient = useQueryClient();
-  const plansQuery = useQuery({ queryKey: ['publisher-plans'], queryFn: () => getPublisherPlansAction().then(unwrapResult) });
+  const plansQuery = useQuery({ queryKey: ['operator-plans'], queryFn: () => getOperatorPlansAction().then(unwrapResult) });
   const marketplacePlansQuery = useQuery({
-    queryKey: ['publisher-marketplace-plans'],
+    queryKey: ['operator-marketplace-plans'],
     queryFn: () => getMarketplacePlansAction().then(unwrapResult),
   });
   const [editorState, setEditorState] = useState<EditorState>({ mode: 'list' });
@@ -304,11 +304,11 @@ export function PublisherPlansClient() {
     [editorState, plansQuery.data],
   );
 
-  const invalidatePublisherData = async () => {
+  const invalidateOperatorData = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['publisher-plans'] }),
-      queryClient.invalidateQueries({ queryKey: ['publisher-dashboard'] }),
-      queryClient.invalidateQueries({ queryKey: ['publisher-tenants'] }),
+      queryClient.invalidateQueries({ queryKey: ['operator-plans'] }),
+      queryClient.invalidateQueries({ queryKey: ['operator-dashboard'] }),
+      queryClient.invalidateQueries({ queryKey: ['operator-tenants'] }),
     ]);
   };
 
@@ -333,18 +333,18 @@ export function PublisherPlansClient() {
   };
 
   const createPlanMutation = useMutation({
-    mutationFn: (payload: CreatePublisherPlanInput) => createPublisherPlanAction(payload).then(unwrapResult),
+    mutationFn: (payload: CreatePublisherPlanInput) => createOperatorPlanAction(payload).then(unwrapResult),
     onSuccess: async () => {
-      await invalidatePublisherData();
+      await invalidateOperatorData();
       closeEditor();
       setSuccessMessage('Plan created.');
     },
   });
 
   const updatePlanMutation = useMutation({
-    mutationFn: ({ planId, payload }: { planId: string; payload: PublisherPlanUpdateInput }) => updatePublisherPlanAction(planId, payload).then(unwrapResult),
+    mutationFn: ({ planId, payload }: { planId: string; payload: PublisherPlanUpdateInput }) => updateOperatorPlanAction(planId, payload).then(unwrapResult),
     onSuccess: async () => {
-      await invalidatePublisherData();
+      await invalidateOperatorData();
       closeEditor();
       setSuccessMessage('Plan updated.');
     },
@@ -353,7 +353,7 @@ export function PublisherPlansClient() {
   const archivePlanMutation = useMutation({
     mutationFn: (planId: string) => archivePlan(planId).then(unwrapResult),
     onSuccess: async () => {
-      await invalidatePublisherData();
+      await invalidateOperatorData();
       setSuccessMessage('Plan archived.');
     },
   });
@@ -361,7 +361,7 @@ export function PublisherPlansClient() {
   const unarchivePlanMutation = useMutation({
     mutationFn: (planId: string) => unarchivePlan(planId).then(unwrapResult),
     onSuccess: async () => {
-      await invalidatePublisherData();
+      await invalidateOperatorData();
       setSuccessMessage('Plan restored.');
     },
   });
@@ -369,14 +369,14 @@ export function PublisherPlansClient() {
   const isSaving = createPlanMutation.isPending || updatePlanMutation.isPending;
   const isChangingPlanStatus = archivePlanMutation.isPending || unarchivePlanMutation.isPending;
 
-  if (plansQuery.isLoading) return <LoadingPanel label="Loading publisher plan catalog" />;
+  if (plansQuery.isLoading) return <LoadingPanel label="Loading operator plan catalog" />;
   if (plansQuery.isError) {
     if (isApiErrorStatus(plansQuery.error, 403)) {
-      return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account does not have publisher access.')} href="/dashboard" cta="Open customer portal" />;
+      return <ForbiddenState message={getErrorMessage(plansQuery.error, 'This account does not have operator access.')} href="/dashboard" cta="Open customer portal" />;
     }
-    return <ErrorAlert message={getErrorMessage(plansQuery.error, 'We could not load publisher plans.')} />;
+    return <ErrorAlert message={getErrorMessage(plansQuery.error, 'We could not load operator plans.')} />;
   }
-  if (!plansQuery.data) return <LoadingPanel label="Loading publisher plan catalog" />;
+  if (!plansQuery.data) return <LoadingPanel label="Loading operator plan catalog" />;
 
   const activePlans = plansQuery.data.plans.filter((plan) => plan.status === 'active');
   const archivedPlans = plansQuery.data.plans.filter((plan) => plan.status === 'archived');
@@ -490,7 +490,7 @@ export function PublisherPlansClient() {
       <header className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-panel dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Publisher plans</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Operator plans</p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">Manage your subscription catalog</h1>
             <p className="mt-3 max-w-3xl text-sm text-slate-500 dark:text-slate-400">Keep pricing, seat limits, marketplace linking, and archive state aligned with the publisher experience.</p>
           </div>

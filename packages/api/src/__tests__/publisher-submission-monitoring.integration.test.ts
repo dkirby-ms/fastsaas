@@ -139,7 +139,7 @@ describe('publisher submission monitoring routes', () => {
     });
 
     const submissionsResponse = await request(harness.app)
-      .get(`/v1/publisher/products/${detail.product.id}/submissions`)
+      .get(`/v1/operator/products/${detail.product.id}/submissions`)
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(submissionsResponse.status).toBe(200);
@@ -156,7 +156,7 @@ describe('publisher submission monitoring routes', () => {
     expect(submissionsResponse.body.data.history).toHaveLength(2);
 
     const diffResponse = await request(harness.app)
-      .get(`/v1/publisher/products/${detail.product.id}/diff`)
+      .get(`/v1/operator/products/${detail.product.id}/diff`)
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(diffResponse.status).toBe(200);

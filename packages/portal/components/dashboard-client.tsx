@@ -11,7 +11,7 @@ import { LoadingPanel } from '@/components/loading-panel';
 import { LockedFeature } from '@/components/locked-feature';
 import { ApiError } from '@/lib/errors';
 import { getErrorMessage, isApiErrorStatus } from '@/lib/errors';
-import { hasPublisherAccess } from '@/lib/roles';
+import { hasOperatorAccess } from '@/lib/roles';
 
 const stateTone: Record<NonNullable<DashboardData['subscription']>['state'], string> = {
   active: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
@@ -70,8 +70,8 @@ export function DashboardClient() {
   if (dashboardQuery.isLoading) return <LoadingPanel label="Loading your subscription overview" />;
   if (dashboardQuery.isError) {
     if (isApiErrorStatus(dashboardQuery.error, 403)) {
-      if (hasPublisherAccess(session?.roles)) {
-        return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account cannot open the customer portal.')} href="/publisher" cta="Open publisher portal" />;
+      if (hasOperatorAccess(session?.roles)) {
+        return <ForbiddenState message={getErrorMessage(dashboardQuery.error, 'This account cannot open the customer portal.')} href="/operator" cta="Open operator portal" />;
       }
       return <ForbiddenState title="No active subscription" message="You don't have an active subscription for this portal." href="/no-subscription" cta="Go to subscription page" />;
     }
