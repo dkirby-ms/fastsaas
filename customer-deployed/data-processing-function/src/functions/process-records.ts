@@ -90,6 +90,10 @@ export async function processRecords(request: HttpRequest, context: InvocationCo
     });
   }
 
+  if (payload.records.length > 1000) {
+    return jsonResponse(400, { error: 'records array must not exceed 1000 items.' });
+  }
+
   const fastsaasApiUrl = process.env.FASTSAAS_API_URL?.trim();
   if (!fastsaasApiUrl) {
     context.error('FASTSAAS_API_URL is not configured.');
@@ -143,6 +147,11 @@ export async function processRecords(request: HttpRequest, context: InvocationCo
     });
   }
 
+  const deduplicated =
+    typeof meteringBody === 'object' && meteringBody !== null && !Array.isArray(meteringBody)
+      ? (meteringBody as MeteringEventResponse).data?.deduplicated ?? false
+      : false;
+
   return jsonResponse(200, {
     recordsProcessed: quantity,
     meteringEvent: {
@@ -150,7 +159,7 @@ export async function processRecords(request: HttpRequest, context: InvocationCo
       dimensionId: RECORDS_DIMENSION_ID,
       quantity,
       status: 'pending',
-      deduplicated: false
+      deduplicated
     }
   });
 }

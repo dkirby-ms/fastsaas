@@ -42,10 +42,4 @@ export async function down(db: Kysely<unknown>): Promise<void> {
       AND plan_id = 'premium-1'
       AND feature_key = 'data-processing'
   `.execute(db);
-
-  await sql`
-    DELETE FROM publisher_plans
-    WHERE publisher_tenant_id = ${publisherTenantId}
-      AND id = 'premium-1'
-  `.execute(db);
 }

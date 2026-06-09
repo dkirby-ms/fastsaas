@@ -43,6 +43,12 @@ After deployment, set `FASTSAAS_API_URL` in the Function App configuration and r
 6. Observe the 200 response showing `recordsProcessed` and the pending metering event summary.
 7. Verify the FastSaaS metering dashboard or `POST /v1/metering/events` outbox state to confirm the usage event was accepted.
 
+## Security note
+
+The function is registered with `authLevel: 'anonymous'`, meaning Azure Functions does not enforce its own function key on inbound requests. The only authentication layer is the bearer token that callers must supply and that is forwarded to the FastSaaS metering API — an invalid or missing token produces a `401` or `502` before any metering event is recorded.
+
+If you want an additional network-level protection layer, change `authLevel` to `'function'` in `src/functions/process-records.ts` and pass the Azure-issued function key as `x-functions-key` on every request.
+
 ## API contract reference
 ### Function request
 `POST /api/process-records`
