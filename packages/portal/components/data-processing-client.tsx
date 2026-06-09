@@ -13,11 +13,10 @@ import { ErrorAlert } from '@/components/error-alert';
 import { LoadingPanel } from '@/components/loading-panel';
 import { LockedFeature } from '@/components/locked-feature';
 import { useHasFeature } from '@/components/features-provider';
-import { ApiError } from '@/lib/errors';
-import { getErrorMessage } from '@/lib/errors';
+import { ApiError, getErrorMessage } from '@/lib/errors';
 
 interface DataProcessingClientProps {
-  initialDashboardResult: ActionResult<MeteringDashboardSummary>;
+  initialDashboardResult: ActionResult<MeteringDashboardSummary> | null;
   demoFunctionConfigured: boolean;
 }
 
@@ -79,7 +78,7 @@ export function DataProcessingClient({ initialDashboardResult, demoFunctionConfi
   const meteringQuery = useQuery({
     queryKey: ['metering-dashboard'],
     queryFn: () => getMeteringDashboard().then(unwrapResult),
-    initialData: initialDashboardResult.ok ? initialDashboardResult.data : undefined,
+    initialData: initialDashboardResult?.ok ? initialDashboardResult.data : undefined,
   });
   const processMutation = useMutation({
     mutationFn: (records: object[]) => processRecords(records).then(unwrapResult),
@@ -105,7 +104,7 @@ export function DataProcessingClient({ initialDashboardResult, demoFunctionConfi
 
   const dashboardError = meteringQuery.isError
     ? getErrorMessage(meteringQuery.error, 'We could not load the metering dashboard summary.')
-    : !meteringQuery.data && !initialDashboardResult.ok
+    : !meteringQuery.data && initialDashboardResult && !initialDashboardResult.ok
       ? initialDashboardResult.message
       : null;
   const result = processMutation.data;

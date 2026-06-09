@@ -459,7 +459,7 @@ export async function processRecords(records: object[]): Promise<ActionResult<Pr
     const dashboard = config.isMockMode
       ? await getMockDashboard()
       : await liveCustomerRequest<DashboardData>(config.apiBaseUrl, '/portal/dashboard', token);
-    const subscription = dashboard.subscription as (NonNullable<DashboardData['subscription']> & { id?: string }) | null;
+    const subscription = dashboard.subscription;
 
     if (!subscription) {
       throw new ApiError(
@@ -480,7 +480,7 @@ export async function processRecords(records: object[]): Promise<ActionResult<Pr
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          subscriptionId: typeof subscription.id === 'string' && subscription.id.trim() ? subscription.id : subscription.tenantId,
+          subscriptionId: subscription.id,
           planId: subscription.planId,
           records,
         }),
