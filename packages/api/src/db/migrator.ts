@@ -17,6 +17,7 @@ import * as featureDefinitionsMigration from './migrations/20260607T154900_featu
 import * as seedPremium1DarkModeMigration from './migrations/20260607T180000_seed_premium1_dark_mode';
 import * as publisherPlansArchivedStatusMigration from './migrations/20260608T132240_publisher_plans_archived_status';
 import * as seedDataProcessingFeatureMigration from './migrations/20260609T120000_seed_data_processing_feature';
+import * as removeDarkModeFeatureMigration from './migrations/20260609T131900_remove_dark_mode_feature';
 
 const MIGRATIONS: Record<string, Migration> = {
   '20260531T213532_audit_logs': auditLogsMigration,
@@ -33,7 +34,8 @@ const MIGRATIONS: Record<string, Migration> = {
   '20260607T154900_feature_definitions': featureDefinitionsMigration,
   '20260607T180000_seed_premium1_dark_mode': seedPremium1DarkModeMigration,
   '20260608T132240_publisher_plans_archived_status': publisherPlansArchivedStatusMigration,
-  '20260609T120000_seed_data_processing_feature': seedDataProcessingFeatureMigration
+  '20260609T120000_seed_data_processing_feature': seedDataProcessingFeatureMigration,
+  '20260609T131900_remove_dark_mode_feature': removeDarkModeFeatureMigration
 };
 
 class StaticMigrationProvider implements MigrationProvider {

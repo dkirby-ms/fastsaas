@@ -13,7 +13,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
   await sql.raw(`
     INSERT INTO feature_definitions (feature_key, label, description, category) VALUES
-      ('dark-mode',           'Dark Mode',          'Unlock dark theme toggle',                                          'visual'),
       ('advanced-analytics',  'Advanced Analytics', 'Usage analytics dashboard with charts',                            'visual'),
       ('export-csv',          'Export CSV',          'Export data tables to CSV',                                        'functional'),
       ('custom-webhooks',     'Custom Webhooks',     'Configure custom webhook endpoints for lifecycle events',          'functional')

@@ -42,7 +42,7 @@ import { DefaultPlanFeatureGateService } from '../services/plan-feature-gate-ser
 // packages/api/src/db/migrations/20260607T154900_feature_definitions.ts)
 // ---------------------------------------------------------------------------
 
-const DEMO_FEATURE_KEYS = ['advanced-analytics', 'custom-webhooks', 'dark-mode', 'export-csv'] as const;
+const DEMO_FEATURE_KEYS = ['advanced-analytics', 'custom-webhooks', 'export-csv', 'data-processing'] as const;
 
 // ---------------------------------------------------------------------------
 // Global JWKS server — shared across all integration tests in this file
@@ -177,7 +177,7 @@ describe('Plan differentiation and middleware enforcement', () => {
 
     // Seed all 4 demo features enabled for plan-pro
     await featureGateRepository.upsertMany([
-      { publisherTenantId: PRO_TENANT, planId: PLAN_PRO, featureKey: 'dark-mode', enabled: true },
+      { publisherTenantId: PRO_TENANT, planId: PLAN_PRO, featureKey: 'data-processing', enabled: true },
       { publisherTenantId: PRO_TENANT, planId: PLAN_PRO, featureKey: 'advanced-analytics', enabled: true },
       { publisherTenantId: PRO_TENANT, planId: PLAN_PRO, featureKey: 'export-csv', enabled: true },
       { publisherTenantId: PRO_TENANT, planId: PLAN_PRO, featureKey: 'custom-webhooks', enabled: true }
@@ -229,7 +229,7 @@ describe('Plan differentiation and middleware enforcement', () => {
       expect(response.body.status).toBe('success');
       expect(response.body.data.features).toHaveLength(4);
       expect(response.body.data.features).toEqual(
-        expect.arrayContaining(['dark-mode', 'advanced-analytics', 'export-csv', 'custom-webhooks'])
+        expect.arrayContaining(['data-processing', 'advanced-analytics', 'export-csv', 'custom-webhooks'])
       );
     });
 
@@ -291,7 +291,7 @@ describe('Plan upgrade flow', () => {
 
     // Seed 4 demo features for plan-pro
     await featureGateRepository.upsertMany([
-      { publisherTenantId: upgradeTestTenant, planId: PLAN_PRO, featureKey: 'dark-mode', enabled: true },
+      { publisherTenantId: upgradeTestTenant, planId: PLAN_PRO, featureKey: 'data-processing', enabled: true },
       { publisherTenantId: upgradeTestTenant, planId: PLAN_PRO, featureKey: 'advanced-analytics', enabled: true },
       { publisherTenantId: upgradeTestTenant, planId: PLAN_PRO, featureKey: 'export-csv', enabled: true },
       { publisherTenantId: upgradeTestTenant, planId: PLAN_PRO, featureKey: 'custom-webhooks', enabled: true }
@@ -338,7 +338,7 @@ describe('Plan upgrade flow', () => {
     const featuresAfterUpgrade = await planFeatureGateService.listFeaturesForTenant(upgradeTestTenant);
     expect(featuresAfterUpgrade).toHaveLength(4);
     expect(featuresAfterUpgrade).toEqual(
-      expect.arrayContaining(['dark-mode', 'advanced-analytics', 'export-csv', 'custom-webhooks'])
+      expect.arrayContaining(['data-processing', 'advanced-analytics', 'export-csv', 'custom-webhooks'])
     );
 
     // Verify the specific feature gate now passes
@@ -352,7 +352,7 @@ describe('Plan upgrade flow', () => {
 
     // Seed 4 demo features for plan-pro only — no gates for plan-starter
     await featureGateRepository.upsertMany([
-      { publisherTenantId: downgradeTestTenant, planId: PLAN_PRO, featureKey: 'dark-mode', enabled: true },
+      { publisherTenantId: downgradeTestTenant, planId: PLAN_PRO, featureKey: 'data-processing', enabled: true },
       { publisherTenantId: downgradeTestTenant, planId: PLAN_PRO, featureKey: 'advanced-analytics', enabled: true },
       { publisherTenantId: downgradeTestTenant, planId: PLAN_PRO, featureKey: 'export-csv', enabled: true },
       { publisherTenantId: downgradeTestTenant, planId: PLAN_PRO, featureKey: 'custom-webhooks', enabled: true }
@@ -413,17 +413,17 @@ describe('Feature definitions integrity', () => {
 
   const demoDefs: FeatureDefinition[] = [
     {
-      featureKey: 'dark-mode',
-      label: 'Dark Mode',
-      description: 'Unlock dark theme toggle',
-      category: 'visual',
-      createdAt: new Date().toISOString()
-    },
-    {
       featureKey: 'advanced-analytics',
       label: 'Advanced Analytics',
       description: 'Usage analytics dashboard with charts',
       category: 'visual',
+      createdAt: new Date().toISOString()
+    },
+    {
+      featureKey: 'data-processing',
+      label: 'Data Processing',
+      description: 'Metered data processing pipeline',
+      category: 'functional',
       createdAt: new Date().toISOString()
     },
     {
@@ -492,104 +492,3 @@ describe('Feature definitions integrity', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Section 5: premium-1 plan gate — Issue #155
-// ---------------------------------------------------------------------------
-
-describe('premium-1 plan dark-mode gate (Issue #155)', () => {
-  const PUBLISHER_TENANT = 'publisher-tenant-premium';
-  const PREMIUM_PLAN = 'premium-1';
-  const OTHER_PLANS = ['plan-starter', 'plan-basic', 'plan-free'];
-
-  it('dark-mode is enabled for premium-1 plan', async () => {
-    const { featureGateRepository, subscriptionRepository, planFeatureGateService } = createFreshDeps();
-
-    await featureGateRepository.upsertMany([
-      { publisherTenantId: PUBLISHER_TENANT, planId: PREMIUM_PLAN, featureKey: 'dark-mode', enabled: true }
-    ]);
-
-    await subscriptionRepository.createManagedSubscription({
-      tenantId: PUBLISHER_TENANT,
-      marketplaceSubscriptionId: `mkt-premium-${randomUUID()}`,
-      planId: PREMIUM_PLAN,
-      seats: 10,
-      status: 'Active',
-      offerId: 'offer-premium',
-      correlationId: randomUUID(),
-      metadata: {},
-      auditEntry: { action: 'subscribe', createdAt: new Date().toISOString(), source: 'api', userId: 'seed' }
-    });
-
-    const features = await planFeatureGateService.listFeaturesForTenant(PUBLISHER_TENANT);
-    expect(features).toContain('dark-mode');
-  });
-
-  it('dark-mode is NOT enabled for other plans when no gate is configured', async () => {
-    for (const planId of OTHER_PLANS) {
-      const { featureGateRepository, subscriptionRepository, planFeatureGateService } = createFreshDeps();
-
-      // Only seed dark-mode for premium-1 — other plans have no gate
-      await featureGateRepository.upsertMany([
-        { publisherTenantId: `tenant-${planId}`, planId: PREMIUM_PLAN, featureKey: 'dark-mode', enabled: true }
-      ]);
-
-      const otherTenant = `tenant-${planId}`;
-      await subscriptionRepository.createManagedSubscription({
-        tenantId: otherTenant,
-        marketplaceSubscriptionId: `mkt-${planId}-${randomUUID()}`,
-        planId,
-        seats: 5,
-        status: 'Active',
-        offerId: `offer-${planId}`,
-        correlationId: randomUUID(),
-        metadata: {},
-        auditEntry: { action: 'subscribe', createdAt: new Date().toISOString(), source: 'api', userId: 'seed' }
-      });
-
-      const features = await planFeatureGateService.listFeaturesForTenant(otherTenant);
-      expect(features, `plan ${planId} should not include dark-mode`).not.toContain('dark-mode');
-    }
-  });
-
-  it('hasFeature returns true for premium-1 / dark-mode gate', async () => {
-    const { featureGateRepository, subscriptionRepository, planFeatureGateService } = createFreshDeps();
-
-    await featureGateRepository.upsertMany([
-      { publisherTenantId: PUBLISHER_TENANT, planId: PREMIUM_PLAN, featureKey: 'dark-mode', enabled: true }
-    ]);
-
-    await subscriptionRepository.createManagedSubscription({
-      tenantId: PUBLISHER_TENANT,
-      marketplaceSubscriptionId: `mkt-hf-${randomUUID()}`,
-      planId: PREMIUM_PLAN,
-      seats: 10,
-      status: 'Active',
-      offerId: 'offer-premium',
-      correlationId: randomUUID(),
-      metadata: {},
-      auditEntry: { action: 'subscribe', createdAt: new Date().toISOString(), source: 'api', userId: 'seed' }
-    });
-
-    const enabled = await planFeatureGateService.hasFeature(PUBLISHER_TENANT, 'dark-mode');
-    expect(enabled).toBe(true);
-  });
-
-  it('hasFeature returns false for a non-premium plan with no dark-mode gate', async () => {
-    const { subscriptionRepository, planFeatureGateService } = createFreshDeps();
-    const starterTenant = `tenant-starter-${randomUUID()}`;
-
-    await subscriptionRepository.createManagedSubscription({
-      tenantId: starterTenant,
-      marketplaceSubscriptionId: `mkt-starter-${randomUUID()}`,
-      planId: 'plan-starter',
-      seats: 5,
-      status: 'Active',
-      offerId: 'offer-starter',
-      correlationId: randomUUID(),
-      metadata: {},
-      auditEntry: { action: 'subscribe', createdAt: new Date().toISOString(), source: 'api', userId: 'seed' }
-    });
-
-    const enabled = await planFeatureGateService.hasFeature(starterTenant, 'dark-mode');
-    expect(enabled).toBe(false);
-  });
-});
