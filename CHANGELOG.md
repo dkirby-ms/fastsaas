@@ -1,3 +1,9 @@
+## [0.28.0](https://github.com/dkirby-ms/fastsaas/compare/v0.27.1...v0.28.0) (2026-06-09)
+
+### Features
+
+* remove dark mode feature gate entirely ([#179](https://github.com/dkirby-ms/fastsaas/issues/179)) ([9db1138](https://github.com/dkirby-ms/fastsaas/commit/9db113871a80a78f6028a30e56d4cb4805834d40))
+
 ## [0.27.1](https://github.com/dkirby-ms/fastsaas/compare/v0.27.0...v0.27.1) (2026-06-09)
 
 ### Bug Fixes
