@@ -1,3 +1,9 @@
+## [0.27.0](https://github.com/dkirby-ms/fastsaas/compare/v0.26.4...v0.27.0) (2026-06-09)
+
+### Features
+
+* demo data-processing Azure Function and portal page ([#176](https://github.com/dkirby-ms/fastsaas/issues/176)) ([565dbf8](https://github.com/dkirby-ms/fastsaas/commit/565dbf8e423cabb71f318a7d38dc1e4c3e06d9ad)), closes [#173](https://github.com/dkirby-ms/fastsaas/issues/173)
+
 ## [0.26.4](https://github.com/dkirby-ms/fastsaas/compare/v0.26.3...v0.26.4) (2026-06-09)
 
 ### Bug Fixes
