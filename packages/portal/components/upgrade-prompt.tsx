@@ -2,10 +2,6 @@
 
 /** Human-readable labels for known feature keys. Unknown keys fall back to formatted key + generic copy. */
 const FEATURE_METADATA: Record<string, { title: string; description: string }> = {
-  'dark-mode': {
-    title: 'Dark Mode',
-    description: 'Switch between light and dark themes to match your working environment and reduce eye strain.',
-  },
   'advanced-analytics': {
     title: 'Advanced Analytics',
     description: 'Unlock deeper usage insights, trend analysis, and exportable reports to understand how your team works.',

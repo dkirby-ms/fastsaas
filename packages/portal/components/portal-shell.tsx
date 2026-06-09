@@ -2,7 +2,6 @@
 
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useHasFeature } from '@/components/features-provider';
 import { SidebarNav } from '@/components/sidebar-nav';
 import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -13,7 +12,6 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
   const pathname = usePathname();
   const sidebarOpen = usePortalShellStore((state) => state.sidebarOpen);
   const toggleSidebar = usePortalShellStore((state) => state.toggleSidebar);
-  const hasDarkMode = useHasFeature('dark-mode');
   const userName = session?.user?.name ?? 'Customer';
   const isOperatorArea = pathname.startsWith('/operator');
   const portalTitle = isOperatorArea ? 'Operator Portal' : 'Customer Portal';
@@ -51,7 +49,7 @@ export function PortalShell({ children }: Readonly<{ children: React.ReactNode }
               <h2 className="text-xl font-semibold">{userName}</h2>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              {hasDarkMode && <ThemeToggle />}
+              <ThemeToggle />
               <SignOutButton />
             </div>
           </header>
