@@ -14,7 +14,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const autoSignIn = getSingleSearchParam(params.autoSignIn) === '1';
   const session = await auth();
 
-  if (session) {
+  if (session && !session.error) {
     redirect(callbackUrl === '/dashboard' ? getDefaultPortalRoute(session.roles) : callbackUrl);
   }
 

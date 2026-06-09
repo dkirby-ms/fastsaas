@@ -81,6 +81,10 @@ export default async function PortalLayout({ children }: Readonly<{ children: Re
     redirect('/sign-in');
   }
 
+  if (session.error === 'RefreshAccessTokenError') {
+    redirect('/sign-in');
+  }
+
   const hasSubscription = await hasCustomerSubscription(session).catch(() => false);
   if (!hasOperatorAccess(session.roles) && !hasSubscription) {
     redirect('/no-subscription');
