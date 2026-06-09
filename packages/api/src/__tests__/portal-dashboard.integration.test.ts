@@ -64,7 +64,7 @@ describe('GET /portal/dashboard', () => {
       )
     );
 
-    await harness.createSubscriptionFixture({
+    const subscription = await harness.createSubscriptionFixture({
       tenantId: 'tenant-with-subscription',
       planId: 'growth',
       seats: 12,
@@ -97,6 +97,7 @@ describe('GET /portal/dashboard', () => {
       company: 'Contoso Ltd'
     });
     expect(response.body.subscription).toMatchObject({
+      id: subscription.id,
       tenantId: 'tenant-with-subscription',
       state: 'trialing',
       planId: 'growth',

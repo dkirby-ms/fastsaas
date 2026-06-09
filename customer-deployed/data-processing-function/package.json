@@ -1,0 +1,21 @@
+{
+  "name": "@fastsaas/demo-data-processing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/functions/process-records.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prestart": "npm run build",
+    "start": "func start",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3"
+  }
+}

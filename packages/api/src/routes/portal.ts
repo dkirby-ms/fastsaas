@@ -252,6 +252,7 @@ function buildDashboard(
   return {
     user,
     subscription: {
+      id: subscription.id,
       tenantId: subscription.tenantId,
       state,
       planId: subscription.planId,

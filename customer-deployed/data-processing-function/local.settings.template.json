@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "FASTSAAS_API_URL": "https://your-api.example.com"
+  },
+  "Host": { "CORS": "*" }
+}
