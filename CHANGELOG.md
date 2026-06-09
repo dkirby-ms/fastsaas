@@ -1,3 +1,9 @@
+## [0.26.4](https://github.com/dkirby-ms/fastsaas/compare/v0.26.3...v0.26.4) (2026-06-09)
+
+### Bug Fixes
+
+* rename publisher role to operator ([#175](https://github.com/dkirby-ms/fastsaas/issues/175)) ([3e7bc08](https://github.com/dkirby-ms/fastsaas/commit/3e7bc08d25efed35801af54df6bb38c10cc50f38)), closes [#172](https://github.com/dkirby-ms/fastsaas/issues/172) [#172](https://github.com/dkirby-ms/fastsaas/issues/172)
+
 ## [0.26.3](https://github.com/dkirby-ms/fastsaas/compare/v0.26.2...v0.26.3) (2026-06-08)
 
 ### Bug Fixes
