@@ -12,6 +12,7 @@ export interface UsageSummary {
     apiRequestsThisMonth: number;
 }
 export interface SubscriptionSummary {
+    id: string;
     tenantId: string;
     state: SubscriptionState;
     planId: string;

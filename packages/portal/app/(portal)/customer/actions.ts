@@ -1,6 +1,6 @@
 'use server';
 
-import type { DashboardData, PlansResponse, SettingsData } from '@fastsaas/shared';
+import type { DashboardData, MeteringDashboardSummary, PlansResponse, SettingsData } from '@fastsaas/shared';
 import { auth } from '@/auth';
 import { customerApiPaths } from '@/lib/api-paths';
 import { ApiError } from '@/lib/errors';
@@ -13,6 +13,17 @@ export type ActionResult<T> = ActionSuccess<T> | ActionFailure;
 
 type CustomerSubscriptionState = NonNullable<DashboardData['subscription']>['state'];
 type MockPlan = PlansResponse['availablePlans'][number] & { seatLimit: number | null; seatsPurchased: number };
+
+export interface ProcessRecordsResponse {
+  recordsProcessed: number;
+  meteringEvent: {
+    eventId: string;
+    dimensionId: string;
+    quantity: number;
+    status: string;
+    deduplicated: boolean;
+  };
+}
 
 const mockPlans: MockPlan[] = [
   {
@@ -60,6 +71,16 @@ const mockPlans: MockPlan[] = [
 let mockCurrentPlanId: MockPlan['id'] = 'growth';
 let mockSubscriptionState: CustomerSubscriptionState = 'active';
 let mockSettingsOverrides: Partial<SettingsData> = {};
+let mockMeteringSummary: MeteringDashboardSummary = {
+  pendingCount: 3,
+  retryScheduledCount: 1,
+  submittedCount: 27,
+  deadLetterCount: 0,
+  overdueCount: 0,
+  submittedWithinSlaPercent: 99.4,
+  oldestPendingAgeMinutes: 4,
+  lastSubmittedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+};
 
 function normalizeBaseUrl(url: string) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
@@ -227,6 +248,7 @@ async function getMockDashboard(): Promise<DashboardData> {
       company: settings.company,
     },
     subscription: {
+      id: 'mock-subscription',
       tenantId: session?.tenantId ?? 'mock-tenant',
       state: mockSubscriptionState,
       planId: plan.id,
@@ -243,6 +265,35 @@ async function getMockDashboard(): Promise<DashboardData> {
     },
     actions: mockSubscriptionState === 'trialing' ? [] : mockActions(mockSubscriptionState),
   };
+}
+
+async function getMockMeteringDashboard(): Promise<MeteringDashboardSummary> {
+  await getCustomerSession();
+  return { ...mockMeteringSummary };
+}
+
+function unwrapActionBody<T>(body: unknown): T {
+  if (body && typeof body === 'object' && !Array.isArray(body) && 'status' in body) {
+    const wrapped = body as {
+      status?: string;
+      data?: T;
+      message?: string;
+      code?: string;
+      error?: { code?: string; message?: string };
+    };
+
+    if (wrapped.status === 'success' && wrapped.data !== undefined) {
+      return wrapped.data;
+    }
+
+    throw new ApiError(
+      wrapped.error?.message ?? wrapped.message ?? 'Unexpected API response',
+      500,
+      wrapped.error?.code ?? wrapped.code,
+    );
+  }
+
+  return body as T;
 }
 
 function getMockPlans(): PlansResponse {
@@ -374,5 +425,115 @@ export async function runAction(actionId: string): Promise<ActionResult<Dashboar
     return liveCustomerRequest<DashboardData>(config.apiBaseUrl, customerApiPaths.action(actionId), token, {
       method: 'POST',
     });
+  });
+}
+
+export async function getMeteringDashboard(): Promise<ActionResult<MeteringDashboardSummary>> {
+  return executeAction(async () => {
+    const config = getServerConfig();
+
+    if (config.isMockMode) {
+      return getMockMeteringDashboard();
+    }
+
+    const token = await requireCustomerAccessToken();
+
+    return liveCustomerRequest<MeteringDashboardSummary>(config.apiBaseUrl, '/v1/metering/dashboard', token);
+  });
+}
+
+export async function processRecords(records: object[]): Promise<ActionResult<ProcessRecordsResponse>> {
+  const demoFunctionUrl = process.env.DEMO_FUNCTION_URL?.trim();
+
+  if (!demoFunctionUrl) {
+    return {
+      ok: false,
+      status: 503,
+      message: 'Data processing function is not configured. Set DEMO_FUNCTION_URL environment variable.',
+    };
+  }
+
+  return executeAction(async () => {
+    const config = getServerConfig();
+    const token = await requireCustomerAccessToken();
+    const dashboard = config.isMockMode
+      ? await getMockDashboard()
+      : await liveCustomerRequest<DashboardData>(config.apiBaseUrl, '/portal/dashboard', token);
+    const subscription = dashboard.subscription;
+
+    if (!subscription) {
+      throw new ApiError(
+        'No active subscription is available for this account.',
+        409,
+        'subscription_required',
+        'You need an active subscription before processing data.',
+      );
+    }
+
+    let response: Response;
+
+    try {
+      response = await fetch(demoFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subscriptionId: subscription.id,
+          planId: subscription.planId,
+          records,
+        }),
+        cache: 'no-store',
+      });
+    } catch (error) {
+      throw new ApiError(
+        error instanceof Error ? error.message : 'Request failed',
+        500,
+        'FUNCTION_UNAVAILABLE',
+        'We could not reach the data processing function. Try again in a moment.',
+      );
+    }
+
+    const body = (await response.json().catch(() => null)) as
+      | {
+          status?: string;
+          data?: ProcessRecordsResponse;
+          message?: string;
+          code?: string;
+          error?: { code?: string; message?: string };
+        }
+      | ProcessRecordsResponse
+      | null;
+
+    if (!response.ok) {
+      const errorBody = body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as {
+            message?: string;
+            code?: string;
+            error?: { code?: string; message?: string };
+          })
+        : null;
+
+      throw new ApiError(
+        errorBody?.error?.message ?? errorBody?.message ?? 'Data processing failed.',
+        response.status,
+        errorBody?.error?.code ?? errorBody?.code,
+        errorBody?.error?.message ?? errorBody?.message ?? 'We could not process those records.',
+      );
+    }
+
+    const result = unwrapActionBody<ProcessRecordsResponse>(body);
+
+    if (config.isMockMode) {
+      mockMeteringSummary = {
+        ...mockMeteringSummary,
+        pendingCount: Math.max(0, mockMeteringSummary.pendingCount - 1),
+        submittedCount: mockMeteringSummary.submittedCount + 1,
+        lastSubmittedAt: new Date().toISOString(),
+      };
+    }
+
+    return result;
   });
 }

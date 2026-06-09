@@ -15,6 +15,7 @@ export interface UsageSummary {
 }
 
 export interface SubscriptionSummary {
+  id: string;
   tenantId: string;
   state: SubscriptionState;
   planId: string;

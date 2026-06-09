@@ -260,6 +260,7 @@ function buildCustomerDashboard(state: MockPortalState): DashboardData {
   return {
     user: state.dashboard.user,
     subscription: {
+      id: currentSubscription.id,
       tenantId: currentSubscription.tenantId,
       state: dashboardState,
       planId: currentSubscription.planId,
