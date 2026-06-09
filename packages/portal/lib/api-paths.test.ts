@@ -23,14 +23,14 @@ test('operator admin paths encode plan and tenant IDs for live APIs', () => {
   const planId = 'plan/basic?draft=true';
   const tenantId = 'tenant/abc?state=suspended';
 
-  assert.equal(operatorAdminPaths.marketplacePlans, '/v1/publisher/marketplace-plans');
-  assert.equal(operatorAdminPaths.plan(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue');
-  assert.equal(operatorAdminPaths.planArchive(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue/archive');
-  assert.equal(operatorAdminPaths.planUnarchive(planId), '/v1/publisher/plans/plan%2Fbasic%3Fdraft%3Dtrue/unarchive');
-  assert.equal(operatorAdminPaths.tenant(tenantId), '/v1/publisher/tenants/tenant%2Fabc%3Fstate%3Dsuspended');
+  assert.equal(operatorAdminPaths.marketplacePlans, '/v1/operator/marketplace-plans');
+  assert.equal(operatorAdminPaths.plan(planId), '/v1/operator/plans/plan%2Fbasic%3Fdraft%3Dtrue');
+  assert.equal(operatorAdminPaths.planArchive(planId), '/v1/operator/plans/plan%2Fbasic%3Fdraft%3Dtrue/archive');
+  assert.equal(operatorAdminPaths.planUnarchive(planId), '/v1/operator/plans/plan%2Fbasic%3Fdraft%3Dtrue/unarchive');
+  assert.equal(operatorAdminPaths.tenant(tenantId), '/v1/operator/tenants/tenant%2Fabc%3Fstate%3Dsuspended');
   assert.equal(
     operatorAdminPaths.tenantAction(tenantId, 'activate'),
-    '/v1/publisher/tenants/tenant%2Fabc%3Fstate%3Dsuspended/activate',
+    '/v1/operator/tenants/tenant%2Fabc%3Fstate%3Dsuspended/activate',
   );
 });
 
