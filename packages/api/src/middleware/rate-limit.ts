@@ -21,6 +21,9 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
 function createRateLimiter(limit: number): RateLimitRequestHandler {
   const windowMs = parsePositiveInteger(process.env.RATE_LIMIT_WINDOW_MS, DEFAULT_RATE_LIMIT_WINDOW_MS);
 
+  // NOTE: Uses the default in-memory store. Rate limit counters are per-process
+  // and do not synchronize across replicas. When scaling to multiple instances,
+  // replace with a shared store (e.g. @rate-limit/redis) to maintain accurate limits.
   return rateLimit({
     windowMs,
     limit,
