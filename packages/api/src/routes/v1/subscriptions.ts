@@ -6,6 +6,7 @@ import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, getRoles, requireScopes } from '../../middleware/auth';
+import { apiLimiter } from '../../middleware/rate-limit';
 import { authorizeRoute, isRequestRoleAllowed } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { TenantMemberService } from '../../services/tenant-member-service';
@@ -85,6 +86,7 @@ export function createSubscriptionsRouter(config: ApiConfig, subscriptionService
   const router = Router();
 
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })

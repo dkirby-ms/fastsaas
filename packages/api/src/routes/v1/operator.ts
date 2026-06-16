@@ -25,6 +25,7 @@ import type { ApiRequest } from '../../http';
 import { PRODUCT_INGESTION_SCHEMAS, type ProductIngestionResource, type ProductIngestionResourceTreeResponse } from '../../lib/product-ingestion-types';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { apiLimiter } from '../../middleware/rate-limit';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type {
@@ -327,6 +328,7 @@ export function createOperatorRouter(
 ) {
   const router = Router();
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'operator' })

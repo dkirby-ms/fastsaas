@@ -6,6 +6,7 @@ import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { apiLimiter } from '../../middleware/rate-limit';
 import { authorizeRoute, normalizeRbacRole, type RbacRole } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { TenantMember } from '../../repositories/tenant-member-repository';
@@ -81,6 +82,7 @@ export function createMembersRouter(config: ApiConfig, tenantMemberService: Tena
   const router = Router();
 
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })

@@ -5,6 +5,7 @@ import type { ApiConfig } from '../config';
 import { AppError } from '../errors/app-error';
 import type { ApiRequest } from '../http';
 import { authenticateRequest, requireScopes } from '../middleware/auth';
+import { apiLimiter } from '../middleware/rate-limit';
 import { injectTenantContext } from '../middleware/tenant-context';
 import type { PublisherPlanRepository, StoredPublisherPlan } from '../repositories/publisher-plan-repository';
 import type { SubscriptionService } from '../services/subscription-service';
@@ -280,6 +281,7 @@ export function createPortalRouter(
   const router = Router();
 
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })

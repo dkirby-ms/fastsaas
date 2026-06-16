@@ -4,6 +4,7 @@ import { Router, type Response } from 'express';
 import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
 import { authenticateRequest, getRoles, getScopes, getUserId, requireScopes } from '../../middleware/auth';
+import { authLimiter } from '../../middleware/rate-limit';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { TenantMemberService } from '../../services/tenant-member-service';
 
@@ -30,7 +31,7 @@ export function createAuthRouter(config: ApiConfig, tenantMemberService?: Tenant
    *       404:
    *         description: Endpoint not enabled
    */
-  router.get('/debug', authenticateRequest(config), (req: ApiRequest, res: Response) => {
+  router.get('/debug', authLimiter, authenticateRequest(config), (req: ApiRequest, res: Response) => {
     if (!config.auth.bypassEnabled && process.env.AUTH_DEBUG !== 'true') {
       res.status(404).json({ status: 'error', error: { code: 'NOT_FOUND', message: 'Not found' } });
       return;
@@ -76,6 +77,7 @@ export function createAuthRouter(config: ApiConfig, tenantMemberService?: Tenant
    */
   router.get(
     '/context',
+    authLimiter,
     authenticateRequest(config),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
     requireScopes([config.auth.requiredScope]),

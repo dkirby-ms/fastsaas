@@ -68,13 +68,23 @@ export interface MemberRegistrationRequest {
   gitHubUserId?: string;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let normalizedValue = value;
+
+  while (normalizedValue.endsWith('/')) {
+    normalizedValue = normalizedValue.slice(0, -1);
+  }
+
+  return normalizedValue;
+}
+
 export class SquadPlacesClient {
   private readonly baseUrl: string;
   private readonly apiKey?: string;
   private readonly squadId?: string;
 
   public constructor(config: SquadPlacesConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(config.baseUrl);
     this.apiKey = config.apiKey;
     this.squadId = config.squadId;
   }

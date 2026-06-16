@@ -41,6 +41,8 @@ export function createApp(config: ApiConfig = createConfig(), dependencies: AppD
   const meteringRuntime = createMeteringRuntime(config, dependencies);
 
   app.disable('x-powered-by');
+  // Azure Container Apps adds one proxy hop; trust the first X-Forwarded-For entry
+  app.set('trust proxy', 1);
   app.use(requestLogger);
 
   if (dependencies.subscriptionService) {
