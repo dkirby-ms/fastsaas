@@ -1,3 +1,9 @@
+## [0.28.2](https://github.com/dkirby-ms/fastsaas/compare/v0.28.1...v0.28.2) (2026-06-16)
+
+### Bug Fixes
+
+* Resolve all open CodeQL security alerts (ReDoS + rate limiting) ([#181](https://github.com/dkirby-ms/fastsaas/issues/181)) ([ffa6b1d](https://github.com/dkirby-ms/fastsaas/commit/ffa6b1d43de4a10ed18ca7944bedff961cc81e28)), closes [1-#13](https://github.com/dkirby-ms/1-/issues/13) [3-#5](https://github.com/dkirby-ms/3-/issues/5)
+
 ## [0.28.1](https://github.com/dkirby-ms/fastsaas/compare/v0.28.0...v0.28.1) (2026-06-16)
 
 ### Bug Fixes
