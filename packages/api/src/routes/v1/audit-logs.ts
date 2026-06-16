@@ -5,6 +5,7 @@ import type { ApiConfig } from '../../config';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { apiLimiter } from '../../middleware/rate-limit';
 import { authorizeRoute } from '../../middleware/rbac';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { TenantMemberService } from '../../services/tenant-member-service';
@@ -15,6 +16,7 @@ export function createAuditLogsRouter(config: ApiConfig, auditService: AuditServ
   const router = Router();
 
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' }),
     requireScopes([config.auth.requiredScope])

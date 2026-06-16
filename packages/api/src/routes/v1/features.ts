@@ -6,6 +6,7 @@ import { AppError } from '../../errors/app-error';
 import type { ApiRequest } from '../../http';
 import { buildResponseMeta } from '../../lib/response';
 import { authenticateRequest, requireScopes } from '../../middleware/auth';
+import { apiLimiter } from '../../middleware/rate-limit';
 import { injectTenantContext } from '../../middleware/tenant-context';
 import type { TenantMemberService } from '../../services/tenant-member-service';
 import type { PlanFeatureGateService } from '../../services/plan-feature-gate-service';
@@ -26,6 +27,7 @@ export function createFeaturesRouter(
 ) {
   const router = Router();
   router.use(
+    apiLimiter,
     authenticateRequest(config),
     requireScopes([config.auth.requiredScope]),
     injectTenantContext(config, tenantMemberService, { authorizationModel: 'customer' })
