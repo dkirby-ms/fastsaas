@@ -1,3 +1,9 @@
+## [0.28.1](https://github.com/dkirby-ms/fastsaas/compare/v0.28.0...v0.28.1) (2026-06-16)
+
+### Bug Fixes
+
+* upgrade all dependencies to latest versions ([35893bf](https://github.com/dkirby-ms/fastsaas/commit/35893bfe3fc7fcbdcff154e5a995d26087d25945))
+
 ## [0.28.0](https://github.com/dkirby-ms/fastsaas/compare/v0.27.1...v0.28.0) (2026-06-09)
 
 ### Features
