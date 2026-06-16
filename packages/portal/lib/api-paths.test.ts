@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { customerApiPaths, encodePathSegment, operatorAdminMockPaths, operatorAdminPaths } from './api-paths.ts';
+import { customerApiPaths, encodePathSegment, operatorAdminMockPaths, operatorAdminPaths } from './api-paths';
 
 test('encodePathSegment escapes reserved URL characters', () => {
   assert.equal(encodePathSegment('tenant/a?b=c&d=e'), 'tenant%2Fa%3Fb%3Dc%26d%3De');

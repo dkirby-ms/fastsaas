@@ -1,4 +1,5 @@
-import { Migrator, type Kysely, type Migration, type MigrationProvider, type MigrationResultSet } from 'kysely';
+import type { Kysely } from 'kysely';
+import { Migrator, type Migration, type MigrationProvider, type MigrationResultSet } from 'kysely/migration';
 import type { Logger } from 'pino';
 
 import type { Database } from './database';

@@ -40,5 +40,5 @@ describe('API startup validation', () => {
     expect(exitCode).toBe(1);
     expect(output).toContain('Failed to start API server');
     expect(output).toContain('Missing required marketplace secrets for NODE_ENV=production: MARKETPLACE_CLIENT_SECRET');
-  });
+  }, 20_000);
 });

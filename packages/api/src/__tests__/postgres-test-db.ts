@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { Client } from 'pg';
@@ -14,6 +14,15 @@ const execFileAsync = promisify(execFile);
 const POSTGRES_IMAGE = 'postgres:16-alpine';
 const DOCKER_RUN_MAX_ATTEMPTS = 3;
 const DOCKER_RETRY_DELAY_MS = 1_500;
+
+export function canUseDocker(): boolean {
+  try {
+    execFileSync('docker', ['version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function runDockerCommand(args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('docker', args, { timeout: 120_000 });

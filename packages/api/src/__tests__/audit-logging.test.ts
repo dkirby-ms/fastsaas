@@ -16,7 +16,14 @@ import { requestLogger } from '../middleware/request-logger';
 import { injectTenantContext } from '../middleware/tenant-context';
 import { KyselyAuditLogRepository } from '../repositories/audit-log-repository';
 import { AuditService, createAuditLoggingMiddleware, waitForAuditLogFlush } from '../services/audit-service';
-import { PostgresTestDatabase } from './postgres-test-db';
+import { canUseDocker, PostgresTestDatabase } from './postgres-test-db';
+
+const dockerAvailable = canUseDocker();
+const describeWithPostgres = dockerAvailable ? describe : describe.skip;
+
+if (!dockerAvailable) {
+  console.warn('Skipping audit logging PostgreSQL tests because Docker is unavailable.');
+}
 
 let jwksServer: Server | undefined;
 let signingKey: KeyLike;
@@ -41,6 +48,10 @@ async function closeServer(server: Server | undefined): Promise<void> {
 }
 
 beforeAll(async () => {
+  if (!dockerAvailable) {
+    return;
+  }
+
   postgres = await PostgresTestDatabase.start();
 
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -159,7 +170,7 @@ function buildAuditApp() {
   return { app, service, getHandlerRuns: () => handlerRuns };
 }
 
-describe('audit logging hardening', () => {
+describeWithPostgres('audit logging hardening', () => {
   it('records tenant-scoped audit events for successful and denied requests', async () => {
     const { app, service, getHandlerRuns } = buildAuditApp();
     const allowedToken = await createToken('Admin', 'tenant-a');
