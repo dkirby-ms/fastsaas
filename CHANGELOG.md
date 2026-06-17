@@ -1,3 +1,9 @@
+## [0.28.4](https://github.com/dkirby-ms/fastsaas/compare/v0.28.3...v0.28.4) (2026-06-17)
+
+### Bug Fixes
+
+* use Balanced_B1 SKU for Azure Managed Redis ([50d3f1b](https://github.com/dkirby-ms/fastsaas/commit/50d3f1b80548ee0228de1f4dcad9d84dedeff4b3))
+
 ## [0.28.3](https://github.com/dkirby-ms/fastsaas/compare/v0.28.2...v0.28.3) (2026-06-17)
 
 ### Bug Fixes
