@@ -2,7 +2,7 @@ param name string
 param location string
 param skuName string = 'MemoryOptimized_M10'
 param minimumTlsVersion string = '1.2'
-param highAvailability string = 'Disabled'
+param highAvailability string = 'Enabled'
 param databaseName string = 'default'
 param databasePort int = 10000
 param tags object = {}
