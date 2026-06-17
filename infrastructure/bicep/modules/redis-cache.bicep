@@ -1,8 +1,8 @@
 param name string
 param location string
-param skuName string = 'MemoryOptimized_M10'
+param skuName string = 'Balanced_B1'
 param minimumTlsVersion string = '1.2'
-param highAvailability string = 'Enabled'
+param highAvailability string = 'Disabled'
 param databaseName string = 'default'
 param databasePort int = 10000
 param tags object = {}
