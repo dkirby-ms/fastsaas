@@ -1,3 +1,9 @@
+## [0.28.3](https://github.com/dkirby-ms/fastsaas/compare/v0.28.2...v0.28.3) (2026-06-17)
+
+### Bug Fixes
+
+* enable high availability for Redis Enterprise M10 SKU ([da9a163](https://github.com/dkirby-ms/fastsaas/commit/da9a163c871244c1322285b2e128f7190c13ed5e))
+
 ## [0.28.2](https://github.com/dkirby-ms/fastsaas/compare/v0.28.1...v0.28.2) (2026-06-16)
 
 ### Bug Fixes
