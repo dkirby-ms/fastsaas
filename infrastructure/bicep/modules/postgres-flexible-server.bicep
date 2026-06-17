@@ -68,15 +68,6 @@ resource allowAzureServicesFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServe
   }
 }
 
-resource allowAllFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = if (isPublicMode) {
-  parent: server
-  name: 'AllowAllDev'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '255.255.255.255'
-  }
-}
-
 output id string = server.id
 output fqdn string = server.properties.fullyQualifiedDomainName
 output databaseName string = database.name
