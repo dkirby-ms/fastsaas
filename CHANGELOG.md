@@ -1,3 +1,9 @@
+## [0.28.6](https://github.com/dkirby-ms/fastsaas/compare/v0.28.5...v0.28.6) (2026-06-22)
+
+### Bug Fixes
+
+* use Balanced_B0 (cheapest) Azure Managed Redis SKU for staging ([0fd40f9](https://github.com/dkirby-ms/fastsaas/commit/0fd40f9a1e977bc8f89ec71c025411004b5e0ae1)), closes [#193](https://github.com/dkirby-ms/fastsaas/issues/193)
+
 ## [0.28.5](https://github.com/dkirby-ms/fastsaas/compare/v0.28.4...v0.28.5) (2026-06-22)
 
 ### Bug Fixes
