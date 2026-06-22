@@ -1,3 +1,9 @@
+## [0.28.5](https://github.com/dkirby-ms/fastsaas/compare/v0.28.4...v0.28.5) (2026-06-22)
+
+### Bug Fixes
+
+* split Redis Enterprise database into separate module to fix staging infra deploy ([1511e93](https://github.com/dkirby-ms/fastsaas/commit/1511e931f1a4d5a7ddb47087c942f4f45f249472)), closes [#193](https://github.com/dkirby-ms/fastsaas/issues/193)
+
 ## [0.28.4](https://github.com/dkirby-ms/fastsaas/compare/v0.28.3...v0.28.4) (2026-06-17)
 
 ### Bug Fixes
