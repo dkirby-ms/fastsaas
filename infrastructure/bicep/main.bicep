@@ -221,6 +221,16 @@ module redis './modules/redis-cache.bicep' = {
   }
 }
 
+module redisDatabase './modules/redis-cache-database.bicep' = {
+  name: 'redis-database'
+  params: {
+    clusterName: redisName
+  }
+  dependsOn: [
+    redis
+  ]
+}
+
 module managedEnvironment './modules/container-app-environment.bicep' = {
   name: 'managedEnvironment'
   params: {
@@ -425,6 +435,9 @@ module apiApp './modules/container-app.bicep' = if (deployContainerApps) {
     secretEnvVars: apiSecretEnvVars
     tags: mergedTags
   }
+  dependsOn: [
+    redisDatabase
+  ]
 }
 
 module portalApp './modules/container-app.bicep' = if (deployContainerApps) {
